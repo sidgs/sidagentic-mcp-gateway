@@ -187,13 +187,13 @@
   padding: 8px 12px;
   cursor: pointer;
   white-space: nowrap;
-  border-color: rgba(31, 136, 61, 0.25);
-  background: #1f883d;
+  border-color: rgba(9, 105, 218, 0.25);
+  background: #0969da;
   color: #ffffff;
 }
 
 .primary-action:hover {
-  background: #1a7f37;
+  background: #0550ae;
 }
 
 .danger-action {
@@ -904,7 +904,7 @@ button:disabled {
 }
 
 .tool-pick-item.is-selected {
-  border-color: rgba(31, 136, 61, 0.24);
+  border-color: rgba(9, 105, 218, 0.24);
   background: #f6f8fa;
 }
 

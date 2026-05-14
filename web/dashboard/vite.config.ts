@@ -5,7 +5,7 @@ import path from "node:path";
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), "");
   const rawBase = (env.VITE_DASHBOARD_BASE ?? "").trim();
-  const dashboardBase = rawBase === "" ? "/" : rawBase.replace(/\/?$/, "/");
+  const dashboardBase = rawBase === "" ? "./" : rawBase.replace(/\/?$/, "/");
 
   const proxy: Record<string, { target: string; changeOrigin: boolean }> = {};
   if (rawBase === "") {

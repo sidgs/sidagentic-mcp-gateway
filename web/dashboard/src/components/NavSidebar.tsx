@@ -9,7 +9,6 @@ import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
 import Box from "@mui/material/Box";
-import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
@@ -118,20 +117,12 @@ export function NavSidebar({
           {expanded ? (
             <>
               <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
-                <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
-                  <Typography
-                    component="span"
-                    sx={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden" }}
-                  >
-                    MCP Gateway
-                  </Typography>
-                  <Chip
-                    label="Beta"
-                    size="small"
-                    variant="outlined"
-                    title="Dashboard frontend is currently in Beta"
-                  />
-                </Stack>
+                <Typography
+                  component="span"
+                  sx={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden" }}
+                >
+                  MCP Gateway
+                </Typography>
               </Box>
               <Tooltip title="Collapse menu">
                 <IconButton aria-label="Collapse menu" edge="end" size="small" onClick={() => persist(false)}>

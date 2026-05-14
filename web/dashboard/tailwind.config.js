@@ -11,7 +11,7 @@ export default {
           border: "rgba(27, 31, 36, 0.12)",
           text: "#1f2328",
           muted: "#57606a",
-          accent: "#1f883d",
+          accent: "#0969da",
           bad: "#cf222e",
         },
       },
