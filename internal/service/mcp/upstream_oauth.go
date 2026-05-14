@@ -16,6 +16,7 @@ import (
 	mcpgotransport "github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -47,6 +48,7 @@ func (e *UpstreamOAuthAuthorizationPendingError) Error() string {
 
 type upstreamOAuthTokenStore struct {
 	db         *gorm.DB
+	tenantID   string
 	serverName string
 	transport  types.McpServerTransport
 }
@@ -58,7 +60,7 @@ func (s *upstreamOAuthTokenStore) GetToken(ctx context.Context) (*mcpgotransport
 	}
 
 	var record model.UpstreamOAuthToken
-	if err := s.db.WithContext(ctx).Where("server_name = ?", s.serverName).First(&record).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND server_name = ?", s.tenantID, s.serverName).First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, mcpgotransport.ErrNoToken
 		}
@@ -86,6 +88,7 @@ func (s *upstreamOAuthTokenStore) SaveToken(ctx context.Context, token *mcpgotra
 	}
 
 	record := &model.UpstreamOAuthToken{
+		TenantID:     s.tenantID,
 		ServerName:   s.serverName,
 		Transport:    s.transport,
 		AccessToken:  token.AccessToken,
@@ -97,7 +100,7 @@ func (s *upstreamOAuthTokenStore) SaveToken(ctx context.Context, token *mcpgotra
 
 	return s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var existing model.UpstreamOAuthToken
-		err := tx.Where("server_name = ?", s.serverName).First(&existing).Error
+		err := tx.Where("tenant_id = ? AND server_name = ?", s.tenantID, s.serverName).First(&existing).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return tx.Create(record).Error
 		}
@@ -199,11 +202,13 @@ func prepareOAuthConfig(input *types.RegisterServerInput, tokenStore mcpgotransp
 // persistOAuthTokenMetadata stores gateway-scoped OAuth client metadata for a
 // registered upstream server without clobbering token values.
 func (m *MCPService) persistOAuthTokenMetadata(ctx context.Context, serverName string, transport types.McpServerTransport, redirectURI, clientID, clientSecret string, scopes []string) error {
+	tid := tenant.MustFromContext(ctx)
 	return m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		var record model.UpstreamOAuthToken
-		err := tx.Where("server_name = ?", serverName).First(&record).Error
+		err := tx.Where("tenant_id = ? AND server_name = ?", tid, serverName).First(&record).Error
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			record = model.UpstreamOAuthToken{
+				TenantID:     tid,
 				ServerName:   serverName,
 				Transport:    transport,
 				RedirectURI:  redirectURI,
@@ -343,11 +348,12 @@ func (m *MCPService) bootstrapUpstreamOAuth(ctx context.Context, input *types.Re
 	expiresAt := time.Now().Add(upstreamOAuthPendingSessionTTL)
 
 	if err := m.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := tx.Unscoped().Where("server_name = ?", server.Name).Delete(&model.UpstreamOAuthPendingSession{}).Error; err != nil {
+		if err := tx.Unscoped().Where("tenant_id = ? AND server_name = ?", server.TenantID, server.Name).Delete(&model.UpstreamOAuthPendingSession{}).Error; err != nil {
 			return err
 		}
 
 		session := &model.UpstreamOAuthPendingSession{
+			TenantID:     server.TenantID,
 			SessionID:    sessionID,
 			ServerName:   server.Name,
 			Transport:    server.Transport,
@@ -531,9 +537,10 @@ func (m *MCPService) CompleteUpstreamOAuthSession(ctx context.Context, sessionID
 		return nil, fmt.Errorf("session_id, code and state are required: %w", apierrors.ErrInvalidInput)
 	}
 
+	tid := tenant.MustFromContext(ctx)
 	var session model.UpstreamOAuthPendingSession
 	if err := m.db.WithContext(ctx).
-		Where("session_id = ?", sessionID).
+		Where("tenant_id = ? AND session_id = ?", tid, sessionID).
 		First(&session).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("upstream OAuth session not found: %w", apierrors.ErrNotFound)
@@ -566,6 +573,7 @@ func (m *MCPService) CompleteUpstreamOAuthSession(ctx context.Context, sessionID
 	if err != nil {
 		return nil, err
 	}
+	server.TenantID = session.TenantID
 
 	if err := m.persistOAuthTokenMetadata(ctx, server.Name, server.Transport, input.OAuthRedirectURI, input.OAuthClientID, input.OAuthClientSecret, input.OAuthScopes); err != nil {
 		return nil, fmt.Errorf("failed to persist OAuth client metadata: %w", err)
@@ -576,8 +584,8 @@ func (m *MCPService) CompleteUpstreamOAuthSession(ctx context.Context, sessionID
 	}
 
 	if session.Force {
-		if _, err := m.GetMcpServer(server.Name); err == nil {
-			if err := m.DeregisterMcpServer(server.Name); err != nil {
+		if _, err := m.GetMcpServer(ctx, server.Name); err == nil {
+			if err := m.DeregisterMcpServer(ctx, server.Name); err != nil {
 				return nil, fmt.Errorf("failed to deregister existing server during OAuth completion: %w", err)
 			}
 		} else if !errors.Is(err, apierrors.ErrNotFound) {
@@ -603,7 +611,8 @@ func (m *MCPService) GetPendingUpstreamOAuthSession(ctx context.Context, session
 	}
 
 	var session model.UpstreamOAuthPendingSession
-	if err := m.db.WithContext(ctx).Where("session_id = ?", sessionID).First(&session).Error; err != nil {
+	tid := tenant.MustFromContext(ctx)
+	if err := m.db.WithContext(ctx).Where("tenant_id = ? AND session_id = ?", tid, sessionID).First(&session).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("upstream OAuth session not found: %w", apierrors.ErrNotFound)
 		}
@@ -619,7 +628,8 @@ func (m *MCPService) GetPendingUpstreamOAuthSessionByState(ctx context.Context, 
 	}
 
 	var session model.UpstreamOAuthPendingSession
-	if err := m.db.WithContext(ctx).Where("state = ?", state).First(&session).Error; err != nil {
+	tid := tenant.MustFromContext(ctx)
+	if err := m.db.WithContext(ctx).Where("tenant_id = ? AND state = ?", tid, state).First(&session).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("upstream OAuth session not found: %w", apierrors.ErrNotFound)
 		}
@@ -645,6 +655,7 @@ func (m *MCPService) DeletePendingUpstreamOAuthSession(ctx context.Context, sess
 func (m *MCPService) processOAuthAuthorizationCode(ctx context.Context, server *model.McpServer, input *types.RegisterServerInput, codeVerifier, state, code string) error {
 	tokenStore := &upstreamOAuthTokenStore{
 		db:         m.db,
+		tenantID:   server.TenantID,
 		serverName: server.Name,
 		transport:  server.Transport,
 	}
@@ -710,14 +721,14 @@ func (m *MCPService) processOAuthAuthorizationCode(ctx context.Context, server *
 
 // GetUpstreamOAuthToken retrieves the stored gateway-scoped upstream OAuth credentials
 // metadata and tokens for a registered upstream MCP server.
-func (m *MCPService) GetUpstreamOAuthToken(serverName string) (*model.UpstreamOAuthToken, error) {
-	return getStoredUpstreamOAuthToken(m.db, serverName)
+func (m *MCPService) GetUpstreamOAuthToken(ctx context.Context, serverName string) (*model.UpstreamOAuthToken, error) {
+	return getStoredUpstreamOAuthToken(m.db.WithContext(ctx), tenant.MustFromContext(ctx), serverName)
 }
 
 // getStoredUpstreamOAuthToken loads the stored upstream OAuth token record for a server.
-func getStoredUpstreamOAuthToken(db *gorm.DB, serverName string) (*model.UpstreamOAuthToken, error) {
+func getStoredUpstreamOAuthToken(db *gorm.DB, tenantID, serverName string) (*model.UpstreamOAuthToken, error) {
 	var record model.UpstreamOAuthToken
-	if err := db.Where("server_name = ?", serverName).First(&record).Error; err != nil {
+	if err := db.Where("tenant_id = ? AND server_name = ?", tenantID, serverName).First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("upstream OAuth token not found: %w", apierrors.ErrNotFound)
 		}

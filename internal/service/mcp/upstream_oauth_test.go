@@ -423,7 +423,7 @@ func TestDeregisterMcpServer_HardDeletesUpstreamOAuthState(t *testing.T) {
 	require.NoError(t, setup.DB.Create(token).Error)
 	require.NoError(t, setup.DB.Create(pending).Error)
 
-	require.NoError(t, service.DeregisterMcpServer("todoist"))
+	require.NoError(t, service.DeregisterMcpServer(context.Background(), "todoist"))
 
 	var tokenCount int64
 	require.NoError(t, setup.DB.Unscoped().Model(&model.UpstreamOAuthToken{}).Where("server_name = ?", "todoist").Count(&tokenCount).Error)

@@ -9,6 +9,8 @@ import (
 type Resource struct {
 	gorm.Model
 
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;index"`
+
 	// URI is the MCPJungle-assigned public URI for this resource.
 	URI string `json:"uri" gorm:"not null"`
 

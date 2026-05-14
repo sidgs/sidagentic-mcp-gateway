@@ -4,6 +4,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"strings"
 	"testing"
 
@@ -77,6 +78,30 @@ func TestConstructAPIEndpoint(t *testing.T) {
 				t.Errorf("Expected %s, got %s", tt.expectedPath, result)
 			}
 		})
+	}
+}
+
+func TestConstructAPIEndpointWithPathPrefixedBaseURL(t *testing.T) {
+	t.Parallel()
+
+	client := NewClient("https://api.example.com/ai/v1/sami-mcp-gateway", "token", &http.Client{})
+
+	result, err := client.constructAPIEndpoint("servers")
+	if err != nil {
+		t.Fatalf("Unexpected error: %v", err)
+	}
+	expected := "https://api.example.com/ai/v1/sami-mcp-gateway/api/v0/servers"
+	if result != expected {
+		t.Errorf("Expected %s, got %s", expected, result)
+	}
+
+	u, err := url.JoinPath(client.baseURL, "metadata")
+	if err != nil {
+		t.Fatalf("JoinPath: %v", err)
+	}
+	expectedMeta := "https://api.example.com/ai/v1/sami-mcp-gateway/metadata"
+	if u != expectedMeta {
+		t.Errorf("metadata URL: expected %s, got %s", expectedMeta, u)
 	}
 }
 

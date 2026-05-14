@@ -13,6 +13,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	mcpService "github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -92,29 +93,31 @@ func TestPromptsIntegration(t *testing.T) {
 	err = db.Create(testPrompt).Error
 	require.NoError(t, err)
 
+	testCtx := tenant.WithContext(context.Background(), tenant.DefaultID)
+
 	// Test listing prompts
-	prompts, err := service.ListPrompts()
+	prompts, err := service.ListPrompts(testCtx)
 	require.NoError(t, err)
 	assert.Len(t, prompts, 1)
 	assert.Equal(t, "github__code-review", prompts[0].Name)
 
 	// Test getting specific prompt
-	prompt, err := service.GetPrompt("github__code-review")
+	prompt, err := service.GetPrompt(testCtx, "github__code-review")
 	require.NoError(t, err)
 	assert.Equal(t, "github__code-review", prompt.Name)
 	assert.Equal(t, "Review code for security issues and best practices", prompt.Description)
 
 	// Test enable/disable
-	disabledPrompts, err := service.DisablePrompts("github__code-review")
+	disabledPrompts, err := service.DisablePrompts(testCtx, "github__code-review")
 	require.NoError(t, err)
 	assert.Len(t, disabledPrompts, 1)
 
-	enabledPrompts, err := service.EnablePrompts("github__code-review")
+	enabledPrompts, err := service.EnablePrompts(testCtx, "github__code-review")
 	require.NoError(t, err)
 	assert.Len(t, enabledPrompts, 1)
 
 	// Test listing by server
-	serverPrompts, err := service.ListPromptsByServer("github")
+	serverPrompts, err := service.ListPromptsByServer(testCtx, "github")
 	require.NoError(t, err)
 	assert.Len(t, serverPrompts, 1)
 	assert.Equal(t, "github__code-review", serverPrompts[0].Name)
@@ -178,7 +181,9 @@ func TestResourcesIntegration(t *testing.T) {
 	service, err := mcpService.NewMCPService(conf)
 	require.NoError(t, err)
 
-	resources, err := service.ListResources()
+	testCtx := tenant.WithContext(context.Background(), tenant.DefaultID)
+
+	resources, err := service.ListResources(testCtx)
 	require.NoError(t, err)
 	require.Len(t, resources, 1)
 	assert.Equal(t, "github__repo-status", resources[0].Name)
@@ -202,7 +207,8 @@ func TestResourcesIntegration(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, initResult.Capabilities.Resources)
 
-	listResult, err := proxyClient.ListResources(context.Background(), mcp.ListResourcesRequest{})
+	listCtx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeDev), tenant.DefaultID)
+	listResult, err := proxyClient.ListResources(listCtx, mcp.ListResourcesRequest{})
 	require.NoError(t, err)
 	require.Len(t, listResult.Resources, 1)
 	assert.Equal(t, "github__repo-status", listResult.Resources[0].Name)

@@ -26,6 +26,7 @@ import (
 
 	"github.com/mcpjungle/mcpjungle/client"
 	"github.com/mcpjungle/mcpjungle/cmd/config"
+	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
 	"github.com/spf13/cobra"
 )
@@ -67,7 +68,7 @@ var registryServerURL string
 var apiClient *client.Client
 
 var rootCmd = &cobra.Command{
-	Use:   "mcpjungle",
+	Use:   cliapp.ExecutableName,
 	Short: "MCP Gateway for AI Agents",
 
 	SilenceErrors: true,
@@ -105,7 +106,7 @@ func Execute() error {
 		&registryServerURL,
 		"registry",
 		"http://127.0.0.1:"+BindPortDefault,
-		"Base URL of the MCPJungle registry server",
+		"Base URL of the MCPJungle gateway (scheme+host+optional path prefix, e.g. http://127.0.0.1:8080 or https://host/ai/v1/sami-mcp-gateway)",
 	)
 
 	// Initialize the API client with the registry server URL & client configuration (if any)

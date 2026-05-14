@@ -16,7 +16,7 @@ func (s *Server) registerInitServerHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
 			return
 		}
-		ok, err := s.configService.Init(req.Mode)
+		ok, err := s.configService.Init(c.Request.Context(), req.Mode)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize server: " + err.Error()})
 			return
@@ -33,7 +33,7 @@ func (s *Server) registerInitServerHandler() gin.HandlerFunc {
 		}
 		// The server was successfully initialized and the mode is enterprise (either ModeEnterprise or ModeProd),
 		// create an admin user and return its access token
-		admin, err := s.userService.CreateAdminUser()
+		admin, err := s.userService.CreateAdminUser(c.Request.Context())
 		if err != nil {
 			c.JSON(
 				http.StatusInternalServerError,

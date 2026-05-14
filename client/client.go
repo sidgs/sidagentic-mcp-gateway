@@ -8,8 +8,11 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 
 	"github.com/mcpjungle/mcpjungle/internal/api"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
 
@@ -27,13 +30,18 @@ func (e *APIError) Error() string {
 type Client struct {
 	baseURL     string
 	accessToken string
+	tenantID    string
 	httpClient  *http.Client
 }
 
 func NewClient(baseURL string, accessToken string, httpClient *http.Client) *Client {
+	if httpClient == nil {
+		httpClient = http.DefaultClient
+	}
 	return &Client{
 		baseURL:     baseURL,
 		accessToken: accessToken,
+		tenantID:    strings.TrimSpace(os.Getenv("DEFAULT_TENANT_ID")),
 		httpClient:  httpClient,
 	}
 }
@@ -57,6 +65,9 @@ func (c *Client) newRequest(method, url string, body io.Reader) (*http.Request, 
 	}
 	if c.accessToken != "" {
 		req.Header.Set("Authorization", "Bearer "+c.accessToken)
+	}
+	if c.tenantID != "" {
+		req.Header.Set(tenant.HeaderName, c.tenantID)
 	}
 	return req, nil
 }
@@ -86,7 +97,11 @@ func (c *Client) parseErrorResponse(resp *http.Response) error {
 
 // GetServerMetadata fetches metadata about the MCPJungle server.
 func (c *Client) GetServerMetadata(ctx context.Context) (*types.ServerMetadata, error) {
-	req, err := c.newRequest(http.MethodGet, c.baseURL+"/metadata", nil)
+	u, err := url.JoinPath(c.baseURL, "metadata")
+	if err != nil {
+		return nil, err
+	}
+	req, err := c.newRequest(http.MethodGet, u, nil)
 	if err != nil {
 		return nil, err
 	}

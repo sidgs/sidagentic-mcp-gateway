@@ -284,7 +284,7 @@ func createHTTPMcpServerConn(
 	var c *client.Client
 
 	if useStoredUpstreamAuth && db != nil {
-		tokenModel, err := getStoredUpstreamOAuthToken(db, s.Name)
+		tokenModel, err := getStoredUpstreamOAuthToken(db, s.TenantID, s.Name)
 		if err == nil {
 			hasStoredOAuthTokens := tokenModel.AccessToken != "" || tokenModel.RefreshToken != ""
 			if hasStoredOAuthTokens {
@@ -299,6 +299,7 @@ func createHTTPMcpServerConn(
 					Scopes:       scopes,
 					TokenStore: &upstreamOAuthTokenStore{
 						db:         db,
+						tenantID:   s.TenantID,
 						serverName: s.Name,
 						transport:  s.Transport,
 					},
@@ -460,7 +461,7 @@ func createSSEMcpServerConn(
 	}
 
 	if useStoredUpstreamAuth && db != nil {
-		if tokenModel, err := getStoredUpstreamOAuthToken(db, s.Name); err == nil {
+		if tokenModel, err := getStoredUpstreamOAuthToken(db, s.TenantID, s.Name); err == nil {
 			hasStoredOAuthTokens := tokenModel.AccessToken != "" || tokenModel.RefreshToken != ""
 			if hasStoredOAuthTokens {
 				scopes, err := scopesFromJSON(tokenModel.Scopes)
@@ -474,6 +475,7 @@ func createSSEMcpServerConn(
 					Scopes:       scopes,
 					TokenStore: &upstreamOAuthTokenStore{
 						db:         db,
+						tenantID:   s.TenantID,
 						serverName: s.Name,
 						transport:  s.Transport,
 					},

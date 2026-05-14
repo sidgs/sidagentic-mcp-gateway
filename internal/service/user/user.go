@@ -2,12 +2,14 @@
 package user
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/mcpjungle/mcpjungle/internal"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"gorm.io/gorm"
 )
@@ -22,17 +24,19 @@ func NewUserService(db *gorm.DB) *UserService {
 }
 
 // CreateAdminUser creates an admin user in the MCPJungle system.
-func (u *UserService) CreateAdminUser() (*model.User, error) {
+func (u *UserService) CreateAdminUser(ctx context.Context) (*model.User, error) {
+	tid := tenant.MustFromContext(ctx)
 	token, err := internal.GenerateAccessToken()
 	if err != nil {
 		return nil, err
 	}
 	user := model.User{
+		TenantID:    tid,
 		Username:    "admin",
 		Role:        types.UserRoleAdmin,
 		AccessToken: token,
 	}
-	if err := u.db.Create(&user).Error; err != nil {
+	if err := u.db.WithContext(ctx).Create(&user).Error; err != nil {
 		return nil, fmt.Errorf("failed to create admin user: %w", err)
 	}
 	return &user, nil
@@ -40,9 +44,10 @@ func (u *UserService) CreateAdminUser() (*model.User, error) {
 
 // GetUserByAccessToken returns a user associated with the provided access token.
 // If no user is found, an error is returned.
-func (u *UserService) GetUserByAccessToken(token string) (*model.User, error) {
+func (u *UserService) GetUserByAccessToken(ctx context.Context, token string) (*model.User, error) {
+	tid := tenant.MustFromContext(ctx)
 	var user model.User
-	if err := u.db.Where("access_token = ?", token).First(&user).Error; err != nil {
+	if err := u.db.WithContext(ctx).Where("tenant_id = ? AND access_token = ?", tid, token).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("user not found: %w", apierrors.ErrNotFound)
 		}
@@ -53,8 +58,10 @@ func (u *UserService) GetUserByAccessToken(token string) (*model.User, error) {
 
 // CreateUser creates a new user with the specified username.
 // This method currently only supports creating a standard user, ie, user with the "user" role.
-func (u *UserService) CreateUser(input *model.User) (*model.User, error) {
+func (u *UserService) CreateUser(ctx context.Context, input *model.User) (*model.User, error) {
+	tid := tenant.MustFromContext(ctx)
 	user := model.User{
+		TenantID: tid,
 		Username: input.Username,
 		Role:     types.UserRoleUser,
 	}
@@ -72,7 +79,7 @@ func (u *UserService) CreateUser(input *model.User) (*model.User, error) {
 		}
 		user.AccessToken = input.AccessToken
 	}
-	if err := u.db.Create(&user).Error; err != nil {
+	if err := u.db.WithContext(ctx).Create(&user).Error; err != nil {
 		return nil, fmt.Errorf("failed to create user: %w", err)
 	}
 	return &user, nil
@@ -80,9 +87,10 @@ func (u *UserService) CreateUser(input *model.User) (*model.User, error) {
 
 // UpdateUser updates an existing user's information based on the provided input.
 // Currently it only supports updating the user's access token.
-func (u *UserService) UpdateUser(input *model.User) (*model.User, error) {
+func (u *UserService) UpdateUser(ctx context.Context, input *model.User) (*model.User, error) {
+	tid := tenant.MustFromContext(ctx)
 	var user model.User
-	err := u.db.Where("username = ?", input.Username).First(&user).Error
+	err := u.db.WithContext(ctx).Where("tenant_id = ? AND username = ?", tid, input.Username).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("user with username %s not found: %w", input.Username, apierrors.ErrNotFound)
@@ -99,7 +107,7 @@ func (u *UserService) UpdateUser(input *model.User) (*model.User, error) {
 	}
 	user.AccessToken = input.AccessToken
 
-	err = u.db.Save(&user).Error
+	err = u.db.WithContext(ctx).Save(&user).Error
 	if err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
@@ -107,9 +115,10 @@ func (u *UserService) UpdateUser(input *model.User) (*model.User, error) {
 }
 
 // ListUsers retrieves all users from the database.
-func (u *UserService) ListUsers() ([]model.User, error) {
+func (u *UserService) ListUsers(ctx context.Context) ([]model.User, error) {
+	tid := tenant.MustFromContext(ctx)
 	var users []model.User
-	if err := u.db.Find(&users).Error; err != nil {
+	if err := u.db.WithContext(ctx).Where("tenant_id = ?", tid).Find(&users).Error; err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 	return users, nil
@@ -117,9 +126,10 @@ func (u *UserService) ListUsers() ([]model.User, error) {
 
 // DeleteUser removes a user with the specified username from the database.
 // If a user's role is admin, the deletion will be rejected.
-func (u *UserService) DeleteUser(username string) error {
+func (u *UserService) DeleteUser(ctx context.Context, username string) error {
+	tid := tenant.MustFromContext(ctx)
 	var user model.User
-	err := u.db.Where("username = ?", username).First(&user).Error
+	err := u.db.WithContext(ctx).Where("tenant_id = ? AND username = ?", tid, username).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("user with username %s not found: %w", username, apierrors.ErrNotFound)
@@ -131,7 +141,7 @@ func (u *UserService) DeleteUser(username string) error {
 		return fmt.Errorf("cannot delete an admin user: %w", apierrors.ErrInvalidInput)
 	}
 
-	err = u.db.Unscoped().Where("username = ?", username).Delete(&model.User{}).Error
+	err = u.db.WithContext(ctx).Unscoped().Where("tenant_id = ? AND username = ?", tid, username).Delete(&model.User{}).Error
 	if err != nil {
 		return fmt.Errorf("failed to delete user: %w", err)
 	}

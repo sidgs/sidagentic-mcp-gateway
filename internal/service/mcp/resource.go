@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"strings"
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
@@ -18,59 +19,66 @@ import (
 
 const resourceURIPrefix = "mcpj://res/"
 
-// buildResourceURI constructs a new URI for a mcp resource which is unique across all resources registered in mcpjungle.
-// It is of the form:
-// mcpj://res/{upstream mcp server name}/{base64-encoded original URI}
-// This ensures that even if multiple upstream MCP servers expose resources with the same URI, they can be uniquely
-// identified and accessed in mcpjungle by clients.
-func buildResourceURI(serverName string, originalURI string) string {
+// buildResourceURI builds a globally unique resource URI. New format:
+// mcpj://res/{tenant_id}/{server_name}/{base64(original URI)}.
+// Legacy format (still valid): mcpj://res/{server_name}/{base64(original URI)}.
+func buildResourceURI(tenantID, serverName, originalURI string) string {
+	if tenantID != "" {
+		return resourceURIPrefix + tenantID + "/" + serverName + "/" + base64.RawStdEncoding.EncodeToString([]byte(originalURI))
+	}
 	return resourceURIPrefix + serverName + "/" + base64.RawStdEncoding.EncodeToString([]byte(originalURI))
 }
 
-// parseResourceURI parses the server name and original URI from a resource URI.
-// This helps mcpjungle map a globally unique resource URI back to the corresponding upstream MCP server and the
-// resource being referred to.
-func parseResourceURI(resourceURI string) (string, string, error) {
+// parseResourceURI returns tenantID (may be empty for legacy URIs), serverName, and the upstream original URI.
+func parseResourceURI(resourceURI string) (tenantID, serverName, originalURI string, err error) {
 	if len(resourceURI) <= len(resourceURIPrefix) || resourceURI[:len(resourceURIPrefix)] != resourceURIPrefix {
-		return "", "", fmt.Errorf(
+		return "", "", "", fmt.Errorf(
 			"resource URI %s is not a valid MCPJungle resource URI: %w", resourceURI, apierrors.ErrInvalidInput,
 		)
 	}
 
 	rest := resourceURI[len(resourceURIPrefix):]
-	separatorIndex := -1
-	for i := range rest {
-		if rest[i] == '/' {
-			separatorIndex = i
-			break
+	parts := strings.SplitN(rest, "/", 3)
+	if len(parts) == 2 {
+		tenantID = ""
+		serverName = parts[0]
+		encodedOriginalURI := parts[1]
+		if err := validateServerName(serverName); err != nil {
+			return "", "", "", err
 		}
+		decodedOriginalURI, decErr := base64.RawStdEncoding.DecodeString(encodedOriginalURI)
+		if decErr != nil {
+			return "", "", "", fmt.Errorf(
+				"resource URI %s contains an invalid upstream URI encoding: %w", resourceURI, apierrors.ErrInvalidInput,
+			)
+		}
+		return "", serverName, string(decodedOriginalURI), nil
 	}
-	if separatorIndex <= 0 || separatorIndex == len(rest)-1 {
-		return "", "", fmt.Errorf(
-			"resource URI %s is not a valid MCPJungle resource URI: %w", resourceURI, apierrors.ErrInvalidInput,
-		)
+	if len(parts) == 3 {
+		tenantID = parts[0]
+		serverName = parts[1]
+		encodedOriginalURI := parts[2]
+		if err := validateServerName(tenantID); err != nil {
+			return "", "", "", err
+		}
+		if err := validateServerName(serverName); err != nil {
+			return "", "", "", err
+		}
+		decodedOriginalURI, decErr := base64.RawStdEncoding.DecodeString(encodedOriginalURI)
+		if decErr != nil {
+			return "", "", "", fmt.Errorf(
+				"resource URI %s contains an invalid upstream URI encoding: %w", resourceURI, apierrors.ErrInvalidInput,
+			)
+		}
+		return tenantID, serverName, string(decodedOriginalURI), nil
 	}
 
-	serverName := rest[:separatorIndex]
-	encodedOriginalURI := rest[separatorIndex+1:]
-	if err := validateServerName(serverName); err != nil {
-		return "", "", err
-	}
-
-	decodedOriginalURI, err := base64.RawStdEncoding.DecodeString(encodedOriginalURI)
-	if err != nil {
-		return "", "", fmt.Errorf(
-			"resource URI %s contains an invalid upstream URI encoding: %w", resourceURI, apierrors.ErrInvalidInput,
-		)
-	}
-
-	return serverName, string(decodedOriginalURI), nil
+	return "", "", "", fmt.Errorf(
+		"resource URI %s is not a valid MCPJungle resource URI: %w", resourceURI, apierrors.ErrInvalidInput,
+	)
 }
 
 // rewriteResourceContentsURI rewrites the URI field in each item of the resource contents to the given resource URI.
-// This is necessary because the original resource contents returned by the upstream MCP server will have the original
-// resource URI, which cannot be accessed by clients. By rewriting the URI to the new resource URI, clients can use
-// the URIs in the resource contents to access the resources through mcpjungle.
 func rewriteResourceContentsURI(contents []mcp.ResourceContents, resourceURI string) []mcp.ResourceContents {
 	rewritten := make([]mcp.ResourceContents, 0, len(contents))
 	for _, content := range contents {
@@ -92,10 +100,9 @@ func rewriteResourceContentsURI(contents []mcp.ResourceContents, resourceURI str
 }
 
 // ListResources returns all resources registered in the registry.
-// It sets each resource's name to its canonical display form by prepending its server name.
-func (m *MCPService) ListResources() ([]model.Resource, error) {
+func (m *MCPService) ListResources(ctx context.Context) ([]model.Resource, error) {
 	var resources []model.Resource
-	if err := m.db.Preload("Server").Find(&resources).Error; err != nil {
+	if err := m.dbTenant(ctx).Preload("Server").Find(&resources).Error; err != nil {
 		return nil, err
 	}
 
@@ -107,18 +114,18 @@ func (m *MCPService) ListResources() ([]model.Resource, error) {
 }
 
 // ListResourcesByServer fetches resources provided by an MCP server from the registry.
-func (m *MCPService) ListResourcesByServer(name string) ([]model.Resource, error) {
+func (m *MCPService) ListResourcesByServer(ctx context.Context, name string) ([]model.Resource, error) {
 	if err := validateServerName(name); err != nil {
 		return nil, err
 	}
 
-	s, err := m.GetMcpServer(name)
+	s, err := m.GetMcpServer(ctx, name)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get MCP server %s from DB: %w", name, err)
 	}
 
 	var resources []model.Resource
-	if err := m.db.Where("server_id = ?", s.ID).Find(&resources).Error; err != nil {
+	if err := m.dbTenant(ctx).Where("server_id = ?", s.ID).Find(&resources).Error; err != nil {
 		return nil, fmt.Errorf("failed to get resources for server %s from DB: %w", name, err)
 	}
 
@@ -130,17 +137,17 @@ func (m *MCPService) ListResourcesByServer(name string) ([]model.Resource, error
 }
 
 // GetResource fetches resource metadata by URI.
-func (m *MCPService) GetResource(uri string) (*model.Resource, error) {
+func (m *MCPService) GetResource(ctx context.Context, uri string) (*model.Resource, error) {
 	if uri == "" {
 		return nil, fmt.Errorf("resource URI must not be empty: %w", apierrors.ErrInvalidInput)
 	}
 
-	if _, _, err := parseResourceURI(uri); err != nil {
+	if _, _, _, err := parseResourceURI(uri); err != nil {
 		return nil, err
 	}
 
 	var resource model.Resource
-	if err := m.db.Preload("Server").Where("uri = ?", uri).First(&resource).Error; err != nil {
+	if err := m.dbTenant(ctx).Preload("Server").Where("uri = ?", uri).First(&resource).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("resource %s not found: %w", uri, apierrors.ErrNotFound)
 		}
@@ -152,7 +159,7 @@ func (m *MCPService) GetResource(uri string) (*model.Resource, error) {
 
 // ReadResource reads live resource content by URI.
 func (m *MCPService) ReadResource(ctx context.Context, uri string) (*types.ResourceReadResult, error) {
-	resource, err := m.GetResource(uri)
+	resource, err := m.GetResource(ctx, uri)
 	if err != nil {
 		return nil, err
 	}
@@ -189,35 +196,27 @@ func (m *MCPService) ReadResource(ctx context.Context, uri string) (*types.Resou
 }
 
 // EnableResources enables one or more resources.
-// If the entity is a server name, all resources of that server are enabled.
-// Otherwise, the entity is treated as a resource URI and the matching resource is enabled
-// only when the URI uniquely identifies a single registered resource.
-func (m *MCPService) EnableResources(entity string) ([]string, error) {
-	return m.setResourcesEnabled(entity, true)
+func (m *MCPService) EnableResources(ctx context.Context, entity string) ([]string, error) {
+	return m.setResourcesEnabled(ctx, entity, true)
 }
 
 // DisableResources disables one or more resources.
-// If the entity is a server name, all resources of that server are disabled.
-// Otherwise, the entity is treated as a resource URI and the matching resource is disabled
-// only when the URI uniquely identifies a single registered resource.
-func (m *MCPService) DisableResources(entity string) ([]string, error) {
-	return m.setResourcesEnabled(entity, false)
+func (m *MCPService) DisableResources(ctx context.Context, entity string) ([]string, error) {
+	return m.setResourcesEnabled(ctx, entity, false)
 }
 
-func (m *MCPService) setResourcesEnabled(entity string, enabled bool) ([]string, error) {
+func (m *MCPService) setResourcesEnabled(ctx context.Context, entity string, enabled bool) ([]string, error) {
 	if validateServerName(entity) == nil {
-		// entity is a valid server name, try to find the server and set all its resources enabled/disabled
-		if s, err := m.GetMcpServer(entity); err == nil {
-			return m.setServerResourcesEnabled(s, enabled)
+		if s, err := m.GetMcpServer(ctx, entity); err == nil {
+			return m.setServerResourcesEnabled(ctx, s, enabled)
 		}
 	}
-	if _, _, err := parseResourceURI(entity); err != nil {
+	if _, _, _, err := parseResourceURI(entity); err != nil {
 		return nil, err
 	}
 
-	// entity is treated as a resource URI, try to find the resource and set it enabled/disabled
 	var resources []model.Resource
-	if err := m.db.Preload("Server").Where("uri = ?", entity).Find(&resources).Error; err != nil {
+	if err := m.dbTenant(ctx).Preload("Server").Where("uri = ?", entity).Find(&resources).Error; err != nil {
 		return nil, fmt.Errorf("failed to get resources for URI %s: %w", entity, err)
 	}
 	if len(resources) == 0 {
@@ -229,7 +228,7 @@ func (m *MCPService) setResourcesEnabled(entity string, enabled bool) ([]string,
 		return []string{resource.URI}, nil
 	}
 	resource.Enabled = enabled
-	if err := m.db.Save(&resource).Error; err != nil {
+	if err := m.dbTenant(ctx).Save(&resource).Error; err != nil {
 		return nil, fmt.Errorf("failed to set resource %s enabled=%t: %w", resource.URI, enabled, err)
 	}
 
@@ -256,9 +255,9 @@ func (m *MCPService) setResourcesEnabled(entity string, enabled bool) ([]string,
 	return []string{resource.URI}, nil
 }
 
-func (m *MCPService) setServerResourcesEnabled(s *model.McpServer, enabled bool) ([]string, error) {
+func (m *MCPService) setServerResourcesEnabled(ctx context.Context, s *model.McpServer, enabled bool) ([]string, error) {
 	var resources []model.Resource
-	if err := m.db.Where("server_id = ?", s.ID).Find(&resources).Error; err != nil {
+	if err := m.dbTenant(ctx).Where("server_id = ?", s.ID).Find(&resources).Error; err != nil {
 		return nil, fmt.Errorf("failed to get resources for server %s: %w", s.Name, err)
 	}
 
@@ -268,7 +267,7 @@ func (m *MCPService) setServerResourcesEnabled(s *model.McpServer, enabled bool)
 			continue
 		}
 		resources[i].Enabled = enabled
-		if err := m.db.Save(&resources[i]).Error; err != nil {
+		if err := m.dbTenant(ctx).Save(&resources[i]).Error; err != nil {
 			return nil, fmt.Errorf("failed to set resource %s enabled=%t: %w", resources[i].URI, enabled, err)
 		}
 
@@ -312,8 +311,9 @@ func (m *MCPService) registerServerResources(ctx context.Context, s *model.McpSe
 		metaJSON, _ := json.Marshal(resource.Meta)
 
 		r := &model.Resource{
+			TenantID:    s.TenantID,
 			ServerID:    s.ID,
-			URI:         buildResourceURI(s.Name, resource.URI),
+			URI:         buildResourceURI(s.TenantID, s.Name, resource.URI),
 			OriginalURI: resource.URI,
 			Name:        resource.GetName(),
 			Description: resource.Description,
@@ -321,7 +321,7 @@ func (m *MCPService) registerServerResources(ctx context.Context, s *model.McpSe
 			Annotations: annotationsJSON,
 			Meta:        metaJSON,
 		}
-		if err := m.db.Create(r).Error; err != nil {
+		if err := m.dbTenant(ctx).Create(r).Error; err != nil {
 			log.Printf("[ERROR] failed to register resource %s (%s) in DB: %v", canonicalResourceName, resource.URI, err)
 			continue
 		}
@@ -339,14 +339,13 @@ func (m *MCPService) registerServerResources(ctx context.Context, s *model.McpSe
 }
 
 // deregisterServerResources deletes all resources that belong to an MCP server from the DB.
-// It also removes the resources from the MCP proxy server.
-func (m *MCPService) deregisterServerResources(s *model.McpServer) error {
+func (m *MCPService) deregisterServerResources(ctx context.Context, s *model.McpServer) error {
 	var resources []model.Resource
-	if err := m.db.Where("server_id = ?", s.ID).Find(&resources).Error; err != nil {
+	if err := m.dbTenant(ctx).Where("server_id = ?", s.ID).Find(&resources).Error; err != nil {
 		return fmt.Errorf("failed to list resources for server %s: %w", s.Name, err)
 	}
 
-	result := m.db.Unscoped().Where("server_id = ?", s.ID).Delete(&model.Resource{})
+	result := m.dbTenant(ctx).Unscoped().Where("server_id = ?", s.ID).Delete(&model.Resource{})
 	if result.Error != nil {
 		return fmt.Errorf("failed to delete resources for server %s: %w", s.Name, result.Error)
 	}

@@ -2,12 +2,14 @@
 package mcpclient
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
 	"github.com/mcpjungle/mcpjungle/internal"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"gorm.io/gorm"
 )
 
@@ -21,9 +23,10 @@ func NewMCPClientService(db *gorm.DB) *McpClientService {
 }
 
 // ListClients retrieves all MCP clients known to mcpjungle from the database
-func (m *McpClientService) ListClients() ([]*model.McpClient, error) {
+func (m *McpClientService) ListClients(ctx context.Context) ([]*model.McpClient, error) {
+	tid := tenant.MustFromContext(ctx)
 	var clients []*model.McpClient
-	if err := m.db.Find(&clients).Error; err != nil {
+	if err := m.db.WithContext(ctx).Where("tenant_id = ?", tid).Find(&clients).Error; err != nil {
 		return nil, err
 	}
 	return clients, nil
@@ -31,7 +34,9 @@ func (m *McpClientService) ListClients() ([]*model.McpClient, error) {
 
 // CreateClient creates a new MCP client in the database.
 // It also generates a new access token for the client.
-func (m *McpClientService) CreateClient(client model.McpClient) (*model.McpClient, error) {
+func (m *McpClientService) CreateClient(ctx context.Context, client model.McpClient) (*model.McpClient, error) {
+	tid := tenant.MustFromContext(ctx)
+	client.TenantID = tid
 	if client.AccessToken != "" {
 		// user has supplied a custom access token, validate it
 		if err := internal.ValidateAccessToken(client.AccessToken); err != nil {
@@ -52,7 +57,7 @@ func (m *McpClientService) CreateClient(client model.McpClient) (*model.McpClien
 		client.AllowList = []byte("[]")
 	}
 
-	if err := m.db.Create(&client).Error; err != nil {
+	if err := m.db.WithContext(ctx).Create(&client).Error; err != nil {
 		return nil, err
 	}
 	return &client, nil
@@ -60,9 +65,10 @@ func (m *McpClientService) CreateClient(client model.McpClient) (*model.McpClien
 
 // GetClientByToken retrieves an MCP client by its access token from the database.
 // It returns an error if no such client is found.
-func (m *McpClientService) GetClientByToken(token string) (*model.McpClient, error) {
+func (m *McpClientService) GetClientByToken(ctx context.Context, token string) (*model.McpClient, error) {
+	tid := tenant.MustFromContext(ctx)
 	var client model.McpClient
-	if err := m.db.Where("access_token = ?", token).First(&client).Error; err != nil {
+	if err := m.db.WithContext(ctx).Where("tenant_id = ? AND access_token = ?", tid, token).First(&client).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("client not found: %w", apierrors.ErrNotFound)
 		}
@@ -73,16 +79,18 @@ func (m *McpClientService) GetClientByToken(token string) (*model.McpClient, err
 
 // DeleteClient removes an MCP client from the database and immediately revokes its access.
 // It is an idempotent operation. Deleting a client that does not exist will not return an error.
-func (m *McpClientService) DeleteClient(name string) error {
-	result := m.db.Unscoped().Where("name = ?", name).Delete(&model.McpClient{})
+func (m *McpClientService) DeleteClient(ctx context.Context, name string) error {
+	tid := tenant.MustFromContext(ctx)
+	result := m.db.WithContext(ctx).Unscoped().Where("tenant_id = ? AND name = ?", tid, name).Delete(&model.McpClient{})
 	return result.Error
 }
 
 // UpdateClient updates an existing MCP client's information in the database.
 // Currently, it only supports updating the access token of the client.
-func (m *McpClientService) UpdateClient(updatedClient model.McpClient) (*model.McpClient, error) {
+func (m *McpClientService) UpdateClient(ctx context.Context, updatedClient model.McpClient) (*model.McpClient, error) {
+	tid := tenant.MustFromContext(ctx)
 	var client model.McpClient
-	if err := m.db.Where("name = ?", updatedClient.Name).First(&client).Error; err != nil {
+	if err := m.db.WithContext(ctx).Where("tenant_id = ? AND name = ?", tid, updatedClient.Name).First(&client).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("client not found: %w", apierrors.ErrNotFound)
 		}
@@ -96,7 +104,7 @@ func (m *McpClientService) UpdateClient(updatedClient model.McpClient) (*model.M
 	// Update only the access token for now
 	client.AccessToken = updatedClient.AccessToken
 
-	if err := m.db.Save(&client).Error; err != nil {
+	if err := m.db.WithContext(ctx).Save(&client).Error; err != nil {
 		return nil, err
 	}
 	return &client, nil

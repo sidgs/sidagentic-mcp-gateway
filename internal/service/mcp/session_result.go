@@ -37,7 +37,8 @@ type sessionResult struct {
 	client      *client.Client
 	shouldClose bool // true for stateless sessions, false for stateful sessions
 
-	// For stateful sessions, these are used for reactive invalidation on errors
+// For stateful sessions, these are used for reactive invalidation on errors
+	tenantID       string
 	serverName     string
 	sessionManager *SessionManager
 }
@@ -59,7 +60,7 @@ func (sr *sessionResult) invalidateOnError(err error) {
 
 	// Check if this looks like a connection error
 	if isConnectionError(err) {
-		sr.sessionManager.InvalidateSession(sr.serverName, err.Error())
+		sr.sessionManager.InvalidateSessionForServer(sr.tenantID, sr.serverName, err.Error())
 	}
 }
 
@@ -76,6 +77,7 @@ func (m *MCPService) getSession(ctx context.Context, server *model.McpServer) (*
 		return &sessionResult{
 			client:         mcpClient,
 			shouldClose:    false, // Don't close stateful sessions after each call
+			tenantID:       server.TenantID,
 			serverName:     server.Name,
 			sessionManager: m.sessionManager,
 		}, nil

@@ -13,7 +13,9 @@ import (
 type UpstreamOAuthPendingSession struct {
 	gorm.Model
 
-	SessionID string `json:"session_id" gorm:"uniqueIndex;not null"`
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_oauth_pending_session"`
+
+	SessionID string `json:"session_id" gorm:"uniqueIndex:ux_oauth_pending_session;not null"`
 
 	ServerName string                   `json:"server_name" gorm:"index;not null"`
 	Transport  types.McpServerTransport `json:"transport" gorm:"type:varchar(30);not null"`
@@ -41,7 +43,9 @@ type UpstreamOAuthPendingSession struct {
 type UpstreamOAuthToken struct {
 	gorm.Model
 
-	ServerName string                   `json:"server_name" gorm:"uniqueIndex;not null"`
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_oauth_token_server"`
+
+	ServerName string                   `json:"server_name" gorm:"uniqueIndex:ux_oauth_token_server;not null"`
 	Transport  types.McpServerTransport `json:"transport" gorm:"type:varchar(30);not null"`
 
 	ClientID     string         `json:"client_id"`

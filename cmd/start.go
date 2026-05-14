@@ -28,6 +28,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
 	"github.com/spf13/cobra"
 )
@@ -39,6 +40,12 @@ const (
 	DBUrlEnvVar            = "DATABASE_URL"
 	ServerModeEnvVar       = "SERVER_MODE"
 	TelemetryEnabledEnvVar = "OTEL_ENABLED"
+
+	// HTTPPathPrefixEnvVar sets a path prefix for all HTTP routes (e.g. /ai/v1/sami-mcp-gateway).
+	HTTPPathPrefixEnvVar = "HTTP_PATH_PREFIX"
+
+	// DefaultTenantIDEnvVar selects the tenant when the X-Tenant-ID header is omitted.
+	DefaultTenantIDEnvVar = "DEFAULT_TENANT_ID"
 )
 
 const (
@@ -211,6 +218,18 @@ func isTelemetryEnabled(desiredServerMode model.ServerMode) (bool, error) {
 	}
 
 	return telemetryEnabled, nil
+}
+
+// getDefaultTenantID returns the tenant id used when a request has no X-Tenant-ID header.
+func getDefaultTenantID() (string, error) {
+	v := strings.TrimSpace(os.Getenv(DefaultTenantIDEnvVar))
+	if v == "" {
+		return tenant.DefaultID, nil
+	}
+	if err := tenant.Validate(v); err != nil {
+		return "", fmt.Errorf("invalid %s: %w", DefaultTenantIDEnvVar, err)
+	}
+	return v, nil
 }
 
 // getBindPort returns the TCP port to bind the mcpjungle server to
@@ -450,6 +469,11 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create Tool Group service: %v", err)
 	}
 
+	defaultTenantID, err := getDefaultTenantID()
+	if err != nil {
+		return err
+	}
+
 	// create the API server
 	opts := &api.ServerOptions{
 		MCPProxyServer:    mcpProxyServer,
@@ -462,6 +486,8 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		DashboardService:  dashboardService,
 		OtelProviders:     otelProviders,
 		Metrics:           mcpMetrics,
+		HTTPPathPrefix:    strings.TrimSpace(os.Getenv(HTTPPathPrefixEnvVar)),
+		DefaultTenantID:   defaultTenantID,
 	}
 	s, err := api.NewServer(opts)
 	if err != nil {

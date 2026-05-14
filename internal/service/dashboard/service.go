@@ -2,12 +2,14 @@ package dashboard
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"sort"
 	"strings"
 	"time"
 
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
 	"gorm.io/gorm"
@@ -140,9 +142,9 @@ func (s *Service) Tools() (*types.DashboardToolsResponse, error) {
 			"No tools discovered yet",
 			"MCPJungle is running, but it has not discovered any tools from registered servers yet.",
 			[]string{
-				"mcpjungle list tools --server context7",
-				"mcpjungle usage <tool-name>",
-				`mcpjungle invoke <tool-name> --input '{"key": "value"}'`,
+				fmt.Sprintf("%s list tools --server context7", cliapp.ExecutableName),
+				fmt.Sprintf("%s usage <tool-name>", cliapp.ExecutableName),
+				fmt.Sprintf(`%s invoke <tool-name> --input '{"key": "value"}'`, cliapp.ExecutableName),
 			},
 		)
 	}
@@ -178,8 +180,8 @@ func (s *Service) Prompts() (*types.DashboardPromptsResponse, error) {
 			"No prompts discovered yet",
 			"Registered servers can expose prompt templates. None are currently available.",
 			[]string{
-				"mcpjungle list prompts",
-				"mcpjungle get prompt <prompt-name>",
+				fmt.Sprintf("%s list prompts", cliapp.ExecutableName),
+				fmt.Sprintf("%s get prompt <prompt-name>", cliapp.ExecutableName),
 			},
 		)
 	}
@@ -212,8 +214,8 @@ func (s *Service) Resources() (*types.DashboardResourcesResponse, error) {
 			"No resources discovered yet",
 			"Registered servers can expose MCP resources. None are currently available.",
 			[]string{
-				"mcpjungle list resources",
-				"mcpjungle get resource --read <uri>",
+				fmt.Sprintf("%s list resources", cliapp.ExecutableName),
+				fmt.Sprintf("%s get resource --read <uri>", cliapp.ExecutableName),
 			},
 		)
 	}
@@ -520,8 +522,8 @@ func noServersEmptyState() *types.DashboardEmptyState {
 		"No servers registered yet",
 		"Register an MCP server from the CLI, then refresh the dashboard to inspect tools, prompts, and resources.",
 		[]string{
-			"mcpjungle register --name context7 --url https://mcp.context7.com/mcp",
-			"mcpjungle list servers",
+			fmt.Sprintf("%s register --name context7 --url https://mcp.context7.com/mcp", cliapp.ExecutableName),
+			fmt.Sprintf("%s list servers", cliapp.ExecutableName),
 		},
 	)
 }

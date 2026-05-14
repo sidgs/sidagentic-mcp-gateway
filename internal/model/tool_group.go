@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 
@@ -11,7 +12,7 @@ import (
 // ToolResolver defines the interface needed to resolve tools by server.
 type ToolResolver interface {
 	// ListToolsByServer returns a list of tools for the given MCP server name.
-	ListToolsByServer(serverName string) ([]Tool, error)
+	ListToolsByServer(ctx context.Context, serverName string) ([]Tool, error)
 }
 
 // ToolGroup represents a group of tools.
@@ -19,7 +20,9 @@ type ToolResolver interface {
 type ToolGroup struct {
 	gorm.Model
 
-	Name        string `json:"name" gorm:"unique; not null"`
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_toolgroup_tenant_name"`
+
+	Name        string `json:"name" gorm:"uniqueIndex:ux_toolgroup_tenant_name; not null"`
 	Description string `json:"description"`
 
 	// IncludedTools contains a list of tool names that are included in this group.
@@ -68,7 +71,7 @@ func (g *ToolGroup) GetExcludedTools() ([]string, error) {
 // Note that tool exclusions are applied at last, so if a tool is both included and excluded,
 // it will be excluded.
 // It requires an MCP service to lookup tools by server.
-func (g *ToolGroup) ResolveEffectiveTools(mcpService ToolResolver) ([]string, error) {
+func (g *ToolGroup) ResolveEffectiveTools(ctx context.Context, mcpService ToolResolver) ([]string, error) {
 	effectiveTools := make(map[string]bool)
 
 	// Add tools from included_tools
@@ -86,7 +89,7 @@ func (g *ToolGroup) ResolveEffectiveTools(mcpService ToolResolver) ([]string, er
 		return nil, fmt.Errorf("failed to get included servers: %w", err)
 	}
 	for _, serverName := range includedServers {
-		serverTools, err := mcpService.ListToolsByServer(serverName)
+		serverTools, err := mcpService.ListToolsByServer(ctx, serverName)
 		if err != nil {
 			return nil, fmt.Errorf("failed to get tools for server %s: %w", serverName, err)
 		}

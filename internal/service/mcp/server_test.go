@@ -11,6 +11,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -143,7 +144,7 @@ func createTestResourceRecord(t *testing.T, db *gorm.DB, server *model.McpServer
 	t.Helper()
 
 	resource := &model.Resource{
-		URI:         buildResourceURI(server.Name, originalURI),
+		URI:         buildResourceURI(tenant.DefaultID, server.Name, originalURI),
 		OriginalURI: originalURI,
 		Name:        name,
 		Description: "Test resource",
@@ -213,7 +214,7 @@ func TestRegisterMcpServerWithOAuthSupport_StreamableHTTPRegistersServerAndEntit
 	)
 	require.NoError(t, err)
 
-	err = service.RegisterMcpServerWithOAuthSupport(context.Background(), &types.RegisterServerInput{}, srv, false, "test")
+	err = service.RegisterMcpServerWithOAuthSupport(tenant.WithContext(context.Background(), tenant.DefaultID), &types.RegisterServerInput{}, srv, false, "test")
 	require.NoError(t, err)
 
 	var serverCount, toolCount, promptCount, resourceCount int64
@@ -226,42 +227,46 @@ func TestRegisterMcpServerWithOAuthSupport_StreamableHTTPRegistersServerAndEntit
 	assert.EqualValues(t, 1, promptCount)
 	assert.EqualValues(t, 1, resourceCount)
 
-	registeredServer, err := service.GetMcpServer("catalog")
+	testCtx := tenant.WithContext(context.Background(), tenant.DefaultID)
+	registeredServer, err := service.GetMcpServer(testCtx, "catalog")
 	require.NoError(t, err)
 	assert.True(t, registeredServer.Enabled)
 
-	tool, err := service.GetTool("catalog__echo")
+	tool, err := service.GetTool(testCtx, "catalog__echo")
 	require.NoError(t, err)
 	assert.Equal(t, "catalog__echo", tool.Name)
 
-	prompts, err := service.ListPromptsByServer("catalog")
+	prompts, err := service.ListPromptsByServer(testCtx, "catalog")
 	require.NoError(t, err)
 	require.Len(t, prompts, 1)
 	assert.Equal(t, "catalog__review", prompts[0].Name)
 
-	resources, err := service.ListResourcesByServer("catalog")
+	resources, err := service.ListResourcesByServer(testCtx, "catalog")
 	require.NoError(t, err)
 	require.Len(t, resources, 1)
 	assert.Equal(t, "catalog__spec", resources[0].Name)
 
-	_, ok := service.GetToolInstance("catalog__echo")
+	qualEcho := tenant.QualifyProxyName(tenant.DefaultID, "catalog__echo")
+	_, ok := service.GetToolInstance(qualEcho)
 	assert.True(t, ok)
 
+	listCtx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeDev), tenant.DefaultID)
 	proxyClient := newInitializedInProcessClient(t, service.mcpProxyServer)
-	toolList, err := proxyClient.ListTools(context.Background(), mcp.ListToolsRequest{})
+	toolList, err := proxyClient.ListTools(listCtx, mcp.ListToolsRequest{})
 	require.NoError(t, err)
 	require.Len(t, toolList.Tools, 1)
-	assert.Equal(t, "catalog__echo", toolList.Tools[0].Name)
+	assert.Equal(t, qualEcho, toolList.Tools[0].Name)
 
-	promptList, err := proxyClient.ListPrompts(context.Background(), mcp.ListPromptsRequest{})
+	qualReview := tenant.QualifyProxyName(tenant.DefaultID, "catalog__review")
+	promptList, err := proxyClient.ListPrompts(listCtx, mcp.ListPromptsRequest{})
 	require.NoError(t, err)
 	require.Len(t, promptList.Prompts, 1)
-	assert.Equal(t, "catalog__review", promptList.Prompts[0].Name)
+	assert.Equal(t, qualReview, promptList.Prompts[0].Name)
 
-	resourceList, err := proxyClient.ListResources(context.Background(), mcp.ListResourcesRequest{})
+	resourceList, err := proxyClient.ListResources(listCtx, mcp.ListResourcesRequest{})
 	require.NoError(t, err)
 	require.Len(t, resourceList.Resources, 1)
-	assert.Equal(t, buildResourceURI("catalog", "resource://catalog/spec"), resourceList.Resources[0].URI)
+	assert.Equal(t, buildResourceURI(tenant.DefaultID, "catalog", "resource://catalog/spec"), resourceList.Resources[0].URI)
 }
 
 func TestRegisterMcpServer_RejectsInvalidNameAndURLBeforePersistence(t *testing.T) {
@@ -325,15 +330,18 @@ func TestDisableEnableMcpServer_CascadesEntitiesAndSetDashboardServerEnabled(t *
 
 	service := newTestLifecycleService(t, db)
 
-	_, ok := service.GetToolInstance("test-server__echo")
+	testCtx := tenant.WithContext(context.Background(), tenant.DefaultID)
+	qualEcho := tenant.QualifyProxyName(tenant.DefaultID, "test-server__echo")
+
+	_, ok := service.GetToolInstance(qualEcho)
 	require.True(t, ok)
 
-	disabledTools, disabledPrompts, err := service.DisableMcpServer("test-server")
+	disabledTools, disabledPrompts, err := service.DisableMcpServer(testCtx, "test-server")
 	require.NoError(t, err)
 	assert.Equal(t, []string{"test-server__echo"}, disabledTools)
 	assert.Equal(t, []string{"test-server__review"}, disabledPrompts)
 
-	updatedServer, err := service.GetMcpServer("test-server")
+	updatedServer, err := service.GetMcpServer(testCtx, "test-server")
 	require.NoError(t, err)
 	assert.False(t, updatedServer.Enabled)
 
@@ -349,14 +357,14 @@ func TestDisableEnableMcpServer_CascadesEntitiesAndSetDashboardServerEnabled(t *
 	require.NoError(t, db.Where("server_id = ? AND name = ?", srv.ID, "status").First(&resource).Error)
 	assert.False(t, resource.Enabled)
 
-	assert.Nil(t, service.mcpProxyServer.GetTool("test-server__echo"))
-	_, ok = service.GetToolInstance("test-server__echo")
+	assert.Nil(t, service.mcpProxyServer.GetTool(qualEcho))
+	_, ok = service.GetToolInstance(qualEcho)
 	assert.False(t, ok)
 
-	err = service.SetDashboardServerEnabled("test-server", true)
+	err = service.SetDashboardServerEnabled(testCtx, "test-server", true)
 	require.NoError(t, err)
 
-	updatedServer, err = service.GetMcpServer("test-server")
+	updatedServer, err = service.GetMcpServer(testCtx, "test-server")
 	require.NoError(t, err)
 	assert.True(t, updatedServer.Enabled)
 
@@ -367,8 +375,8 @@ func TestDisableEnableMcpServer_CascadesEntitiesAndSetDashboardServerEnabled(t *
 	require.NoError(t, db.Where("server_id = ? AND name = ?", srv.ID, "status").First(&resource).Error)
 	assert.True(t, resource.Enabled)
 
-	assert.NotNil(t, service.mcpProxyServer.GetTool("test-server__echo"))
-	_, ok = service.GetToolInstance("test-server__echo")
+	assert.NotNil(t, service.mcpProxyServer.GetTool(qualEcho))
+	_, ok = service.GetToolInstance(qualEcho)
 	assert.True(t, ok)
 }
 
@@ -404,7 +412,7 @@ func TestDeregisterMcpServer_RemovesEntitiesOAuthStateAndSession(t *testing.T) {
 	service.sessionManager.sessions[srv.Name] = &ManagedSession{ServerName: srv.Name}
 	require.True(t, service.sessionManager.HasSession(srv.Name))
 
-	err := service.DeregisterMcpServer(srv.Name)
+	err := service.DeregisterMcpServer(tenant.WithContext(context.Background(), tenant.DefaultID), srv.Name)
 	require.NoError(t, err)
 
 	var serverCount, toolCount, promptCount, resourceCount, tokenCount, pendingCount int64
@@ -421,8 +429,9 @@ func TestDeregisterMcpServer_RemovesEntitiesOAuthStateAndSession(t *testing.T) {
 	assert.Zero(t, tokenCount)
 	assert.Zero(t, pendingCount)
 
-	assert.Nil(t, service.mcpProxyServer.GetTool("test-server__echo"))
-	_, ok := service.GetToolInstance("test-server__echo")
+	qualEcho := tenant.QualifyProxyName(tenant.DefaultID, "test-server__echo")
+	assert.Nil(t, service.mcpProxyServer.GetTool(qualEcho))
+	_, ok := service.GetToolInstance(qualEcho)
 	assert.False(t, ok)
 	assert.False(t, service.sessionManager.HasSession(srv.Name))
 }

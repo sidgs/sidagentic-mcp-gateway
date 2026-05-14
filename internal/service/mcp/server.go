@@ -9,6 +9,7 @@ import (
 	mcpgotransport "github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"gorm.io/gorm"
 )
@@ -71,6 +72,7 @@ func (m *MCPService) registerMcpServer(ctx context.Context, s *model.McpServer, 
 
 	// Upon registration, a server is always enabled. Admin can choose to disable it later.
 	s.Enabled = true
+	s.TenantID = tenant.MustFromContext(ctx)
 
 	// Only validate URLs for transports that actually carry a URL in their config.
 	switch s.Transport {
@@ -133,61 +135,61 @@ func (m *MCPService) registerMcpServer(ctx context.Context, s *model.McpServer, 
 // If even a single tool, prompt or resource fails to deregister, the server deregistration fails.
 // Deregistered tools, prompts and resources are also removed from the MCP proxy server.
 // Any stateful sessions associated with this server are also closed.
-func (m *MCPService) DeregisterMcpServer(name string) error {
-	s, err := m.GetMcpServer(name)
+func (m *MCPService) DeregisterMcpServer(ctx context.Context, name string) error {
+	s, err := m.GetMcpServer(ctx, name)
 	if err != nil {
 		return fmt.Errorf("failed to get MCP server %s from DB: %w", name, err)
 	}
-	if err := m.deregisterServerTools(s); err != nil {
+	if err := m.deregisterServerTools(ctx, s); err != nil {
 		return fmt.Errorf(
 			"failed to deregister tools for server %s, cannot proceed with server deregistration: %w",
 			name,
 			err,
 		)
 	}
-	if err := m.deregisterServerPrompts(s); err != nil {
+	if err := m.deregisterServerPrompts(ctx, s); err != nil {
 		return fmt.Errorf(
 			"failed to deregister prompts for server %s, cannot proceed with server deregistration: %w",
 			name,
 			err,
 		)
 	}
-	if err := m.deregisterServerResources(s); err != nil {
+	if err := m.deregisterServerResources(ctx, s); err != nil {
 		return fmt.Errorf(
 			"failed to deregister resources for server %s, cannot proceed with server deregistration: %w",
 			name,
 			err,
 		)
 	}
-	if err := m.db.Unscoped().Delete(s).Error; err != nil {
+	if err := m.dbTenant(ctx).Unscoped().Delete(s).Error; err != nil {
 		return fmt.Errorf("failed to deregister server %s: %w", name, err)
 	}
-	if err := m.db.Unscoped().Where("server_name = ?", name).Delete(&model.UpstreamOAuthToken{}).Error; err != nil {
+	if err := m.dbTenant(ctx).Unscoped().Where("server_name = ?", name).Delete(&model.UpstreamOAuthToken{}).Error; err != nil {
 		return fmt.Errorf("failed to remove upstream OAuth tokens for server %s: %w", name, err)
 	}
-	if err := m.db.Unscoped().Where("server_name = ?", name).Delete(&model.UpstreamOAuthPendingSession{}).Error; err != nil {
+	if err := m.dbTenant(ctx).Unscoped().Where("server_name = ?", name).Delete(&model.UpstreamOAuthPendingSession{}).Error; err != nil {
 		return fmt.Errorf("failed to remove pending upstream OAuth sessions for server %s: %w", name, err)
 	}
 
 	// Close any stateful session associated with this server
-	m.sessionManager.CloseSession(name)
+	m.sessionManager.CloseSessionForServer(s.TenantID, name)
 
 	return nil
 }
 
 // ListMcpServers returns all registered MCP servers.
-func (m *MCPService) ListMcpServers() ([]model.McpServer, error) {
+func (m *MCPService) ListMcpServers(ctx context.Context) ([]model.McpServer, error) {
 	var servers []model.McpServer
-	if err := m.db.Find(&servers).Error; err != nil {
+	if err := m.dbTenant(ctx).Find(&servers).Error; err != nil {
 		return nil, err
 	}
 	return servers, nil
 }
 
 // GetMcpServer fetches a server from the database by name.
-func (m *MCPService) GetMcpServer(name string) (*model.McpServer, error) {
+func (m *MCPService) GetMcpServer(ctx context.Context, name string) (*model.McpServer, error) {
 	var serverModel model.McpServer
-	if err := m.db.Where("name = ?", name).First(&serverModel).Error; err != nil {
+	if err := m.dbTenant(ctx).Where("name = ?", name).First(&serverModel).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("MCP server %s not found: %w", name, apierrors.ErrNotFound)
 		}
@@ -199,22 +201,22 @@ func (m *MCPService) GetMcpServer(name string) (*model.McpServer, error) {
 // EnableMcpServer enables all tools, prompts and resources registered by the given MCP server.
 // It returns the names of the enabled tools and prompts.
 // If even a single tool, prompt or resource fails to enable, the operation fails.
-func (m *MCPService) EnableMcpServer(name string) ([]string, []string, error) {
+func (m *MCPService) EnableMcpServer(ctx context.Context, name string) ([]string, []string, error) {
 	if err := validateServerName(name); err != nil {
 		return nil, nil, err
 	}
-	if err := m.setMcpServerEnabled(name, true); err != nil {
+	if err := m.setMcpServerEnabled(ctx, name, true); err != nil {
 		return nil, nil, fmt.Errorf("failed to mark server %s enabled: %w", name, err)
 	}
-	toolsEnabled, err := m.EnableTools(name)
+	toolsEnabled, err := m.EnableTools(ctx, name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enable tools for server %s: %w", name, err)
 	}
-	promptsEnabled, err := m.EnablePrompts(name)
+	promptsEnabled, err := m.EnablePrompts(ctx, name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to enable prompts for server %s: %w", name, err)
 	}
-	if _, err := m.EnableResources(name); err != nil {
+	if _, err := m.EnableResources(ctx, name); err != nil {
 		return nil, nil, fmt.Errorf("failed to enable resources for server %s: %w", name, err)
 	}
 	return toolsEnabled, promptsEnabled, nil
@@ -223,22 +225,22 @@ func (m *MCPService) EnableMcpServer(name string) ([]string, []string, error) {
 // DisableMcpServer disables all tools, prompts and resources registered by the given MCP server.
 // It returns the names of the disabled tools and prompts.
 // If even a single tool, prompt or resource fails to disable, the operation fails.
-func (m *MCPService) DisableMcpServer(name string) ([]string, []string, error) {
+func (m *MCPService) DisableMcpServer(ctx context.Context, name string) ([]string, []string, error) {
 	if err := validateServerName(name); err != nil {
 		return nil, nil, err
 	}
-	if err := m.setMcpServerEnabled(name, false); err != nil {
+	if err := m.setMcpServerEnabled(ctx, name, false); err != nil {
 		return nil, nil, fmt.Errorf("failed to mark server %s disabled: %w", name, err)
 	}
-	toolsDisabled, err := m.DisableTools(name)
+	toolsDisabled, err := m.DisableTools(ctx, name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to disable tools for server %s: %w", name, err)
 	}
-	promptsDisabled, err := m.DisablePrompts(name)
+	promptsDisabled, err := m.DisablePrompts(ctx, name)
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to disable prompts for server %s: %w", name, err)
 	}
-	if _, err := m.DisableResources(name); err != nil {
+	if _, err := m.DisableResources(ctx, name); err != nil {
 		return nil, nil, fmt.Errorf("failed to disable resources for server %s: %w", name, err)
 	}
 	return toolsDisabled, promptsDisabled, nil
@@ -247,18 +249,18 @@ func (m *MCPService) DisableMcpServer(name string) ([]string, []string, error) {
 // SetDashboardServerEnabled reuses the standard server enable/disable flow so dashboard
 // toggles stay consistent with CLI semantics and cascade to the server's tools, prompts,
 // and resources.
-func (m *MCPService) SetDashboardServerEnabled(name string, enabled bool) error {
+func (m *MCPService) SetDashboardServerEnabled(ctx context.Context, name string, enabled bool) error {
 	if enabled {
-		_, _, err := m.EnableMcpServer(name)
+		_, _, err := m.EnableMcpServer(ctx, name)
 		return err
 	}
-	_, _, err := m.DisableMcpServer(name)
+	_, _, err := m.DisableMcpServer(ctx, name)
 	return err
 }
 
 // setMcpServerEnabled is a helper that updates the enabled status of the MCP server in the DB.
-func (m *MCPService) setMcpServerEnabled(name string, enabled bool) error {
-	server, err := m.GetMcpServer(name)
+func (m *MCPService) setMcpServerEnabled(ctx context.Context, name string, enabled bool) error {
+	server, err := m.GetMcpServer(ctx, name)
 	if err != nil {
 		return err
 	}
@@ -266,7 +268,7 @@ func (m *MCPService) setMcpServerEnabled(name string, enabled bool) error {
 		return nil
 	}
 	server.Enabled = enabled
-	if err := m.db.Save(server).Error; err != nil {
+	if err := m.dbTenant(ctx).Save(server).Error; err != nil {
 		return fmt.Errorf("failed to set server %s enabled=%t: %w", name, enabled, err)
 	}
 	return nil

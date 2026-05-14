@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/spf13/cobra"
 )
@@ -41,11 +42,11 @@ var getPromptCmd = &cobra.Command{
 	Short: "Get a prompt template",
 	Long: "Retrieve a prompt template from an MCP server with optional arguments.\n" +
 		"The prompt will be rendered with the provided arguments and returned as structured messages.",
-	Example: `  # Get a basic prompt
-  mcpjungle get prompt github__code-review
+	Example: fmt.Sprintf(`  # Get a basic prompt
+  %s get prompt github__code-review
 
   # Get a prompt with arguments
-  mcpjungle get prompt github__code-review --arg code="def hello(): print('world')" --arg language="python"`,
+  %s get prompt github__code-review --arg code="def hello(): print('world')" --arg language="python"`, cliapp.ExecutableName, cliapp.ExecutableName),
 	RunE: runGetPrompt,
 }
 

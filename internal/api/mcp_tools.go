@@ -17,12 +17,13 @@ func (s *Server) listToolsHandler() gin.HandlerFunc {
 			tools []model.Tool
 			err   error
 		)
+		ctx := c.Request.Context()
 		if server == "" {
 			// no server specified, list all tools
-			tools, err = s.mcpService.ListTools()
+			tools, err = s.mcpService.ListTools(ctx)
 		} else {
 			// server specified, list tools for that server
-			tools, err = s.mcpService.ListToolsByServer(server)
+			tools, err = s.mcpService.ListToolsByServer(ctx, server)
 		}
 		if err != nil {
 			handleServiceError(c, err)
@@ -58,7 +59,7 @@ func (s *Server) invokeToolHandler() gin.HandlerFunc {
 		// remove name from args since it was an input for the api, not for the tool
 		delete(args, "name")
 
-		resp, err := s.mcpService.InvokeTool(c, name, args)
+		resp, err := s.mcpService.InvokeTool(c.Request.Context(), name, args)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to invoke tool: %w", err))
 			return
@@ -79,7 +80,7 @@ func (s *Server) getToolHandler() gin.HandlerFunc {
 			return
 		}
 
-		tool, err := s.mcpService.GetTool(name)
+		tool, err := s.mcpService.GetTool(c.Request.Context(), name)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to get tool: %w", err))
 			return
@@ -97,7 +98,7 @@ func (s *Server) enableToolsHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing 'entity' query parameter"})
 			return
 		}
-		enabledTools, err := s.mcpService.EnableTools(entity)
+		enabledTools, err := s.mcpService.EnableTools(c.Request.Context(), entity)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to enable tool(s): %w", err))
 			return
@@ -114,7 +115,7 @@ func (s *Server) disableToolsHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing 'entity' query parameter"})
 			return
 		}
-		disabledTools, err := s.mcpService.DisableTools(entity)
+		disabledTools, err := s.mcpService.DisableTools(c.Request.Context(), entity)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to disable tool(s): %w", err))
 			return

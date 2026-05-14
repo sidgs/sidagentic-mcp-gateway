@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -70,7 +71,7 @@ func TestListPrompts(t *testing.T) {
 	createTestPrompt(t, db, srv, "code-review")
 	createTestPrompt(t, db, srv, "security-audit")
 
-	prompts, err := service.ListPrompts()
+	prompts, err := service.ListPrompts(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, prompts, 2)
 
@@ -91,7 +92,7 @@ func TestListPromptsByServer(t *testing.T) {
 	srv := createTestServer(t, db)
 	createTestPrompt(t, db, srv, "code-review")
 
-	prompts, err := service.ListPromptsByServer("test-server")
+	prompts, err := service.ListPromptsByServer(context.Background(), "test-server")
 	require.NoError(t, err)
 	assert.Len(t, prompts, 1)
 	assert.Equal(t, "test-server__code-review", prompts[0].Name)
@@ -104,7 +105,7 @@ func TestGetPrompt(t *testing.T) {
 	srv := createTestServer(t, db)
 	originalPrompt := createTestPrompt(t, db, srv, "code-review")
 
-	prompt, err := service.GetPrompt("test-server__code-review")
+	prompt, err := service.GetPrompt(context.Background(), "test-server__code-review")
 	require.NoError(t, err)
 	assert.Equal(t, "test-server__code-review", prompt.Name)
 	assert.Equal(t, originalPrompt.Description, prompt.Description)
@@ -115,7 +116,7 @@ func TestGetPrompt_InvalidName(t *testing.T) {
 	service := &MCPService{db: db}
 
 	// Test with invalid name (no separator)
-	_, err := service.GetPrompt("invalid-name")
+	_, err := service.GetPrompt(context.Background(), "invalid-name")
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "does not contain a __ separator")
 	assert.ErrorIs(t, err, apierrors.ErrInvalidInput)
@@ -141,7 +142,7 @@ func TestEnableDisablePrompts(t *testing.T) {
 	prompt := createTestPrompt(t, db, srv, "code-review")
 
 	// Test disable
-	disabledPrompts, err := service.DisablePrompts("test-server__code-review")
+	disabledPrompts, err := service.DisablePrompts(context.Background(), "test-server__code-review")
 	require.NoError(t, err)
 	assert.Len(t, disabledPrompts, 1)
 	assert.Equal(t, "test-server__code-review", disabledPrompts[0])
@@ -153,7 +154,7 @@ func TestEnableDisablePrompts(t *testing.T) {
 	assert.False(t, updatedPrompt.Enabled)
 
 	// Test enable
-	enabledPrompts, err := service.EnablePrompts("test-server__code-review")
+	enabledPrompts, err := service.EnablePrompts(context.Background(), "test-server__code-review")
 	require.NoError(t, err)
 	assert.Len(t, enabledPrompts, 1)
 	assert.Equal(t, "test-server__code-review", enabledPrompts[0])
@@ -185,7 +186,7 @@ func TestEnableDisableServerPrompts(t *testing.T) {
 	createTestPrompt(t, db, srv, "security-audit")
 
 	// Test disable all prompts for server
-	disabledPrompts, err := service.DisablePrompts("test-server")
+	disabledPrompts, err := service.DisablePrompts(context.Background(), "test-server")
 	require.NoError(t, err)
 	assert.Len(t, disabledPrompts, 2)
 
@@ -198,7 +199,7 @@ func TestEnableDisableServerPrompts(t *testing.T) {
 	}
 
 	// Test enable all prompts for server
-	enabledPrompts, err := service.EnablePrompts("test-server")
+	enabledPrompts, err := service.EnablePrompts(context.Background(), "test-server")
 	require.NoError(t, err)
 	assert.Len(t, enabledPrompts, 2)
 

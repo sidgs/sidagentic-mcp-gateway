@@ -8,6 +8,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
 
@@ -18,7 +19,7 @@ func (s *Server) createToolGroupHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		if err := s.toolGroupService.CreateToolGroup(&input); err != nil {
+		if err := s.toolGroupService.CreateToolGroup(c.Request.Context(), &input); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -33,7 +34,7 @@ func (s *Server) createToolGroupHandler() gin.HandlerFunc {
 // This API only provides basic information about each tool group, ie, name and description.
 func (s *Server) listToolGroupsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		groups, err := s.toolGroupService.ListToolGroups()
+		groups, err := s.toolGroupService.ListToolGroups(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -89,7 +90,7 @@ func (s *Server) getToolGroupHandler() gin.HandlerFunc {
 			return
 		}
 
-		group, err := s.toolGroupService.GetToolGroup(name)
+		group, err := s.toolGroupService.GetToolGroup(c.Request.Context(), name)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -151,7 +152,7 @@ func (s *Server) getToolGroupEffectiveToolsHandler() gin.HandlerFunc {
 			return
 		}
 
-		tools, err := s.toolGroupService.ResolveEffectiveTools(name)
+		tools, err := s.toolGroupService.ResolveEffectiveTools(c.Request.Context(), name)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -169,7 +170,7 @@ func (s *Server) deleteToolGroupHandler() gin.HandlerFunc {
 			return
 		}
 
-		err := s.toolGroupService.DeleteToolGroup(name)
+		err := s.toolGroupService.DeleteToolGroup(c.Request.Context(), name)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -196,7 +197,7 @@ func (s *Server) updateToolGroupHandler() gin.HandlerFunc {
 			return
 		}
 
-		originalConf, err := s.toolGroupService.UpdateToolGroup(name, &input)
+		originalConf, err := s.toolGroupService.UpdateToolGroup(c.Request.Context(), name, &input)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -290,7 +291,8 @@ func (s *Server) toolGroupMCPServerCallHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// get the Proxy MCP server for the specified tool group
 		groupName := c.Param("name")
-		groupMcpServer, exists := s.toolGroupService.GetToolGroupMCPServer(groupName)
+		tid := tenant.MustFromContext(c.Request.Context())
+		groupMcpServer, exists := s.toolGroupService.GetToolGroupMCPServer(tid, groupName)
 		if !exists {
 			c.JSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("tool group not found: %s", groupName)})
 			return
@@ -307,30 +309,27 @@ func (s *Server) toolGroupMCPServerCallHandler() gin.HandlerFunc {
 }
 
 // getGroupSseServer returns a server.SSEServer for a specific group, creating one if it doesn't already exist.
-// It ensures that each tool group has its own SSE server with the correct dynamic base path.
-func (s *Server) getGroupSseServer(groupName string) (*server.SSEServer, error) {
-	// Try to get existing server first
-	if serverVal, ok := s.groupSseServers.Load(groupName); ok {
+func (s *Server) getGroupSseServer(c *gin.Context, groupName string) (*server.SSEServer, error) {
+	tid := tenant.MustFromContext(c.Request.Context())
+	cacheKey := tenant.ToolGroupMapKey(tid, groupName)
+
+	if serverVal, ok := s.groupSseServers.Load(cacheKey); ok {
 		return serverVal.(*server.SSEServer), nil
 	}
 
-	// Get the sse MCP proxy server for the group
-	groupSseMcpServer, exists := s.toolGroupService.GetToolGroupSseMCPServer(groupName)
+	groupSseMcpServer, exists := s.toolGroupService.GetToolGroupSseMCPServer(tid, groupName)
 	if !exists {
 		return nil, fmt.Errorf("tool group not found: %s", groupName)
 	}
 
-	// Create new server with the correct dynamic base path
 	sseServer := server.NewSSEServer(
 		groupSseMcpServer,
 		server.WithDynamicBasePath(func(r *http.Request, sessionID string) string {
-			// Return the group-specific base path
 			return fmt.Sprintf("%s/groups/%s", V0PathPrefix, groupName)
 		}),
 	)
 
-	// Store for future use
-	s.groupSseServers.Store(groupName, sseServer)
+	s.groupSseServers.Store(cacheKey, sseServer)
 
 	return sseServer, nil
 }
@@ -340,7 +339,7 @@ func (s *Server) toolGroupSseMCPServerCallHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		groupName := c.Param("name")
 
-		groupSseMcpServer, err := s.getGroupSseServer(groupName)
+		groupSseMcpServer, err := s.getGroupSseServer(c, groupName)
 		if err != nil {
 			c.JSON(
 				http.StatusNotFound,
@@ -358,7 +357,7 @@ func (s *Server) toolGroupSseMCPServerCallMessageHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		groupName := c.Param("name")
 
-		groupSseMcpServer, err := s.getGroupSseServer(groupName)
+		groupSseMcpServer, err := s.getGroupSseServer(c, groupName)
 		if err != nil {
 			c.JSON(
 				http.StatusNotFound,

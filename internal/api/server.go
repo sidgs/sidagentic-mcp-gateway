@@ -2,8 +2,10 @@
 package api
 
 import (
+	"context"
 	"fmt"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,6 +20,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
@@ -49,6 +52,13 @@ type ServerOptions struct {
 
 	OtelProviders *telemetry.Providers
 	Metrics       telemetry.CustomMetrics
+
+	// HTTPPathPrefix is an optional path prefix (e.g. /ai/v1/sami-mcp-gateway) for every route.
+	// Empty means routes are served from the host root.
+	HTTPPathPrefix string
+
+	// DefaultTenantID is used when the X-Tenant-ID header is absent (typically from DEFAULT_TENANT_ID).
+	DefaultTenantID string
 }
 
 // Server represents the MCPJungle registry server that handles MCP proxy and API requests
@@ -81,6 +91,12 @@ type Server struct {
 	// session ID (completed/failed/expired) so the frontend can poll for
 	// progress after opening the upstream authorization URL.
 	dashboardOAuthResults map[string]dashboardOAuthSessionResult
+
+	// httpPathPrefix is normalized (see NormalizeHTTPPathPrefix).
+	httpPathPrefix string
+
+	// defaultTenantID is used when X-Tenant-ID is missing and for non-HTTP operations.
+	defaultTenantID string
 }
 
 // dashboardOAuthSessionResult is the dashboard-facing terminal state for an
@@ -97,6 +113,13 @@ type dashboardOAuthSessionResult struct {
 
 // NewServer initializes a new Gin server for MCPJungle registry and MCP proxy
 func NewServer(opts *ServerOptions) (*Server, error) {
+	def := strings.TrimSpace(opts.DefaultTenantID)
+	if def == "" {
+		def = tenant.DefaultID
+	}
+	if err := tenant.Validate(def); err != nil {
+		return nil, fmt.Errorf("invalid default tenant id: %w", err)
+	}
 	s := &Server{
 		mcpProxyServer:        opts.MCPProxyServer,
 		sseMcpProxyServer:     opts.SseMcpProxyServer,
@@ -109,6 +132,8 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		otelProviders:         opts.OtelProviders,
 		metrics:               opts.Metrics,
 		dashboardOAuthResults: make(map[string]dashboardOAuthSessionResult),
+		httpPathPrefix:        NormalizeHTTPPathPrefix(opts.HTTPPathPrefix),
+		defaultTenantID:       def,
 	}
 
 	// Set up the router after the server is fully initialized
@@ -123,7 +148,8 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 
 // IsInitialized returns true if the server is initialized
 func (s *Server) IsInitialized() (bool, error) {
-	c, err := s.configService.GetConfig()
+	ctx := tenant.WithContext(context.Background(), s.defaultTenantID)
+	c, err := s.configService.GetConfig(ctx)
 	if err != nil {
 		return false, fmt.Errorf("failed to get server config: %w", err)
 	}
@@ -139,7 +165,7 @@ func (s *Server) GetMode() (model.ServerMode, error) {
 	if !ok {
 		return "", fmt.Errorf("server is not initialized")
 	}
-	c, err := s.configService.GetConfig()
+	c, err := s.configService.GetConfig(tenant.WithContext(context.Background(), s.defaultTenantID))
 	if err != nil {
 		return "", fmt.Errorf("failed to get server config: %w", err)
 	}
@@ -149,7 +175,8 @@ func (s *Server) GetMode() (model.ServerMode, error) {
 // InitDev initializes the server configuration in the Development mode.
 // This method does not create an admin user because that is irrelevant in dev mode.
 func (s *Server) InitDev() error {
-	_, err := s.configService.Init(model.ModeDev)
+	ctx := tenant.WithContext(context.Background(), s.defaultTenantID)
+	_, err := s.configService.Init(ctx, model.ModeDev)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server config in dev mode: %w", err)
 	}
@@ -162,6 +189,28 @@ func (s *Server) Router() http.Handler {
 	return s.router
 }
 
+// HTTPPathPrefix returns the configured path prefix (normalized), or "" if routes are at the host root.
+func (s *Server) HTTPPathPrefix() string {
+	return s.httpPathPrefix
+}
+
+// publicGatewayRoot returns scheme://host[/prefix] with no trailing slash (before path segments like /mcp).
+func (s *Server) publicGatewayRoot(c *gin.Context) string {
+	hostRoot := requestSchemeHost(c)
+	if s.httpPathPrefix == "" {
+		return hostRoot
+	}
+	return strings.TrimRight(hostRoot, "/") + s.httpPathPrefix
+}
+
+func requestSchemeHost(c *gin.Context) string {
+	scheme := "http"
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return scheme + "://" + c.Request.Host
+}
+
 // setupRouter sets up the Gin router with the MCP proxy server and API endpoints.
 func (s *Server) setupRouter() (*gin.Engine, error) {
 	gin.SetMode(gin.ReleaseMode)
@@ -171,19 +220,30 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 	if s.otelProviders != nil && s.otelProviders.IsEnabled() {
 		// instrument gin
 		r.Use(otelgin.Middleware(s.otelProviders.ServiceName()))
-
-		// expose prometheus metrics endpoint
-		r.GET("/metrics", gin.WrapH(promhttp.Handler()))
 	}
 
-	r.GET(
+	var g *gin.RouterGroup
+	if s.httpPathPrefix != "" {
+		g = r.Group(s.httpPathPrefix)
+	} else {
+		g = &r.RouterGroup
+	}
+
+	g.Use(s.tenantMiddleware())
+
+	if s.otelProviders != nil && s.otelProviders.IsEnabled() {
+		// expose prometheus metrics endpoint
+		g.GET("/metrics", gin.WrapH(promhttp.Handler()))
+	}
+
+	g.GET(
 		"/health",
 		func(c *gin.Context) {
 			c.JSON(http.StatusOK, gin.H{"status": "ok"})
 		},
 	)
 
-	r.GET(
+	g.GET(
 		"/metadata",
 		func(c *gin.Context) {
 			m := &types.ServerMetadata{
@@ -193,7 +253,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		},
 	)
 
-	r.POST("/init", s.registerInitServerHandler())
+	g.POST("/init", s.registerInitServerHandler())
 
 	requireEnterpriseMode := s.requireServerMode(model.ModeEnterprise)
 	requireDashboardMode := s.requireDashboardMode()
@@ -203,21 +263,21 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		if err != nil {
 			return nil, err
 		}
-		r.GET("/", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
-		r.GET("/index.html", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
-		r.GET("/assets/*filepath", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
+		g.GET("/", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
+		g.GET("/index.html", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
+		g.GET("/assets/*filepath", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
 	}
 
 	// Set up the MCP proxy server on /mcp
 	streamableHTTPServer := server.NewStreamableHTTPServer(s.mcpProxyServer)
-	r.Any(
+	g.Any(
 		"/mcp",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		gin.WrapH(streamableHTTPServer),
 	)
 
-	r.Any(
+	g.Any(
 		V0PathPrefix+"/groups/:name/mcp",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
@@ -226,26 +286,26 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 
 	// Set up the SSE transport-based MCP proxy server for the global /sse endpoint
 	sseServer := server.NewSSEServer(s.sseMcpProxyServer)
-	r.Any(
+	g.Any(
 		"/sse",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		gin.WrapH(sseServer.SSEHandler()),
 	)
-	r.Any(
+	g.Any(
 		"/message",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		gin.WrapH(sseServer.MessageHandler()),
 	)
 
-	r.Any(
+	g.Any(
 		V0PathPrefix+"/groups/:name/sse",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		s.toolGroupSseMCPServerCallHandler(),
 	)
-	r.Any(
+	g.Any(
 		V0PathPrefix+"/groups/:name/message",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
@@ -253,7 +313,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 	)
 
 	// Setup /v0 API endpoints
-	apiV0 := r.Group(
+	apiV0 := g.Group(
 		V0ApiPathPrefix,
 		s.requireInitialized(),
 		s.verifyUserAuthForAPIAccess(),
@@ -353,7 +413,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 	}
 
 	if s.dashboardService != nil {
-		dashboardAPI := r.Group(
+		dashboardAPI := g.Group(
 			"/api/dashboard",
 			s.requireInitialized(),
 			requireDashboardMode,

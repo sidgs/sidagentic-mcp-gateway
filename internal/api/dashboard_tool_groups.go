@@ -2,11 +2,13 @@ package api
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
 
@@ -40,7 +42,8 @@ type dashboardToolGroupsResponse struct {
 
 func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		groups, err := s.toolGroupService.ListToolGroups()
+		ctx := c.Request.Context()
+		groups, err := s.toolGroupService.ListToolGroups(ctx)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -63,9 +66,9 @@ func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
 				Title:       "No tool groups configured yet.",
 				Description: "Create a tool group to expose a focused subset of MCP tools.",
 				Commands: []string{
-					"mcpjungle create group --conf group.json",
-					"mcpjungle list groups",
-					"mcpjungle get group <group-name>",
+					fmt.Sprintf("%s create group --conf group.json", cliapp.ExecutableName),
+					fmt.Sprintf("%s list groups", cliapp.ExecutableName),
+					fmt.Sprintf("%s get group <group-name>", cliapp.ExecutableName),
 				},
 			}
 		}
@@ -76,7 +79,7 @@ func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardGetToolGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		group, err := s.toolGroupService.GetToolGroup(c.Param("name"))
+		group, err := s.toolGroupService.GetToolGroup(c.Request.Context(), c.Param("name"))
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -110,7 +113,7 @@ func (s *Server) dashboardCreateToolGroupHandler() gin.HandlerFunc {
 			Description:   input.Description,
 			IncludedTools: includedTools,
 		}
-		if err := s.toolGroupService.CreateToolGroup(group); err != nil {
+		if err := s.toolGroupService.CreateToolGroup(c.Request.Context(), group); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -126,7 +129,7 @@ func (s *Server) dashboardCreateToolGroupHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardDeleteToolGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if err := s.toolGroupService.DeleteToolGroup(c.Param("name")); err != nil {
+		if err := s.toolGroupService.DeleteToolGroup(c.Request.Context(), c.Param("name")); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -135,7 +138,7 @@ func (s *Server) dashboardDeleteToolGroupHandler() gin.HandlerFunc {
 }
 
 func (s *Server) buildDashboardToolGroup(c *gin.Context, group model.ToolGroup) (dashboardToolGroup, error) {
-	toolNames, err := group.ResolveEffectiveTools(s.mcpService)
+	toolNames, err := group.ResolveEffectiveTools(c.Request.Context(), s.mcpService)
 	if err != nil {
 		return dashboardToolGroup{}, err
 	}
@@ -147,9 +150,9 @@ func (s *Server) buildDashboardToolGroup(c *gin.Context, group model.ToolGroup) 
 			Name:          toolName,
 			Server:        "Unknown",
 		}
-		if tool, err := s.mcpService.GetTool(toolName); err == nil {
+		if tool, err := s.mcpService.GetTool(c.Request.Context(), toolName); err == nil {
 			item.Name = tool.Name
-			if server, serverErr := s.mcpService.GetToolParentServer(toolName); serverErr == nil {
+			if server, serverErr := s.mcpService.GetToolParentServer(c.Request.Context(), toolName); serverErr == nil {
 				item.Server = server.Name
 			}
 			item.CanonicalName = toolName

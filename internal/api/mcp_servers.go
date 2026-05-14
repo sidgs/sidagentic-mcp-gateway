@@ -16,6 +16,7 @@ import (
 
 func (s *Server) registerServerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		ctx := c.Request.Context()
 		force, err := parseForceQueryParam(c)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -36,9 +37,9 @@ func (s *Server) registerServerHandler() gin.HandlerFunc {
 
 		if force {
 			// If "force" option is set, we check if a server with the same name already exists. If it does, we deregister it before registering the new one.
-			if _, err := s.mcpService.GetMcpServer(input.Name); err == nil {
+			if _, err := s.mcpService.GetMcpServer(ctx, input.Name); err == nil {
 				log.Printf("[INFO] force=true: deregistering existing MCP server %s before re-registration", input.Name)
-				if err := s.mcpService.DeregisterMcpServer(input.Name); err != nil {
+				if err := s.mcpService.DeregisterMcpServer(ctx, input.Name); err != nil {
 					c.JSON(
 						http.StatusInternalServerError,
 						gin.H{"error": fmt.Sprintf("Error deregistering existing server with name %s: %v", input.Name, err)},
@@ -61,7 +62,7 @@ func (s *Server) registerServerHandler() gin.HandlerFunc {
 			}
 		}
 
-		if err := s.mcpService.RegisterMcpServerWithOAuthSupport(c, &input, server, force, initiatedBy); err != nil {
+		if err := s.mcpService.RegisterMcpServerWithOAuthSupport(ctx, &input, server, force, initiatedBy); err != nil {
 			var oauthErr *mcp.UpstreamOAuthAuthorizationPendingError
 			if errors.As(err, &oauthErr) {
 				// registration failed because upstream server requires OAuth authorization.
@@ -118,7 +119,7 @@ func (s *Server) completeUpstreamOAuthSessionHandler() gin.HandlerFunc {
 			return
 		}
 
-		server, err := s.mcpService.CompleteUpstreamOAuthSession(c, sessionID, input.Code, input.State)
+		server, err := s.mcpService.CompleteUpstreamOAuthSession(c.Request.Context(), sessionID, input.Code, input.State)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -159,7 +160,7 @@ func (s *Server) deregisterServerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("name")
 
-		if err := s.mcpService.DeregisterMcpServer(name); err != nil {
+		if err := s.mcpService.DeregisterMcpServer(c.Request.Context(), name); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -170,7 +171,7 @@ func (s *Server) deregisterServerHandler() gin.HandlerFunc {
 
 func (s *Server) listServersHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		records, err := s.mcpService.ListMcpServers()
+		records, err := s.mcpService.ListMcpServers(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -238,7 +239,7 @@ func (s *Server) enableServerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("name")
 
-		tools, prompts, err := s.mcpService.EnableMcpServer(name)
+		tools, prompts, err := s.mcpService.EnableMcpServer(c.Request.Context(), name)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -257,7 +258,7 @@ func (s *Server) disableServerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		name := c.Param("name")
 
-		tools, prompts, err := s.mcpService.DisableMcpServer(name)
+		tools, prompts, err := s.mcpService.DisableMcpServer(c.Request.Context(), name)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -278,7 +279,7 @@ func (s *Server) disableServerHandler() gin.HandlerFunc {
 // The configs can be used to register the servers again elsewhere.
 func (s *Server) getServerConfigsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		records, err := s.mcpService.ListMcpServers()
+		records, err := s.mcpService.ListMcpServers(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -339,7 +340,7 @@ func (s *Server) getServerConfigsHandler() gin.HandlerFunc {
 				servers[i].BearerToken = conf.BearerToken
 			}
 
-			if oauthToken, err := s.mcpService.GetUpstreamOAuthToken(record.Name); err == nil {
+			if oauthToken, err := s.mcpService.GetUpstreamOAuthToken(c.Request.Context(), record.Name); err == nil {
 				servers[i].OAuthRedirectURI = oauthToken.RedirectURI
 				servers[i].OAuthClientID = oauthToken.ClientID
 				servers[i].OAuthClientSecret = oauthToken.ClientSecret

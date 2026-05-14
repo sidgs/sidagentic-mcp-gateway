@@ -12,10 +12,12 @@ import (
 type McpClient struct {
 	gorm.Model
 
-	Name        string `json:"name" gorm:"uniqueIndex;not null"`
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_mcp_client_tenant_name;uniqueIndex:ux_mcp_client_tenant_token"`
+
+	Name        string `json:"name" gorm:"uniqueIndex:ux_mcp_client_tenant_name;not null"`
 	Description string `json:"description"`
 
-	AccessToken string `json:"access_token" gorm:"unique; not null"`
+	AccessToken string `json:"access_token" gorm:"uniqueIndex:ux_mcp_client_tenant_token;not null"`
 
 	// AllowList contains a list of MCP Server names that this client is allowed to view and call
 	// storing the list of server names as a JSON array is a convenient way for now.

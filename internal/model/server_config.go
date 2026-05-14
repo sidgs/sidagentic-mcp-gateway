@@ -32,6 +32,8 @@ func IsEnterpriseMode(mode ServerMode) bool {
 type ServerConfig struct {
 	gorm.Model
 
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_server_config_tenant"`
+
 	Mode ServerMode `gorm:"type:varchar(12);not null"`
 
 	// Initialized indicates whether the server has been initialized.

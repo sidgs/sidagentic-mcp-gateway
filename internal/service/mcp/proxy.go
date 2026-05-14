@@ -9,6 +9,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
 
@@ -19,6 +20,9 @@ func authorizeProxyServerAccess(ctx context.Context, serverName string) error {
 	}
 
 	c := ctx.Value("client").(*model.McpClient)
+	if c.TenantID != tenant.MustFromContext(ctx) {
+		return fmt.Errorf("client is not authorized for this tenant")
+	}
 	if !c.CheckHasServerAccess(serverName) {
 		return fmt.Errorf("client %s is not authorized to access MCP server %s", c.Name, serverName)
 	}
@@ -34,7 +38,15 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 	outcome := telemetry.ToolCallOutcomeSuccess
 
 	name := request.Params.Name
-	serverName, toolName, ok := splitServerToolName(name)
+	prefixTenant, canonicalToolName, qualified := tenant.SplitProxyToolName(name)
+	if !qualified {
+		canonicalToolName = name
+		prefixTenant = tenant.MustFromContext(ctx)
+	} else if prefixTenant != tenant.MustFromContext(ctx) {
+		return nil, fmt.Errorf("tool tenant does not match request tenant: %w", apierrors.ErrInvalidInput)
+	}
+
+	serverName, toolName, ok := splitServerToolName(canonicalToolName)
 	if !ok {
 		return nil, fmt.Errorf("tool name does not contain a %s separator: %w", serverToolNameSep, apierrors.ErrInvalidInput)
 	}
@@ -43,21 +55,20 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 		return nil, err
 	}
 
-	// Record the tool call metrics at the end of the function
 	defer func() {
 		m.metrics.RecordToolCall(ctx, serverName, toolName, outcome, time.Since(started))
 	}()
 
-	// get the MCP server details from the database
-	server, err := m.GetMcpServer(serverName)
+	server, err := m.GetMcpServer(ctx, serverName)
 	if err != nil {
-		// TODO: differentiate between "server not found" and other errors.
-		// server not found is not an internal error, so outcome should be success.
 		outcome = telemetry.ToolCallOutcomeError
 
 		return nil, fmt.Errorf(
 			"failed to get details about MCP server %s from DB: %w", serverName, err,
 		)
+	}
+	if server.TenantID != prefixTenant {
+		return nil, fmt.Errorf("tool tenant does not match server record: %w", apierrors.ErrInvalidInput)
 	}
 
 	session, err := m.getSession(ctx, server)
@@ -67,19 +78,15 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 	}
 	defer session.closeIfApplicable()
 
-	// Ensure the tool name is set correctly, ie, without the server name prefix
 	request.Params.Name = toolName
-	// Do not let any client-sent headers get forwarded to the upstream MCP server.
-	// See https://github.com/mcpjungle/MCPJungle/issues/252
 	request.Header = nil
 
 	res, err := session.client.CallTool(ctx, request)
 	if err != nil {
 		outcome = telemetry.ToolCallOutcomeError
-		session.invalidateOnError(err) // Invalidate unhealthy stateful sessions
+		session.invalidateOnError(err)
 	}
 
-	// forward the request to the upstream MCP server and relay the response back
 	return res, err
 }
 
@@ -87,10 +94,13 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 // by forwarding the request to the appropriate upstream MCP server and
 // relaying the response back.
 func (m *MCPService) mcpProxyResourceHandler(ctx context.Context, request mcp.ReadResourceRequest) ([]mcp.ResourceContents, error) {
-	// get the upstream mcp server and original resource uri for the requested resource uri
-	resource, err := m.GetResource(request.Params.URI)
+	resource, err := m.GetResource(ctx, request.Params.URI)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get resource %s from DB: %w", request.Params.URI, err)
+	}
+
+	if resource.Server.TenantID != tenant.MustFromContext(ctx) {
+		return nil, fmt.Errorf("resource tenant does not match request tenant: %w", apierrors.ErrInvalidInput)
 	}
 
 	if err := authorizeProxyServerAccess(ctx, resource.Server.Name); err != nil {
@@ -105,7 +115,6 @@ func (m *MCPService) mcpProxyResourceHandler(ctx context.Context, request mcp.Re
 
 	request.Params.URI = resource.OriginalURI
 
-	// Do not let any client-sent headers get forwarded to the upstream MCP server.
 	request.Header = nil
 
 	res, err := session.client.ReadResource(ctx, request)
@@ -125,7 +134,15 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 	outcome := telemetry.PromptCallOutcomeSuccess
 
 	name := request.Params.Name
-	serverName, promptName, ok := splitServerPromptName(name)
+	prefixTenant, canonicalPromptName, qualified := tenant.SplitProxyToolName(name)
+	if !qualified {
+		canonicalPromptName = name
+		prefixTenant = tenant.MustFromContext(ctx)
+	} else if prefixTenant != tenant.MustFromContext(ctx) {
+		return nil, fmt.Errorf("prompt tenant does not match request tenant: %w", apierrors.ErrInvalidInput)
+	}
+
+	serverName, promptName, ok := splitServerPromptName(canonicalPromptName)
 	if !ok {
 		return nil, fmt.Errorf("prompt name does not contain a %s separator: %w", serverPromptNameSep, apierrors.ErrInvalidInput)
 	}
@@ -134,21 +151,20 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 		return nil, err
 	}
 
-	// Record the prompt call metrics at the end of the function
 	defer func() {
 		m.metrics.RecordPromptCall(ctx, serverName, promptName, outcome, time.Since(started))
 	}()
 
-	// get the MCP server details from the database
-	server, err := m.GetMcpServer(serverName)
+	server, err := m.GetMcpServer(ctx, serverName)
 	if err != nil {
-		// TODO: differentiate between "server not found" and other errors.
-		// server not found is not an internal error, so outcome should be success.
 		outcome = telemetry.PromptCallOutcomeError
 
 		return nil, fmt.Errorf(
 			"failed to get details about MCP server %s from DB: %w", serverName, err,
 		)
+	}
+	if server.TenantID != prefixTenant {
+		return nil, fmt.Errorf("prompt tenant does not match server record: %w", apierrors.ErrInvalidInput)
 	}
 
 	session, err := m.getSession(ctx, server)
@@ -158,16 +174,13 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 	}
 	defer session.closeIfApplicable()
 
-	// Ensure the prompt name is set correctly, ie, without the server name prefix
 	request.Params.Name = promptName
-	// Do not let any client-sent headers get forwarded to the upstream MCP server.
 	request.Header = nil
 
-	// forward the request to the upstream MCP server and relay the response back
 	res, err := session.client.GetPrompt(ctx, request)
 	if err != nil {
 		outcome = telemetry.PromptCallOutcomeError
-		session.invalidateOnError(err) // Invalidate unhealthy stateful sessions
+		session.invalidateOnError(err)
 	}
 
 	return res, err
@@ -177,40 +190,31 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 // It loads all the registered MCP tools, prompts and resources from the database into the proxy server.
 func (m *MCPService) initMCPProxyServer() error {
 	mcpServerModelsCache := make(map[string]*model.McpServer)
-	// Load Tools
-	tools, err := m.ListTools()
-	if err != nil {
+
+	var tools []model.Tool
+	if err := m.db.Preload("Server").Find(&tools).Error; err != nil {
 		return fmt.Errorf("failed to list tools from DB: %w", err)
 	}
 
 	for _, tm := range tools {
 		if !tm.Enabled {
-			// do not add disabled tools to the proxy
 			continue
 		}
 
-		// Add tool to the MCP proxy server
 		tool, err := convertToolModelToMcpObject(&tm)
 		if err != nil {
 			return fmt.Errorf("failed to convert tool model to MCP object for tool %s: %w", tm.Name, err)
 		}
 
-		// get the tool's MCP server so we can determine the transport type
-		// use a cache to avoid querying the DB multiple times for the same server
-		// since multiple tools can belong to the same server
-		var server *model.McpServer
-		serverName, _, _ := splitServerToolName(tool.Name)
+		canonical := mergeServerToolNames(tm.Server.Name, tm.Name)
+		tool.Name = tenant.QualifyProxyName(tm.TenantID, canonical)
 
-		server, exists := mcpServerModelsCache[serverName]
+		var server *model.McpServer
+		cacheKey := tenant.SessionKey(tm.TenantID, tm.Server.Name)
+		server, exists := mcpServerModelsCache[cacheKey]
 		if !exists {
-			server, err = m.GetMcpServer(serverName)
-			if err != nil {
-				return fmt.Errorf(
-					"init mcp proxy server: failed to get MCP server %s for tool %s from DB: %w", serverName, tool.Name, err,
-				)
-			}
-			// store the server model in cache so we don't have to query the DB again for the same server
-			mcpServerModelsCache[serverName] = server
+			server = &tm.Server
+			mcpServerModelsCache[cacheKey] = server
 		}
 
 		if server.Transport == types.TransportSSE {
@@ -222,37 +226,29 @@ func (m *MCPService) initMCPProxyServer() error {
 		m.addToolInstance(tool)
 	}
 
-	// Load prompts
-	prompts, err := m.ListPrompts()
-	if err != nil {
+	var prompts []model.Prompt
+	if err := m.db.Preload("Server").Find(&prompts).Error; err != nil {
 		return fmt.Errorf("failed to list prompts from DB: %w", err)
 	}
 
 	for _, pm := range prompts {
 		if !pm.Enabled {
-			// do not add disabled prompts to the proxy
 			continue
 		}
 
-		// Add prompt to the MCP proxy server
 		prompt, err := convertPromptModelToMcpObject(&pm)
 		if err != nil {
 			return fmt.Errorf("failed to convert prompt model to MCP object for prompt %s: %w", pm.Name, err)
 		}
 
-		// get the prompt's MCP server from cache so we can determine the transport type
-		var server *model.McpServer
-		serverName, _, _ := splitServerPromptName(prompt.Name)
+		canonical := mergeServerPromptNames(pm.Server.Name, pm.Name)
+		prompt.Name = tenant.QualifyProxyName(pm.TenantID, canonical)
 
-		server, exists := mcpServerModelsCache[serverName]
+		cacheKey := tenant.SessionKey(pm.TenantID, pm.Server.Name)
+		server, exists := mcpServerModelsCache[cacheKey]
 		if !exists {
-			server, err = m.GetMcpServer(serverName)
-			if err != nil {
-				return fmt.Errorf(
-					"init mcp proxy server: failed to get MCP server %s for tool %s from DB: %w", serverName, prompt.Name, err,
-				)
-			}
-			mcpServerModelsCache[serverName] = server
+			server = &pm.Server
+			mcpServerModelsCache[cacheKey] = server
 		}
 
 		if server.Transport == types.TransportSSE {
@@ -262,9 +258,8 @@ func (m *MCPService) initMCPProxyServer() error {
 		}
 	}
 
-	// Load resources
-	resources, err := m.ListResources()
-	if err != nil {
+	var resources []model.Resource
+	if err := m.db.Preload("Server").Find(&resources).Error; err != nil {
 		return fmt.Errorf("failed to list resources from DB: %w", err)
 	}
 
@@ -273,13 +268,11 @@ func (m *MCPService) initMCPProxyServer() error {
 			continue
 		}
 
-		// no need to use mcp servers model cache because resources come pre-loaded with server, ie, rm.Server
-
 		resource, err := convertResourceModelToMcpObject(&rm)
 		if err != nil {
 			return fmt.Errorf("failed to convert resource model to MCP object for resource %s: %w", rm.URI, err)
 		}
-		resource.Name = rm.Name
+		resource.Name = mergeServerResourceNames(rm.Server.Name, rm.Name)
 
 		if rm.Server.Transport == types.TransportSSE {
 			m.sseMcpProxyServer.AddResource(resource, m.mcpProxyResourceHandler)

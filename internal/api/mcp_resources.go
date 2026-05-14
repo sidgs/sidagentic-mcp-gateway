@@ -18,10 +18,11 @@ func (s *Server) listResourcesHandler() gin.HandlerFunc {
 			resources []model.Resource
 			err       error
 		)
+		ctx := c.Request.Context()
 		if server == "" {
-			resources, err = s.mcpService.ListResources()
+			resources, err = s.mcpService.ListResources(ctx)
 		} else {
-			resources, err = s.mcpService.ListResourcesByServer(server)
+			resources, err = s.mcpService.ListResourcesByServer(ctx, server)
 		}
 		if err != nil {
 			handleServiceError(c, err)
@@ -45,7 +46,7 @@ func (s *Server) getResourceHandler() gin.HandlerFunc {
 			return
 		}
 
-		resource, err := s.mcpService.GetResource(request.URI)
+		resource, err := s.mcpService.GetResource(c.Request.Context(), request.URI)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to get resource: %w", err))
 			return
@@ -69,7 +70,7 @@ func (s *Server) readResourceHandler() gin.HandlerFunc {
 			return
 		}
 
-		resp, err := s.mcpService.ReadResource(c, request.URI)
+		resp, err := s.mcpService.ReadResource(c.Request.Context(), request.URI)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to read resource: %w", err))
 			return

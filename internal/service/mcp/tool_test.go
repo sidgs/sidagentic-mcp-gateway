@@ -1,6 +1,7 @@
 package mcp
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"reflect"
@@ -33,7 +34,7 @@ func TestGetTool_InvalidName(t *testing.T) {
 	db := setupTestDBWithTools(t)
 	service := &MCPService{db: db}
 
-	_, err := service.GetTool("invalid-name")
+	_, err := service.GetTool(context.Background(), "invalid-name")
 	if err == nil {
 		t.Fatalf("GetTool() error = nil, want non-nil")
 	}
@@ -46,7 +47,7 @@ func TestGetToolParentServer_InvalidName(t *testing.T) {
 	db := setupTestDBWithTools(t)
 	service := &MCPService{db: db}
 
-	_, err := service.GetToolParentServer("invalid-name")
+	_, err := service.GetToolParentServer(context.Background(), "invalid-name")
 	if err == nil {
 		t.Fatalf("GetToolParentServer() error = nil, want non-nil")
 	}

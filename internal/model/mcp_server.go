@@ -44,7 +44,9 @@ type SSEConfig struct {
 type McpServer struct {
 	gorm.Model
 
-	Name      string                   `json:"name" gorm:"uniqueIndex;not null"`
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_mcp_server_tenant_name"`
+
+	Name      string                   `json:"name" gorm:"uniqueIndex:ux_mcp_server_tenant_name;not null"`
 	Transport types.McpServerTransport `json:"transport" gorm:"type:varchar(30);not null"`
 	Enabled   bool                     `json:"enabled" gorm:"default:true"`
 

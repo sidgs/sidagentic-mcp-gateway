@@ -8,13 +8,31 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
+
+// tenantMiddleware resolves the tenant from X-Tenant-ID or the server's default.
+func (s *Server) tenantMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tid := strings.TrimSpace(c.GetHeader(tenant.HeaderName))
+		if tid == "" {
+			tid = s.defaultTenantID
+		}
+		if err := tenant.Validate(tid); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.Set(tenant.GinKey, tid)
+		c.Request = c.Request.WithContext(tenant.WithContext(c.Request.Context(), tid))
+		c.Next()
+	}
+}
 
 // requireInitialized is middleware to reject requests to certain routes if the server is not initialized
 func (s *Server) requireInitialized() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		cfg, err := s.configService.GetConfig()
+		cfg, err := s.configService.GetConfig(c.Request.Context())
 		if err != nil || !cfg.Initialized {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "server is not initialized"})
 			return
@@ -75,7 +93,7 @@ func (s *Server) verifyUserAuthForAPIAccess() gin.HandlerFunc {
 		}
 
 		// Verify that the token is valid and corresponds to a user
-		authenticatedUser, err := s.userService.GetUserByAccessToken(token)
+		authenticatedUser, err := s.userService.GetUserByAccessToken(c.Request.Context(), token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid access token: " + err.Error()})
 			return
@@ -191,7 +209,7 @@ func (s *Server) checkAuthForMcpProxyAccess() gin.HandlerFunc {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing MCP client access token"})
 			return
 		}
-		client, err := s.mcpClientService.GetClientByToken(token)
+		client, err := s.mcpClientService.GetClientByToken(c.Request.Context(), token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid MCP client token"})
 			return

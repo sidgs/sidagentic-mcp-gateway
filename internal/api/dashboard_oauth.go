@@ -31,13 +31,13 @@ func (s *Server) dashboardOAuthCallbackHandler() gin.HandlerFunc {
 			return
 		}
 
-		session, err := s.mcpService.GetPendingUpstreamOAuthSessionByState(c, state)
+		session, err := s.mcpService.GetPendingUpstreamOAuthSessionByState(c.Request.Context(), state)
 		if err != nil {
 			renderDashboardOAuthHTML(c, dashboardOAuthErrorStatus(err), "Authorization failed", safeOAuthCallbackError(err))
 			return
 		}
 
-		_, err = s.mcpService.CompleteUpstreamOAuthSession(c, session.SessionID, code, state)
+		_, err = s.mcpService.CompleteUpstreamOAuthSession(c.Request.Context(), session.SessionID, code, state)
 		if err != nil {
 			s.storeDashboardOAuthResult(session.SessionID, dashboardOAuthSessionResult{
 				Status:     dashboardOAuthStatusForError(err),
@@ -79,14 +79,14 @@ func (s *Server) dashboardOAuthSessionHandler() gin.HandlerFunc {
 			return
 		}
 
-		session, err := s.mcpService.GetPendingUpstreamOAuthSession(c, sessionID)
+		session, err := s.mcpService.GetPendingUpstreamOAuthSession(c.Request.Context(), sessionID)
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
 
 		if time.Now().After(session.ExpiresAt) {
-			_ = s.mcpService.DeletePendingUpstreamOAuthSession(c, session.SessionID)
+			_ = s.mcpService.DeletePendingUpstreamOAuthSession(c.Request.Context(), session.SessionID)
 			s.storeDashboardOAuthResult(session.SessionID, dashboardOAuthSessionResult{
 				Status:     "expired",
 				Error:      "OAuth authorization expired. Start registration again.",
@@ -170,7 +170,7 @@ func (s *Server) tryMarkDashboardOAuthFailed(c *gin.Context, state, oauthError, 
 	if state == "" {
 		return
 	}
-	session, err := s.mcpService.GetPendingUpstreamOAuthSessionByState(c, state)
+	session, err := s.mcpService.GetPendingUpstreamOAuthSessionByState(c.Request.Context(), state)
 	if err != nil {
 		return
 	}
@@ -181,7 +181,7 @@ func (s *Server) tryMarkDashboardOAuthFailed(c *gin.Context, state, oauthError, 
 		ExpiresAt:  session.ExpiresAt,
 		UpdatedAt:  time.Now(),
 	})
-	_ = s.mcpService.DeletePendingUpstreamOAuthSession(c, session.SessionID)
+	_ = s.mcpService.DeletePendingUpstreamOAuthSession(c.Request.Context(), session.SessionID)
 }
 
 func safeOAuthCallbackError(err error) string {

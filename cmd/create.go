@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/mcpjungle/mcpjungle/internal/configresolver"
+	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/spf13/cobra"
 )
@@ -269,7 +270,7 @@ func runCreateUser(cmd *cobra.Command, args []string) error {
 	cmd.Printf("User '%s' created successfully\n", user.Username)
 	cmd.Println("The user should now run the following command to log into mcpjungle:")
 	cmd.Println()
-	cmd.Printf("    mcpjungle login %s\n", resp.AccessToken)
+	cmd.Printf("    %s login %s\n", cliapp.ExecutableName, resp.AccessToken)
 	cmd.Println()
 
 	return nil

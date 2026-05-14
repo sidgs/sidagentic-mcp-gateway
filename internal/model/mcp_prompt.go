@@ -9,6 +9,8 @@ import (
 type Prompt struct {
 	gorm.Model
 
+	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;index"`
+
 	// Name is just the name of the prompt, without the server name prefix.
 	// A prompt name is unique only within the context of a server.
 	// This means that two prompts in mcpjungle DB CAN have the same name because

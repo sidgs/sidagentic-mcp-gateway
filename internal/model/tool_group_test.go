@@ -1,6 +1,7 @@
 package model
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 
@@ -12,7 +13,7 @@ type mockToolResolver struct {
 	serverTools map[string][]Tool
 }
 
-func (m *mockToolResolver) ListToolsByServer(serverName string) ([]Tool, error) {
+func (m *mockToolResolver) ListToolsByServer(ctx context.Context, serverName string) ([]Tool, error) {
 	if tools, exists := m.serverTools[serverName]; exists {
 		return tools, nil
 	}
@@ -106,7 +107,7 @@ func TestToolGroup_ResolveEffectiveTools(t *testing.T) {
 			IncludedTools: datatypes.JSON(toolsJSON),
 		}
 
-		result, err := group.ResolveEffectiveTools(resolver)
+		result, err := group.ResolveEffectiveTools(context.Background(), resolver)
 		if err != nil {
 			t.Fatalf("ResolveEffectiveTools() failed: %v", err)
 		}
@@ -133,7 +134,7 @@ func TestToolGroup_ResolveEffectiveTools(t *testing.T) {
 			IncludedServers: datatypes.JSON(serversJSON),
 		}
 
-		result, err := group.ResolveEffectiveTools(resolver)
+		result, err := group.ResolveEffectiveTools(context.Background(), resolver)
 		if err != nil {
 			t.Fatalf("ResolveEffectiveTools() failed: %v", err)
 		}
@@ -167,7 +168,7 @@ func TestToolGroup_ResolveEffectiveTools(t *testing.T) {
 			ExcludedTools:   datatypes.JSON(excludedJSON),
 		}
 
-		result, err := group.ResolveEffectiveTools(resolver)
+		result, err := group.ResolveEffectiveTools(context.Background(), resolver)
 		if err != nil {
 			t.Fatalf("ResolveEffectiveTools() failed: %v", err)
 		}
@@ -214,7 +215,7 @@ func TestToolGroup_ResolveEffectiveTools(t *testing.T) {
 			ExcludedTools:   datatypes.JSON(excludedJSON),
 		}
 
-		result, err := group.ResolveEffectiveTools(resolver)
+		result, err := group.ResolveEffectiveTools(context.Background(), resolver)
 		if err != nil {
 			t.Fatalf("ResolveEffectiveTools() failed: %v", err)
 		}
@@ -254,7 +255,7 @@ func TestToolGroup_ResolveEffectiveTools(t *testing.T) {
 			ExcludedTools: datatypes.JSON(excludedJSON),
 		}
 
-		result, err := group.ResolveEffectiveTools(resolver)
+		result, err := group.ResolveEffectiveTools(context.Background(), resolver)
 		if err != nil {
 			t.Fatalf("ResolveEffectiveTools() failed: %v", err)
 		}
@@ -276,7 +277,7 @@ func TestToolGroup_ResolveEffectiveTools_EmptyGroup(t *testing.T) {
 
 	group := &ToolGroup{}
 
-	result, err := group.ResolveEffectiveTools(resolver)
+	result, err := group.ResolveEffectiveTools(context.Background(), resolver)
 	if err != nil {
 		t.Fatalf("ResolveEffectiveTools() failed: %v", err)
 	}

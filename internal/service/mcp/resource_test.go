@@ -11,6 +11,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -31,7 +32,7 @@ func setupTestDBWithResources(t *testing.T) *gorm.DB {
 
 func createTestResource(t *testing.T, db *gorm.DB, server *model.McpServer, originalURI, name string) *model.Resource {
 	resource := &model.Resource{
-		URI:         buildResourceURI(server.Name, originalURI),
+		URI:         buildResourceURI(tenant.DefaultID, server.Name, originalURI),
 		OriginalURI: originalURI,
 		Name:        name,
 		Description: "Test resource",
@@ -52,7 +53,7 @@ func TestListResources(t *testing.T) {
 	createTestResource(t, db, srv, "resource://test/code-review", "code-review")
 	createTestResource(t, db, srv, "resource://test/security-audit", "security-audit")
 
-	resources, err := service.ListResources()
+	resources, err := service.ListResources(context.Background())
 	require.NoError(t, err)
 	assert.Len(t, resources, 2)
 
@@ -62,7 +63,7 @@ func TestListResources(t *testing.T) {
 	}
 	actualNames := []string{resources[0].Name, resources[1].Name}
 	assert.ElementsMatch(t, expectedNames, actualNames)
-	assert.Equal(t, buildResourceURI("test-server", "resource://test/code-review"), resources[0].URI)
+	assert.Equal(t, buildResourceURI(tenant.DefaultID, "test-server", "resource://test/code-review"), resources[0].URI)
 }
 
 func TestListResourcesByServer(t *testing.T) {
@@ -72,11 +73,11 @@ func TestListResourcesByServer(t *testing.T) {
 	srv := createTestServer(t, db)
 	createTestResource(t, db, srv, "resource://test/code-review", "code-review")
 
-	resources, err := service.ListResourcesByServer("test-server")
+	resources, err := service.ListResourcesByServer(context.Background(), "test-server")
 	require.NoError(t, err)
 	assert.Len(t, resources, 1)
 	assert.Equal(t, "test-server__code-review", resources[0].Name)
-	assert.Equal(t, buildResourceURI("test-server", "resource://test/code-review"), resources[0].URI)
+	assert.Equal(t, buildResourceURI(tenant.DefaultID, "test-server", "resource://test/code-review"), resources[0].URI)
 }
 
 func TestEnableDisableResources(t *testing.T) {
@@ -91,7 +92,7 @@ func TestEnableDisableResources(t *testing.T) {
 	srv := createTestServer(t, db)
 	resource := createTestResource(t, db, srv, "resource://test/code-review", "code-review")
 
-	disabledResources, err := service.DisableResources(resource.URI)
+	disabledResources, err := service.DisableResources(context.Background(), resource.URI)
 	require.NoError(t, err)
 	assert.Len(t, disabledResources, 1)
 	assert.Equal(t, resource.URI, disabledResources[0])
@@ -101,7 +102,7 @@ func TestEnableDisableResources(t *testing.T) {
 	require.NoError(t, err)
 	assert.False(t, updatedResource.Enabled)
 
-	enabledResources, err := service.EnableResources(resource.URI)
+	enabledResources, err := service.EnableResources(context.Background(), resource.URI)
 	require.NoError(t, err)
 	assert.Len(t, enabledResources, 1)
 	assert.Equal(t, resource.URI, enabledResources[0])
@@ -124,7 +125,7 @@ func TestEnableDisableServerResources(t *testing.T) {
 	createTestResource(t, db, srv, "resource://test/code-review", "code-review")
 	createTestResource(t, db, srv, "resource://test/security-audit", "security-audit")
 
-	disabledResources, err := service.DisableResources("test-server")
+	disabledResources, err := service.DisableResources(context.Background(), "test-server")
 	require.NoError(t, err)
 	assert.Len(t, disabledResources, 2)
 
@@ -135,7 +136,7 @@ func TestEnableDisableServerResources(t *testing.T) {
 		assert.False(t, resource.Enabled)
 	}
 
-	enabledResources, err := service.EnableResources("test-server")
+	enabledResources, err := service.EnableResources(context.Background(), "test-server")
 	require.NoError(t, err)
 	assert.Len(t, enabledResources, 2)
 
@@ -169,8 +170,8 @@ func TestDisableResourcesByPublicURI(t *testing.T) {
 	createTestResource(t, db, srv1, "resource://shared/status", "status")
 	createTestResource(t, db, srv2, "resource://shared/status", "status")
 
-	resourceURI := buildResourceURI("test-server", "resource://shared/status")
-	disabledResources, err := service.DisableResources(resourceURI)
+	resourceURI := buildResourceURI(tenant.DefaultID, "test-server", "resource://shared/status")
+	disabledResources, err := service.DisableResources(context.Background(), resourceURI)
 	require.NoError(t, err)
 	assert.Equal(t, []string{resourceURI}, disabledResources)
 }
@@ -179,7 +180,7 @@ func TestGetResourceInvalidURI(t *testing.T) {
 	db := setupTestDBWithResources(t)
 	service := &MCPService{db: db}
 
-	_, err := service.GetResource("not-a-mcpj-uri")
+	_, err := service.GetResource(context.Background(), "not-a-mcpj-uri")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, apierrors.ErrInvalidInput))
 }
@@ -189,9 +190,9 @@ func TestGetResourceNotFound(t *testing.T) {
 	service := &MCPService{db: db}
 
 	srv := createTestServer(t, db)
-	missingURI := buildResourceURI(srv.Name, "resource://missing")
+	missingURI := buildResourceURI(tenant.DefaultID, srv.Name, "resource://missing")
 
-	_, err := service.GetResource(missingURI)
+	_, err := service.GetResource(context.Background(), missingURI)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, apierrors.ErrNotFound))
 }
@@ -203,7 +204,7 @@ func TestDisableResourcesInvalidURI(t *testing.T) {
 		mcpProxyServer: server.NewMCPServer("Test Proxy", "0.1.0"),
 	}
 
-	_, err := service.DisableResources("not-a-mcpj-uri")
+	_, err := service.DisableResources(context.Background(), "not-a-mcpj-uri")
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, apierrors.ErrInvalidInput))
 }
@@ -216,9 +217,9 @@ func TestDisableResourcesNotFound(t *testing.T) {
 	}
 
 	srv := createTestServer(t, db)
-	missingURI := buildResourceURI(srv.Name, "resource://missing")
+	missingURI := buildResourceURI(tenant.DefaultID, srv.Name, "resource://missing")
 
-	_, err := service.DisableResources(missingURI)
+	_, err := service.DisableResources(context.Background(), missingURI)
 	require.Error(t, err)
 	assert.True(t, errors.Is(err, apierrors.ErrNotFound))
 }
@@ -282,8 +283,8 @@ func TestMCPProxyResourceHandlerRoutesReadByURI(t *testing.T) {
 	}
 
 	req := mcp.ReadResourceRequest{}
-	req.Params.URI = buildResourceURI("test-server", "resource://test/status")
-	ctx := context.WithValue(context.Background(), "mode", model.ModeDev)
+	req.Params.URI = buildResourceURI(tenant.DefaultID, "test-server", "resource://test/status")
+	ctx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeDev), tenant.DefaultID)
 
 	contents, err := service.mcpProxyResourceHandler(ctx, req)
 	require.NoError(t, err)
@@ -292,7 +293,7 @@ func TestMCPProxyResourceHandlerRoutesReadByURI(t *testing.T) {
 	textContent, ok := contents[0].(mcp.TextResourceContents)
 	require.True(t, ok)
 	assert.Equal(t, "ok", textContent.Text)
-	assert.Equal(t, buildResourceURI("test-server", "resource://test/status"), textContent.URI)
+	assert.Equal(t, buildResourceURI(tenant.DefaultID, "test-server", "resource://test/status"), textContent.URI)
 }
 
 func TestMCPProxyResourceHandlerEnterpriseRejectsUnauthorizedClient(t *testing.T) {
@@ -321,8 +322,8 @@ func TestMCPProxyResourceHandlerEnterpriseRejectsUnauthorizedClient(t *testing.T
 	}
 
 	req := mcp.ReadResourceRequest{}
-	req.Params.URI = buildResourceURI("test-server", "resource://test/status")
-	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
+	req.Params.URI = buildResourceURI(tenant.DefaultID, "test-server", "resource://test/status")
+	ctx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeEnterprise), tenant.DefaultID)
 	ctx = context.WithValue(ctx, "client", &model.McpClient{
 		Name:      "scoped-client",
 		AllowList: datatypes.JSON(`["other-server"]`),
@@ -393,8 +394,8 @@ func TestMCPProxyResourceHandlerEnterpriseAllowsAuthorizedClient(t *testing.T) {
 	}
 
 	req := mcp.ReadResourceRequest{}
-	req.Params.URI = buildResourceURI("test-server", "resource://test/status")
-	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
+	req.Params.URI = buildResourceURI(tenant.DefaultID, "test-server", "resource://test/status")
+	ctx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeEnterprise), tenant.DefaultID)
 	ctx = context.WithValue(ctx, "client", &model.McpClient{
 		Name:      "scoped-client",
 		AllowList: datatypes.JSON(`["test-server"]`),
@@ -407,7 +408,7 @@ func TestMCPProxyResourceHandlerEnterpriseAllowsAuthorizedClient(t *testing.T) {
 	textContent, ok := contents[0].(mcp.TextResourceContents)
 	require.True(t, ok)
 	assert.Equal(t, "ok", textContent.Text)
-	assert.Equal(t, buildResourceURI("test-server", "resource://test/status"), textContent.URI)
+	assert.Equal(t, buildResourceURI(tenant.DefaultID, "test-server", "resource://test/status"), textContent.URI)
 }
 
 func TestMCPProxyResourceHandlerRoutesDuplicateUpstreamURIs(t *testing.T) {
@@ -480,10 +481,10 @@ func TestMCPProxyResourceHandlerRoutesDuplicateUpstreamURIs(t *testing.T) {
 	}
 
 	req := mcp.ReadResourceRequest{}
-	req.Params.URI = buildResourceURI("test-server-2", "resource://shared/status")
-	ctx := context.WithValue(context.Background(), "mode", model.ModeDev)
+	req.Params.URI = buildResourceURI(tenant.DefaultID, "test-server-2", "resource://shared/status")
+	ctx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeDev), tenant.DefaultID)
 
-	resource, err := service.GetResource(req.Params.URI)
+	resource, err := service.GetResource(context.Background(), req.Params.URI)
 	require.NoError(t, err)
 	require.Equal(t, types.SessionModeStateful, resource.Server.SessionMode)
 
@@ -494,5 +495,5 @@ func TestMCPProxyResourceHandlerRoutesDuplicateUpstreamURIs(t *testing.T) {
 	textContent, ok := contents[0].(mcp.TextResourceContents)
 	require.True(t, ok)
 	assert.Equal(t, "from second server", textContent.Text)
-	assert.Equal(t, buildResourceURI("test-server-2", "resource://shared/status"), textContent.URI)
+	assert.Equal(t, buildResourceURI(tenant.DefaultID, "test-server-2", "resource://shared/status"), textContent.URI)
 }

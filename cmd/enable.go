@@ -75,8 +75,8 @@ func init() {
 	rootCmd.AddCommand(enableCmd)
 }
 
-// runEnable checks if the command is called as `mcpjungle enable [name]`
-// and redirects to `mcpjungle enable tool [name]`.
+// runEnable checks if the command is called as `sami-mcp-gateway enable [name]`
+// and redirects to `sami-mcp-gateway enable tool [name]`.
 // This is to maintain backward compatibility with older versions of the CLI that only supported enabling tools & servers.
 func runEnable(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 && cmd.CalledAs() == "enable" {

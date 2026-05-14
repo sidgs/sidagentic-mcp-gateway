@@ -110,6 +110,8 @@ func decodeJSON(t *testing.T, r *http.Response, target any) {
 
 // setupE2EServer spins up a full MCPJungle HTTP server backed by an in-memory
 // SQLite DB, initialised in the requested mode.
+// HTTP routes are at the host root (HTTP_PATH_PREFIX is unset). To test a
+// prefixed deployment, set HTTP_PATH_PREFIX before start and use baseURL+prefix in requests.
 // In enterprise mode, env.adminToken and env.userToken are set.
 // The server is shut down via t.Cleanup.
 func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {

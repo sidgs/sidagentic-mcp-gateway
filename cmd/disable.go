@@ -74,8 +74,8 @@ func init() {
 	rootCmd.AddCommand(disableCmd)
 }
 
-// runDisable checks if the command is called as `mcpjungle disable [name]`
-// and redirects to `mcpjungle disable tool [name]`.
+// runDisable checks if the command is called as `sami-mcp-gateway disable [name]`
+// and redirects to `sami-mcp-gateway disable tool [name]`.
 // This is to maintain backward compatibility with older versions of the CLI that only supported disabling tools & servers.
 func runDisable(cmd *cobra.Command, args []string) error {
 	if len(args) == 1 && cmd.CalledAs() == "disable" {

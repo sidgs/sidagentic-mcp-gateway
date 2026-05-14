@@ -1,6 +1,7 @@
 package toolgroup
 
 import (
+	"context"
 	"errors"
 	"reflect"
 	"testing"
@@ -10,6 +11,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
 	"gorm.io/datatypes"
@@ -193,7 +195,8 @@ func TestResolveEffectiveTools_GroupNotFound(t *testing.T) {
 		mcpService: &mcp.MCPService{}, // zero value is fine for this test
 	}
 
-	_, err := s.ResolveEffectiveTools("nonexistent-group")
+	ctx := context.Background()
+	_, err := s.ResolveEffectiveTools(ctx, "nonexistent-group")
 	if !errors.Is(err, ErrToolGroupNotFound) {
 		t.Fatalf("expected ErrToolGroupNotFound, got: %v", err)
 	}
@@ -220,7 +223,7 @@ func TestResolveEffectiveTools_ReturnsSorted(t *testing.T) {
 		mcpService: &mcp.MCPService{},
 	}
 
-	tools, err := s.ResolveEffectiveTools("my-group")
+	tools, err := s.ResolveEffectiveTools(context.Background(), "my-group")
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
 	}
@@ -242,7 +245,7 @@ func TestCreateToolGroup_InvalidNameReturnsInvalidInput(t *testing.T) {
 		mcpService: &mcp.MCPService{},
 	}
 
-	err := s.CreateToolGroup(&model.ToolGroup{Name: "-bad-group"})
+	err := s.CreateToolGroup(context.Background(), &model.ToolGroup{Name: "-bad-group"})
 	if !errors.Is(err, apierrors.ErrInvalidInput) {
 		t.Fatalf("expected ErrInvalidInput, got: %v", err)
 	}
@@ -255,7 +258,7 @@ func TestCreateToolGroup_EmptyResolvedToolsReturnsInvalidInput(t *testing.T) {
 		mcpService: &mcp.MCPService{},
 	}
 
-	err := s.CreateToolGroup(&model.ToolGroup{Name: "empty-group"})
+	err := s.CreateToolGroup(context.Background(), &model.ToolGroup{Name: "empty-group"})
 	if !errors.Is(err, apierrors.ErrInvalidInput) {
 		t.Fatalf("expected ErrInvalidInput, got: %v", err)
 	}
@@ -305,7 +308,7 @@ func TestNewToolGroupService_DegradedPersistedGroupDoesNotFailStartup(t *testing
 		t.Fatalf("expected degraded persisted group not to fail startup, got: %v", err)
 	}
 
-	validProxy, ok := svc.GetToolGroupMCPServer("valid-group")
+	validProxy, ok := svc.GetToolGroupMCPServer(tenant.DefaultID, "valid-group")
 	if !ok {
 		t.Fatal("expected valid group MCP proxy to be initialized")
 	}
@@ -313,11 +316,11 @@ func TestNewToolGroupService_DegradedPersistedGroupDoesNotFailStartup(t *testing
 	if len(validTools) != 1 {
 		t.Fatalf("expected valid group proxy to expose 1 tool, got %d", len(validTools))
 	}
-	if _, ok := validTools["valid-server__sum"]; !ok {
-		t.Fatalf("expected valid group proxy to expose valid-server__sum, got keys %v", reflect.ValueOf(validTools).MapKeys())
+	if _, ok := validTools[tenant.QualifyProxyName(tenant.DefaultID, "valid-server__sum")]; !ok {
+		t.Fatalf("expected valid group proxy to expose qualified sum tool, got keys %v", reflect.ValueOf(validTools).MapKeys())
 	}
 
-	degradedProxy, ok := svc.GetToolGroupMCPServer("degraded-group")
+	degradedProxy, ok := svc.GetToolGroupMCPServer(tenant.DefaultID, "degraded-group")
 	if !ok {
 		t.Fatal("expected degraded group MCP proxy to be initialized")
 	}
@@ -325,7 +328,7 @@ func TestNewToolGroupService_DegradedPersistedGroupDoesNotFailStartup(t *testing
 		t.Fatalf("expected degraded group proxy to expose 0 tools, got %d", len(degradedProxy.ListTools()))
 	}
 
-	degradedSSEProxy, ok := svc.GetToolGroupSseMCPServer("degraded-group")
+	degradedSSEProxy, ok := svc.GetToolGroupSseMCPServer(tenant.DefaultID, "degraded-group")
 	if !ok {
 		t.Fatal("expected degraded group SSE MCP proxy to be initialized")
 	}
@@ -341,7 +344,7 @@ func TestCreateToolGroup_InvalidIncludedServerStillFailsFast(t *testing.T) {
 		mcpService: newTestMCPService(t, db),
 	}
 
-	err := s.CreateToolGroup(&model.ToolGroup{
+	err := s.CreateToolGroup(context.Background(), &model.ToolGroup{
 		Name:            "invalid-server-group",
 		IncludedServers: datatypes.JSON([]byte(`["missing-server"]`)),
 	})

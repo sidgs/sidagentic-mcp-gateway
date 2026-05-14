@@ -17,12 +17,13 @@ func (s *Server) listPromptsHandler() gin.HandlerFunc {
 			prompts []model.Prompt
 			err     error
 		)
+		ctx := c.Request.Context()
 		if server == "" {
 			// no server specified, list all prompts
-			prompts, err = s.mcpService.ListPrompts()
+			prompts, err = s.mcpService.ListPrompts(ctx)
 		} else {
 			// server specified, list prompts for that server
-			prompts, err = s.mcpService.ListPromptsByServer(server)
+			prompts, err = s.mcpService.ListPromptsByServer(ctx, server)
 		}
 		if err != nil {
 			handleServiceError(c, err)
@@ -42,7 +43,7 @@ func (s *Server) getPromptHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing 'name' query parameter"})
 			return
 		}
-		prompt, err := s.mcpService.GetPrompt(name)
+		prompt, err := s.mcpService.GetPrompt(c.Request.Context(), name)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to get prompt: %w", err))
 			return
@@ -75,7 +76,7 @@ func (s *Server) getPromptWithArgsHandler() gin.HandlerFunc {
 			args[k] = v
 		}
 
-		resp, err := s.mcpService.GetPromptWithArgs(c, request.Name, args)
+		resp, err := s.mcpService.GetPromptWithArgs(c.Request.Context(), request.Name, args)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to get prompt: %w", err))
 			return
@@ -93,7 +94,7 @@ func (s *Server) enablePromptsHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing 'entity' query parameter"})
 			return
 		}
-		enabledPrompts, err := s.mcpService.EnablePrompts(entity)
+		enabledPrompts, err := s.mcpService.EnablePrompts(c.Request.Context(), entity)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to enable prompt(s): %w", err))
 			return
@@ -110,7 +111,7 @@ func (s *Server) disablePromptsHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "missing 'entity' query parameter"})
 			return
 		}
-		disabledPrompts, err := s.mcpService.DisablePrompts(entity)
+		disabledPrompts, err := s.mcpService.DisablePrompts(c.Request.Context(), entity)
 		if err != nil {
 			handleServiceError(c, fmt.Errorf("failed to disable prompt(s): %w", err))
 			return

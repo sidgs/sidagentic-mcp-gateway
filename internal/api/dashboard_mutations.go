@@ -45,11 +45,12 @@ func (s *Server) dashboardRegisterServerHandler() gin.HandlerFunc {
 			return
 		}
 
-		err = s.mcpService.RegisterMcpServerWithOAuthSupport(c, &input, server, false, "dashboard")
+		ctx := c.Request.Context()
+		err = s.mcpService.RegisterMcpServerWithOAuthSupport(ctx, &input, server, false, "dashboard")
 		if err != nil {
 			if errors.Is(err, apierrors.ErrUpstreamOAuthRequired) {
-				input.OAuthRedirectURI = requestBaseURL(c) + "/api/dashboard/oauth/callback"
-				err = s.mcpService.RegisterMcpServerWithOAuthSupport(c, &input, server, false, "dashboard")
+				input.OAuthRedirectURI = s.publicGatewayRoot(c) + "/api/dashboard/oauth/callback"
+				err = s.mcpService.RegisterMcpServerWithOAuthSupport(ctx, &input, server, false, "dashboard")
 			}
 		}
 		if err != nil {
@@ -79,7 +80,7 @@ func (s *Server) dashboardRegisterServerHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardDeleteServerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if err := s.mcpService.DeregisterMcpServer(c.Param("name")); err != nil {
+		if err := s.mcpService.DeregisterMcpServer(c.Request.Context(), c.Param("name")); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -95,7 +96,7 @@ func (s *Server) dashboardSetServerEnabledHandler() gin.HandlerFunc {
 			return
 		}
 
-		if err := s.mcpService.SetDashboardServerEnabled(c.Param("name"), input.Enabled); err != nil {
+		if err := s.mcpService.SetDashboardServerEnabled(c.Request.Context(), c.Param("name"), input.Enabled); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -113,11 +114,12 @@ func (s *Server) dashboardSetToolEnabledHandler() gin.HandlerFunc {
 		}
 
 		entity := c.Param("name")
+		ctx := c.Request.Context()
 		var err error
 		if input.Enabled {
-			_, err = s.mcpService.EnableTools(entity)
+			_, err = s.mcpService.EnableTools(ctx, entity)
 		} else {
-			_, err = s.mcpService.DisableTools(entity)
+			_, err = s.mcpService.DisableTools(ctx, entity)
 		}
 		if err != nil {
 			handleServiceError(c, err)
@@ -137,11 +139,12 @@ func (s *Server) dashboardSetPromptEnabledHandler() gin.HandlerFunc {
 		}
 
 		entity := c.Param("name")
+		ctx := c.Request.Context()
 		var err error
 		if input.Enabled {
-			_, err = s.mcpService.EnablePrompts(entity)
+			_, err = s.mcpService.EnablePrompts(ctx, entity)
 		} else {
-			_, err = s.mcpService.DisablePrompts(entity)
+			_, err = s.mcpService.DisablePrompts(ctx, entity)
 		}
 		if err != nil {
 			handleServiceError(c, err)
