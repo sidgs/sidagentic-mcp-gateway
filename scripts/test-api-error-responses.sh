@@ -7,7 +7,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BIN_PATH="${BIN_PATH:-$ROOT_DIR/bin/mcpjungle}"
+BIN_PATH="${BIN_PATH:-$ROOT_DIR/bin/sami-mcp-gateway}"
 PORT="${PORT:-9101}"
 BASE_URL="http://127.0.0.1:${PORT}"
 API_BASE_URL="${BASE_URL}/api/v0"

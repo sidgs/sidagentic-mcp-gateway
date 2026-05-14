@@ -12,8 +12,14 @@ import type {
   DashboardToolsResponse,
 } from "./types";
 
+function dashboardFetchURL(path: string): string {
+  const base = import.meta.env.BASE_URL;
+  const normalized = path.startsWith("/") ? path.slice(1) : path;
+  return base + normalized;
+}
+
 async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
-  const response = await fetch(path, {
+  const response = await fetch(dashboardFetchURL(path), {
     ...init,
     headers: {
       Accept: "application/json",

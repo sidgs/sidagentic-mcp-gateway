@@ -9,7 +9,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"   # repo root
-BIN_PATH="$ROOT_DIR/bin/mcpjungle"                            # compiled binary
+BIN_PATH="$ROOT_DIR/bin/sami-mcp-gateway"                            # compiled binary
 REGISTRY_PORT="${REGISTRY_PORT:-18080}"
 REGISTRY_URL="http://127.0.0.1:${REGISTRY_PORT}"              # local registry
 OAUTH_MOCK_PORT="${OAUTH_MOCK_PORT:-18081}"

@@ -16,7 +16,7 @@ before:
 builds:
   - id: mcpjungle
     main: ./main.go
-    binary: mcpjungle
+    binary: sami-mcp-gateway
     goos:
       - linux
       - windows
@@ -87,6 +87,7 @@ dockers:
     build_flag_templates:
       - "--pull"
       - "--platform=linux/amd64"
+      - "--build-arg=VERSION={{ .Version }}"
     goarch: amd64
 
   - dockerfile: Dockerfile
@@ -99,6 +100,30 @@ dockers:
     build_flag_templates:
       - "--pull"
       - "--platform=linux/arm64"
+      - "--build-arg=VERSION={{ .Version }}"
+    goarch: arm64
+
+  # Prefixed HTTP path + dashboard base (see Dockerfile.api)
+  - dockerfile: Dockerfile.api
+    image_templates:
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-amd64"
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-amd64"
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/amd64"
+      - "--build-arg=VERSION={{ .Version }}"
+    goarch: amd64
+
+  - dockerfile: Dockerfile.api
+    image_templates:
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-arm64"
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-arm64"
+    use: buildx
+    build_flag_templates:
+      - "--pull"
+      - "--platform=linux/arm64"
+      - "--build-arg=VERSION={{ .Version }}"
     goarch: arm64
 
   - dockerfile: stdio.Dockerfile
@@ -145,6 +170,16 @@ docker_manifests:
     image_templates:
       - "ghcr.io/mcpjungle/mcpjungle:latest-amd64"
       - "ghcr.io/mcpjungle/mcpjungle:latest-arm64"
+
+  - name_template: "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}"
+    image_templates:
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-amd64"
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-arm64"
+
+  - name_template: "ghcr.io/mcpjungle/sami-mcpgateway-api:latest"
+    image_templates:
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-amd64"
+      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-arm64"
 
   - name_template: "mcpjungle/mcpjungle:{{ .Tag }}-stdio"
     image_templates:

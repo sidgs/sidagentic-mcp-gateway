@@ -18,10 +18,10 @@ RUN apt-get update \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy the binary built by goreleaser
-COPY mcpjungle /mcpjungle
+COPY sami-mcp-gateway /sami-mcp-gateway
 
 EXPOSE 8080
-ENTRYPOINT ["/mcpjungle"]
+ENTRYPOINT ["/sami-mcp-gateway"]
 
 # Run the Registry Server by default
 CMD ["start"]
