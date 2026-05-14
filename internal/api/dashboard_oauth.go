@@ -56,7 +56,7 @@ func (s *Server) dashboardOAuthCallbackHandler() gin.HandlerFunc {
 			ExpiresAt:  session.ExpiresAt,
 			UpdatedAt:  time.Now(),
 		})
-		renderDashboardOAuthHTML(c, http.StatusOK, "Authorization successful", "Authorization successful. You can close this tab and return to MCPJungle.")
+		renderDashboardOAuthHTML(c, http.StatusOK, "Authorization successful", "Authorization successful. You can close this tab and return to MCP Gateway.")
 	}
 }
 
@@ -194,7 +194,7 @@ func safeOAuthCallbackError(err error) string {
 		}
 		return "OAuth authorization could not be completed. Start registration again."
 	default:
-		return "OAuth authorization could not be completed. Check the MCPJungle server logs for details."
+		return "OAuth authorization could not be completed. Check the MCP Gateway server logs for details."
 	}
 }
 

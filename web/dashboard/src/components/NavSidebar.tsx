@@ -1,4 +1,47 @@
+import { useState, type ReactElement } from "react";
 import type { AppSection } from "@/lib/types";
+import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
+import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
+import ChevronRightIcon from "@mui/icons-material/ChevronRight";
+import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
+import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
+import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
+import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
+import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
+import Box from "@mui/material/Box";
+import Chip from "@mui/material/Chip";
+import IconButton from "@mui/material/IconButton";
+import List from "@mui/material/List";
+import ListItem from "@mui/material/ListItem";
+import ListItemButton from "@mui/material/ListItemButton";
+import ListItemIcon from "@mui/material/ListItemIcon";
+import ListItemText from "@mui/material/ListItemText";
+import Stack from "@mui/material/Stack";
+import Tooltip from "@mui/material/Tooltip";
+import Typography from "@mui/material/Typography";
+import type { SvgIconProps } from "@mui/material/SvgIcon";
+
+const DRAWER_EXPANDED_WIDTH = 216;
+const DRAWER_COLLAPSED_WIDTH = 56;
+
+function SectionIcon({ section, ...props }: { section: AppSection } & SvgIconProps): ReactElement | null {
+  switch (section) {
+    case "servers":
+      return <DnsOutlinedIcon {...props} />;
+    case "tools":
+      return <HandymanOutlinedIcon {...props} />;
+    case "tool_groups":
+      return <LayersOutlinedIcon {...props} />;
+    case "prompts":
+      return <AssignmentOutlinedIcon {...props} />;
+    case "resources":
+      return <DescriptionOutlinedIcon {...props} />;
+    case "diagnostics":
+      return <InfoOutlinedIcon {...props} />;
+    default:
+      return null;
+  }
+}
 
 const items: Array<{ key: AppSection; label: string }> = [
   { key: "servers", label: "Servers" },
@@ -12,83 +55,153 @@ const items: Array<{ key: AppSection; label: string }> = [
 export function NavSidebar({
   active,
   onSelect,
-  logoUrl,
 }: {
   active: AppSection;
   onSelect: (section: AppSection) => void;
-  logoUrl: string;
 }) {
+  const [expanded, setExpanded] = useState(() => {
+    try {
+      const saved = window.localStorage.getItem("dashboard-nav-expanded");
+      if (saved !== null) {
+        return saved === "1";
+      }
+    } catch {
+      /* ignore */
+    }
+    return true;
+  });
+
+  function persist(next: boolean) {
+    setExpanded(next);
+    try {
+      window.localStorage.setItem("dashboard-nav-expanded", next ? "1" : "0");
+    } catch {
+      /* ignore */
+    }
+  }
+
   return (
-    <aside className="sidebar">
-      <div className="brand-lockup">
-        <img alt="MCPJungle logo" className="brand-logo" src={logoUrl} />
-        <div className="brand-title-row">
-          <p className="brand-title">MCPJungle</p>
-          <span className="brand-beta" title="Dashboard frontend is currently in Beta">
-            Beta
-          </span>
-        </div>
-      </div>
-      <nav className="nav-list" aria-label="Dashboard sections">
-        {items.map((item) => (
-          <button
-            className={`nav-item ${active === item.key ? "is-active" : ""}`}
-            key={item.key}
-            onClick={() => onSelect(item.key)}
-            type="button"
-          >
-            {item.label}
-          </button>
-        ))}
-      </nav>
-      <a
-        className="sidebar-link"
-        href="https://github.com/mcpjungle/MCPJungle/issues"
-        rel="noopener noreferrer"
-        target="_blank"
-      >
-        <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
-          <path
-            d="M8 2.25a2 2 0 0 0-2 2v.6a3.5 3.5 0 0 0-1.75 3.03v.62l-.94.94a.75.75 0 0 0 .53 1.28h8.32a.75.75 0 0 0 .53-1.28l-.94-.94v-.62A3.5 3.5 0 0 0 10 4.85v-.6a2 2 0 0 0-2-2Z"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="1.2"
-          />
-          <path
-            d="M6.5 11.75a1.5 1.5 0 0 0 3 0"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.2"
-          />
-        </svg>
-        <span>Report Bugs</span>
-      </a>
-      <a
-        aria-label="Open MCPJungle documentation"
-        className="sidebar-link"
-        href="https://docs.mcpjungle.com/"
-        rel="noopener noreferrer"
-        target="_blank"
-        title="Open MCPJungle documentation"
-      >
-        <svg aria-hidden="true" fill="none" height="16" viewBox="0 0 16 16" width="16">
-          <path
-            d="M4 2.75h6.25A1.75 1.75 0 0 1 12 4.5v8.25a.5.5 0 0 1-.78.41A3.25 3.25 0 0 0 9.5 12.5H4.75A1.75 1.75 0 0 1 3 10.75V3.75A1 1 0 0 1 4 2.75Z"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            strokeWidth="1.2"
-          />
-          <path
-            d="M5.25 5h4.5M5.25 7h4.5M5.25 9h2.75"
-            stroke="currentColor"
-            strokeLinecap="round"
-            strokeWidth="1.2"
-          />
-        </svg>
-        <span>Documentation</span>
-      </a>
-    </aside>
+    <Box
+      aria-label="Dashboard navigation"
+      aria-expanded={expanded}
+      component="aside"
+      sx={{
+        width: expanded ? DRAWER_EXPANDED_WIDTH : DRAWER_COLLAPSED_WIDTH,
+        flexShrink: 0,
+        transition: (theme) =>
+          theme.transitions.create("width", {
+            easing: theme.transitions.easing.sharp,
+            duration: theme.transitions.duration.standard,
+          }),
+        boxSizing: "border-box",
+        borderRight: 1,
+        borderColor: "divider",
+        backgroundColor: "background.default",
+        px: expanded ? "14px" : 1,
+        py: 2,
+        display: "flex",
+        flexDirection: "column",
+        overflowX: "hidden",
+      }}
+    >
+      <Stack spacing={2.25}>
+        <Stack
+          direction="row"
+          spacing={1}
+          sx={{
+            alignItems: "center",
+            minWidth: 0,
+            justifyContent: expanded ? "flex-start" : "center",
+            flexWrap: "nowrap",
+          }}
+        >
+          {expanded ? (
+            <>
+              <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center", minWidth: 0 }}>
+                  <Typography
+                    component="span"
+                    sx={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden" }}
+                  >
+                    MCP Gateway
+                  </Typography>
+                  <Chip
+                    label="Beta"
+                    size="small"
+                    variant="outlined"
+                    title="Dashboard frontend is currently in Beta"
+                  />
+                </Stack>
+              </Box>
+              <Tooltip title="Collapse menu">
+                <IconButton aria-label="Collapse menu" edge="end" size="small" onClick={() => persist(false)}>
+                  <ChevronLeftIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </>
+          ) : (
+            <Tooltip title="Expand menu">
+              <IconButton aria-label="Expand menu" size="small" onClick={() => persist(true)}>
+                <ChevronRightIcon fontSize="small" />
+              </IconButton>
+            </Tooltip>
+          )}
+        </Stack>
+
+        <List disablePadding sx={{ px: 0 }} aria-label="Dashboard sections">
+          {items.map((item) => {
+            const isActive = active === item.key;
+            const button = (
+              <ListItemButton
+                selected={isActive}
+                onClick={() => onSelect(item.key)}
+                sx={{
+                  px: expanded ? "12px" : "6px",
+                  py: 1.125,
+                  borderRadius: "12px",
+                  mb: 0,
+                  border: 1,
+                  borderColor: isActive ? "divider" : "transparent",
+                  backgroundColor: isActive ? "background.paper" : "transparent",
+                  justifyContent: expanded ? "flex-start" : "center",
+                }}
+              >
+                {!expanded ? (
+                  <ListItemIcon
+                    sx={{
+                      minWidth: 0,
+                      justifyContent: "center",
+                      color: isActive ? "primary.main" : "text.secondary",
+                    }}
+                  >
+                    <SectionIcon section={item.key} fontSize="small" />
+                  </ListItemIcon>
+                ) : null}
+                {expanded ? (
+                  <ListItemText
+                    primary={item.label}
+                    slotProps={{
+                      primary: {
+                        variant: "body2",
+                        sx: {
+                          fontWeight: isActive ? 600 : 400,
+                          color: isActive ? "text.primary" : "text.secondary",
+                        },
+                      },
+                    }}
+                  />
+                ) : null}
+              </ListItemButton>
+            );
+
+            return (
+              <ListItem key={item.key} disablePadding sx={{ mb: 0.25 }}>
+                {expanded ? button : <Tooltip title={item.label} placement="right">{button}</Tooltip>}
+              </ListItem>
+            );
+          })}
+        </List>
+      </Stack>
+    </Box>
   );
 }

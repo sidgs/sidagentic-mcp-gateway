@@ -1,6 +1,7 @@
 package mcpclient
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -26,7 +27,7 @@ func TestListClientsEmpty(t *testing.T) {
 
 	svc := NewMCPClientService(setup.DB)
 
-	clients, err := svc.ListClients()
+	clients, err := svc.ListClients(context.Background())
 	testhelpers.AssertNoError(t, err)
 	if len(clients) != 0 {
 		t.Errorf("Expected 0 clients initially, got %d", len(clients))
@@ -44,7 +45,7 @@ func TestCreateClient(t *testing.T) {
 		Description: "Test MCP client",
 	}
 
-	client, err := svc.CreateClient(clientInput)
+	client, err := svc.CreateClient(context.Background(),clientInput)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, client)
 
@@ -82,12 +83,12 @@ func TestCreateClientWithExistingName(t *testing.T) {
 	}
 
 	// Create first client
-	client1, err := svc.CreateClient(clientInput)
+	client1, err := svc.CreateClient(context.Background(),clientInput)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, client1)
 
 	// Try to create another client with same name
-	client2, err := svc.CreateClient(clientInput)
+	client2, err := svc.CreateClient(context.Background(),clientInput)
 	testhelpers.AssertError(t, err)
 	if client2 != nil {
 		t.Error("Expected second client creation to fail")
@@ -106,7 +107,7 @@ func TestCreateClientWithAccessToken(t *testing.T) {
 		AccessToken: "custom-access-token-12345",
 	}
 
-	client, err := svc.CreateClient(clientInput)
+	client, err := svc.CreateClient(context.Background(),clientInput)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, client)
 
@@ -128,7 +129,7 @@ func TestCreateClientWithInvalidAccessToken(t *testing.T) {
 		AccessToken: "invalid token with spaces",
 	}
 
-	client, err := svc.CreateClient(clientInput)
+	client, err := svc.CreateClient(context.Background(),clientInput)
 	testhelpers.AssertError(t, err)
 	testhelpers.AssertTrue(t, errors.Is(err, apierrors.ErrInvalidInput), "expected ErrInvalidInput")
 	if client != nil {
@@ -152,12 +153,12 @@ func TestGetClientByToken(t *testing.T) {
 		Description: "Test MCP client",
 	}
 
-	client, err := svc.CreateClient(clientInput)
+	client, err := svc.CreateClient(context.Background(),clientInput)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, client)
 
 	// Get client by token
-	retrievedClient, err := svc.GetClientByToken(client.AccessToken)
+	retrievedClient, err := svc.GetClientByToken(context.Background(),client.AccessToken)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertEqual(t, client.ID, retrievedClient.ID)
 	testhelpers.AssertEqual(t, client.Name, retrievedClient.Name)
@@ -176,7 +177,7 @@ func TestGetClientByTokenNotFound(t *testing.T) {
 	svc := NewMCPClientService(db)
 
 	// Try to get client with non-existent token
-	client, err := svc.GetClientByToken("non-existent-token")
+	client, err := svc.GetClientByToken(context.Background(),"non-existent-token")
 	testhelpers.AssertError(t, err)
 	if client != nil {
 		t.Error("Expected client to be nil when token not found")
@@ -199,16 +200,16 @@ func TestDeleteClient(t *testing.T) {
 		Description: "Test MCP client",
 	}
 
-	client, err := svc.CreateClient(clientInput)
+	client, err := svc.CreateClient(context.Background(),clientInput)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, client)
 
 	// Delete client
-	err = svc.DeleteClient(client.Name)
+	err = svc.DeleteClient(context.Background(),client.Name)
 	testhelpers.AssertNoError(t, err)
 
 	// Verify client was deleted
-	_, err = svc.GetClientByToken(client.AccessToken)
+	_, err = svc.GetClientByToken(context.Background(),client.AccessToken)
 	testhelpers.AssertError(t, err)
 }
 
@@ -223,7 +224,7 @@ func TestDeleteClientNotFound(t *testing.T) {
 	svc := NewMCPClientService(db)
 
 	// Try to delete non-existent client
-	err = svc.DeleteClient("non-existent-client")
+	err = svc.DeleteClient(context.Background(),"non-existent-client")
 	testhelpers.AssertNoError(t, err) // DeleteClient is idempotent and doesn't error on non-existent clients
 }
 
@@ -245,12 +246,12 @@ func TestListClientsWithData(t *testing.T) {
 	}
 
 	for _, input := range clientInputs {
-		_, err := svc.CreateClient(input)
+		_, err := svc.CreateClient(context.Background(),input)
 		testhelpers.AssertNoError(t, err)
 	}
 
 	// List all clients
-	clients, err := svc.ListClients()
+	clients, err := svc.ListClients(context.Background())
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertEqual(t, 3, len(clients))
 
@@ -284,7 +285,7 @@ func TestClientTokenUniqueness(t *testing.T) {
 
 	tokens := make(map[string]bool)
 	for _, input := range clientInputs {
-		client, err := svc.CreateClient(input)
+		client, err := svc.CreateClient(context.Background(),input)
 		testhelpers.AssertNoError(t, err)
 		testhelpers.AssertNotNil(t, client)
 
@@ -307,11 +308,11 @@ func TestUpdateClientAccessToken(t *testing.T) {
 		Description: "Test MCP client",
 	}
 
-	_, _ = svc.CreateClient(clientInput)
+	_, _ = svc.CreateClient(context.Background(),clientInput)
 
 	clientInput.AccessToken = "new-access-token"
 
-	client, err := svc.UpdateClient(clientInput)
+	client, err := svc.UpdateClient(context.Background(),clientInput)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, client)
 
@@ -338,11 +339,11 @@ func TestUpdateClientInvalidAccessToken(t *testing.T) {
 		Description: "Test MCP client",
 	}
 
-	_, _ = svc.CreateClient(clientInput)
+	_, _ = svc.CreateClient(context.Background(),clientInput)
 
 	clientInput.AccessToken = "invalid token with spaces"
 
-	client, err := svc.UpdateClient(clientInput)
+	client, err := svc.UpdateClient(context.Background(),clientInput)
 	testhelpers.AssertError(t, err)
 	testhelpers.AssertTrue(t, errors.Is(err, apierrors.ErrInvalidInput), "expected ErrInvalidInput")
 	if client != nil {

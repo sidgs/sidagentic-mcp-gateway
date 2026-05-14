@@ -1,6 +1,7 @@
 package user
 
 import (
+	"context"
 	"errors"
 	"testing"
 
@@ -25,7 +26,7 @@ func TestCreateUser(t *testing.T) {
 	u := &model.User{
 		Username: "testuser2",
 	}
-	user, err := svc.CreateUser(u)
+	user, err := svc.CreateUser(context.Background(),u)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, user)
 	// Verify user properties
@@ -44,10 +45,10 @@ func TestCreateUserWithExistingUsername(t *testing.T) {
 		Username: "testuser2",
 	}
 	// Create first user
-	user1, _ := svc.CreateUser(u)
+	user1, _ := svc.CreateUser(context.Background(),u)
 	testhelpers.AssertNotNil(t, user1)
 	// Try to create another user with same username
-	user2, err := svc.CreateUser(u)
+	user2, err := svc.CreateUser(context.Background(),u)
 	testhelpers.AssertError(t, err)
 	if user2 != nil {
 		t.Error("Expected second user creation to fail")
@@ -58,7 +59,7 @@ func TestCreateAdminUser(t *testing.T) {
 	setup, _ := testhelpers.SetupUserTest(t)
 	defer setup.Cleanup()
 	svc := NewUserService(setup.DB)
-	user, err := svc.CreateAdminUser()
+	user, err := svc.CreateAdminUser(context.Background())
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, user)
 	// Verify admin user properties
@@ -77,7 +78,7 @@ func TestCreateUserAccessToken(t *testing.T) {
 		Username:    "testuser2",
 		AccessToken: "custom-token-123",
 	}
-	user, err := svc.CreateUser(u)
+	user, err := svc.CreateUser(context.Background(),u)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, user)
 	// Verify user properties
@@ -94,7 +95,7 @@ func TestCreateUserInvalidAccessToken(t *testing.T) {
 		Username:    "testuser2",
 		AccessToken: "short", // invalid token (too short)
 	}
-	user, err := svc.CreateUser(u)
+	user, err := svc.CreateUser(context.Background(),u)
 	testhelpers.AssertError(t, err)
 	testhelpers.AssertTrue(t, errors.Is(err, apierrors.ErrInvalidInput), "expected ErrInvalidInput")
 	if user != nil {
@@ -110,14 +111,14 @@ func TestGetUserByAccessToken(t *testing.T) {
 	u := &model.User{
 		Username: "testuser2",
 	}
-	user, _ := svc.CreateUser(u)
+	user, _ := svc.CreateUser(context.Background(),u)
 	// Test getting user by valid token
-	retrievedUser, _ := svc.GetUserByAccessToken(user.AccessToken)
+	retrievedUser, _ := svc.GetUserByAccessToken(context.Background(),user.AccessToken)
 	testhelpers.AssertNotNil(t, retrievedUser)
 	testhelpers.AssertEqual(t, u.Username, retrievedUser.Username)
 	testhelpers.AssertEqual(t, user.AccessToken, retrievedUser.AccessToken)
 	// Test getting user by invalid token
-	_, err := svc.GetUserByAccessToken("invalid-token")
+	_, err := svc.GetUserByAccessToken(context.Background(),"invalid-token")
 	testhelpers.AssertError(t, err)
 }
 
@@ -126,7 +127,7 @@ func TestListUsers(t *testing.T) {
 	defer setup.Cleanup()
 	svc := NewUserService(setup.DB)
 	// Initially should be empty
-	users, err := svc.ListUsers()
+	users, err := svc.ListUsers(context.Background())
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertEqual(t, 0, len(users))
 	// Create some users
@@ -136,10 +137,10 @@ func TestListUsers(t *testing.T) {
 	ub := &model.User{
 		Username: "user2",
 	}
-	_, _ = svc.CreateUser(ua)
-	_, _ = svc.CreateUser(ub)
+	_, _ = svc.CreateUser(context.Background(),ua)
+	_, _ = svc.CreateUser(context.Background(),ub)
 	// Now should have 2 users
-	users, _ = svc.ListUsers()
+	users, _ = svc.ListUsers(context.Background())
 	testhelpers.AssertEqual(t, 2, len(users))
 	// Verify all users are present
 	usernames := make(map[string]bool)
@@ -162,15 +163,15 @@ func TestDeleteUser(t *testing.T) {
 	u := &model.User{
 		Username: "testuser2",
 	}
-	user, _ := svc.CreateUser(u)
+	user, _ := svc.CreateUser(context.Background(),u)
 	// Verify user exists
-	_, err := svc.GetUserByAccessToken(user.AccessToken)
+	_, err := svc.GetUserByAccessToken(context.Background(),user.AccessToken)
 	testhelpers.AssertNoError(t, err)
 	// Delete the user
-	err = svc.DeleteUser(u.Username)
+	err = svc.DeleteUser(context.Background(),u.Username)
 	testhelpers.AssertNoError(t, err)
 	// Verify user was deleted
-	_, err = svc.GetUserByAccessToken(user.AccessToken)
+	_, err = svc.GetUserByAccessToken(context.Background(),user.AccessToken)
 	testhelpers.AssertError(t, err)
 }
 
@@ -179,7 +180,7 @@ func TestDeleteUserNotFound(t *testing.T) {
 	defer setup.Cleanup()
 	svc := NewUserService(setup.DB)
 	// Try to delete non-existent user
-	err := svc.DeleteUser("nonexistent")
+	err := svc.DeleteUser(context.Background(),"nonexistent")
 	testhelpers.AssertError(t, err)
 }
 
@@ -188,13 +189,13 @@ func TestDeleteAdminUser(t *testing.T) {
 	defer setup.Cleanup()
 	svc := NewUserService(setup.DB)
 	// Create admin user
-	admin, _ := svc.CreateAdminUser()
+	admin, _ := svc.CreateAdminUser(context.Background())
 	// Try to delete admin user (should fail)
-	err := svc.DeleteUser("admin")
+	err := svc.DeleteUser(context.Background(),"admin")
 	testhelpers.AssertError(t, err)
 	testhelpers.AssertTrue(t, errors.Is(err, apierrors.ErrInvalidInput), "expected ErrInvalidInput")
 	// Verify admin user still exists
-	retrievedUser, _ := svc.GetUserByAccessToken(admin.AccessToken)
+	retrievedUser, _ := svc.GetUserByAccessToken(context.Background(),admin.AccessToken)
 	testhelpers.AssertEqual(t, "admin", retrievedUser.Username)
 }
 
@@ -206,19 +207,19 @@ func TestUpdateUser(t *testing.T) {
 	u := &model.User{
 		Username: "testuser2",
 	}
-	_, _ = svc.CreateUser(u)
+	_, _ = svc.CreateUser(context.Background(),u)
 	// Update the user's access token
 	newToken := "new-custom-token-456"
 	updateInput := &model.User{
 		Username:    u.Username,
 		AccessToken: newToken,
 	}
-	updatedUser, err := svc.UpdateUser(updateInput)
+	updatedUser, err := svc.UpdateUser(context.Background(),updateInput)
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNotNil(t, updatedUser)
 	testhelpers.AssertEqual(t, newToken, updatedUser.AccessToken)
 	// Verify the update persisted
-	retrievedUser, _ := svc.GetUserByAccessToken(newToken)
+	retrievedUser, _ := svc.GetUserByAccessToken(context.Background(),newToken)
 	testhelpers.AssertNotNil(t, retrievedUser)
 	testhelpers.AssertEqual(t, u.Username, retrievedUser.Username)
 }
@@ -231,13 +232,13 @@ func TestUpdateUserInvalidAccessToken(t *testing.T) {
 	u := &model.User{
 		Username: "testuser2",
 	}
-	_, _ = svc.CreateUser(u)
+	_, _ = svc.CreateUser(context.Background(),u)
 	// Try to update with invalid access token
 	updateInput := &model.User{
 		Username:    u.Username,
 		AccessToken: "token\nwith\t\twhitespace", // invalid token
 	}
-	updatedUser, err := svc.UpdateUser(updateInput)
+	updatedUser, err := svc.UpdateUser(context.Background(),updateInput)
 	testhelpers.AssertError(t, err)
 	testhelpers.AssertTrue(t, errors.Is(err, apierrors.ErrInvalidInput), "expected ErrInvalidInput")
 	if updatedUser != nil {
@@ -254,7 +255,7 @@ func TestUpdateUserNotFound(t *testing.T) {
 		Username:    "nonexistent",
 		AccessToken: "new-token-789",
 	}
-	updatedUser, err := svc.UpdateUser(updateInput)
+	updatedUser, err := svc.UpdateUser(context.Background(),updateInput)
 	testhelpers.AssertError(t, err)
 	testhelpers.AssertTrue(t, errors.Is(err, apierrors.ErrNotFound), "expected ErrNotFound")
 	if updatedUser != nil {
@@ -270,13 +271,13 @@ func TestUpdateUserNoAccessToken(t *testing.T) {
 	u := &model.User{
 		Username: "testuser2",
 	}
-	_, _ = svc.CreateUser(u)
+	_, _ = svc.CreateUser(context.Background(),u)
 	// Update without changing access token
 	updateInput := &model.User{
 		Username: u.Username,
 		// No AccessToken field set
 	}
-	updatedUser, err := svc.UpdateUser(updateInput)
+	updatedUser, err := svc.UpdateUser(context.Background(),updateInput)
 	testhelpers.AssertError(t, err)
 	testhelpers.AssertTrue(t, errors.Is(err, apierrors.ErrInvalidInput), "expected ErrInvalidInput")
 	if updatedUser != nil {

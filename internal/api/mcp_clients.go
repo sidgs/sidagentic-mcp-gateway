@@ -9,7 +9,7 @@ import (
 
 func (s *Server) listMcpClientsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		clients, err := s.mcpClientService.ListClients()
+		clients, err := s.mcpClientService.ListClients(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -30,7 +30,7 @@ func (s *Server) createMcpClientHandler() gin.HandlerFunc {
 			return
 		}
 		// TODO: if allow list in the request is null, convert it to an empty JSON array
-		client, err := s.mcpClientService.CreateClient(req)
+		client, err := s.mcpClientService.CreateClient(c.Request.Context(), req)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -46,7 +46,7 @@ func (s *Server) deleteMcpClientHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "name is required"})
 			return
 		}
-		if err := s.mcpClientService.DeleteClient(name); err != nil {
+		if err := s.mcpClientService.DeleteClient(c.Request.Context(), name); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -68,7 +68,7 @@ func (s *Server) updateMcpClientHandler() gin.HandlerFunc {
 		}
 		req.Name = name // Ensure the name from the URL is used
 
-		resp, err := s.mcpClientService.UpdateClient(req)
+		resp, err := s.mcpClientService.UpdateClient(c.Request.Context(), req)
 		if err != nil {
 			handleServiceError(c, err)
 			return

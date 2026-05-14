@@ -1,0 +1,21 @@
+import { CopyButton } from "./CopyButton";
+import Stack from "@mui/material/Stack";
+import Paper from "@mui/material/Paper";
+import Typography from "@mui/material/Typography";
+import type { DashboardEmptyState } from "@/lib/types";
+
+export function EmptyStateCard({ emptyState }: { emptyState: DashboardEmptyState }) {
+  return (
+    <Paper elevation={0} variant="outlined" sx={{ borderRadius: 2, bgcolor: "#f6f8fa", p: 2 }}>
+      <Stack spacing={2}>
+        <Box>
+          <Typography variant="caption" sx={{ letterSpacing: "0.12em", fontWeight: 600 }}>
+            Empty state
+          </Typography>
+          <Typography variant="h6" component="h3" sx={{ mt: 1 }}>
+            {emptyState.title}
+          </Typography>
+          <Typography color="text.secondary" sx={{ mt: 1 }}>
+            {emptyState.description}
+          </Typography>
+        </Box>

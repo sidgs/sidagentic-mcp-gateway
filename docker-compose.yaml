@@ -4,30 +4,36 @@
 services:
   db:
     image: postgres:17
-    container_name: mcpjungle-db
+    container_name: sami-mcp-gateway-db
     environment:
-      POSTGRES_USER: mcpjungle
-      POSTGRES_PASSWORD: mcpjungle
-      POSTGRES_DB: mcpjungle
+      POSTGRES_USER: sami
+      POSTGRES_PASSWORD: sami
+      POSTGRES_DB: sami
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=mcpjungle pg_isready -U mcpjungle"]
+      test: ["CMD-SHELL", "PGPASSWORD=sami pg_isready -U sami -d sami"]
       interval: 10s
       timeout: 5s
       retries: 5
     restart: unless-stopped
 
-  mcpjungle:
-    image: ghcr.io/mcpjungle/mcpjungle:${MCPJUNGLE_IMAGE_TAG:-latest-stdio}
-    container_name: mcpjungle-server
+  api:
+    image: sidgs.jfrog.io/sami/sami-mcp-gateway:${SAMI_MCP_GATEWAY_IMAGE_TAG:-latest-stdio}
+    container_name: sami-mcp-gateway-server
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+      args:
+        - VITE_DASHBOARD_BASE=${VITE_DASHBOARD_BASE:-/}
     environment:
-      DATABASE_URL: postgres://mcpjungle:mcpjungle@db:5432/mcpjungle
+      DATABASE_URL: postgres://sami:sami@db:5432/sami
       SERVER_MODE: ${SERVER_MODE:-development}
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       MCP_SERVER_INIT_REQ_TIMEOUT_SEC: ${MCP_SERVER_INIT_REQ_TIMEOUT_SEC:-10}
+      HTTP_PATH_PREFIX: ${HTTP_PATH_PREFIX:-/api/v1/sami-mcp-gateway}
     ports:
       - "${HOST_PORT:-8080}:8080"
     volumes:

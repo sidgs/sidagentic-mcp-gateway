@@ -1,6 +1,7 @@
 package config
 
 import (
+	"context"
 	"testing"
 
 	"github.com/mcpjungle/mcpjungle/internal/model"
@@ -24,7 +25,7 @@ func TestGetConfigEmptyDatabase(t *testing.T) {
 
 	svc := NewServerConfigService(setup.DB)
 
-	config, err := svc.GetConfig()
+	config, err := svc.GetConfig(context.Background())
 	testhelpers.AssertNoError(t, err)
 
 	// Should return default uninitialized config
@@ -42,7 +43,7 @@ func TestGetConfigWithExistingConfig(t *testing.T) {
 
 	svc := NewServerConfigService(setup.DB)
 
-	config, err := svc.GetConfig()
+	config, err := svc.GetConfig(context.Background())
 	testhelpers.AssertNoError(t, err)
 
 	// Should return the existing config
@@ -61,21 +62,21 @@ func TestInitFirstTime(t *testing.T) {
 	svc := NewServerConfigService(setup.DB)
 
 	// Initially no config should exist
-	config, err := svc.GetConfig()
+	config, err := svc.GetConfig(context.Background())
 	testhelpers.AssertNoError(t, err)
 	if config.Initialized {
 		t.Error("Expected config to be uninitialized initially")
 	}
 
 	// Initialize the config
-	created, err := svc.Init(model.ModeDev)
+	created, err := svc.Init(context.Background(), model.ModeDev)
 	testhelpers.AssertNoError(t, err)
 	if !created {
 		t.Error("Expected config to be created")
 	}
 
 	// Verify config was created
-	config, err = svc.GetConfig()
+	config, err = svc.GetConfig(context.Background())
 	testhelpers.AssertNoError(t, err)
 	if !config.Initialized {
 		t.Error("Expected config to be initialized after Init")
@@ -96,21 +97,21 @@ func TestInitIdempotent(t *testing.T) {
 	svc := NewServerConfigService(db)
 
 	// Initialize the config first time
-	created, err := svc.Init(model.ModeDev)
+	created, err := svc.Init(context.Background(), model.ModeDev)
 	testhelpers.AssertNoError(t, err)
 	if !created {
 		t.Error("Expected config to be created first time")
 	}
 
 	// Try to initialize again
-	created, err = svc.Init(model.ModeDev)
+	created, err = svc.Init(context.Background(), model.ModeDev)
 	testhelpers.AssertNoError(t, err)
 	if created {
 		t.Error("Expected config not to be created second time")
 	}
 
 	// Verify config is still valid
-	config, err := svc.GetConfig()
+	config, err := svc.GetConfig(context.Background())
 	testhelpers.AssertNoError(t, err)
 	if !config.Initialized {
 		t.Error("Expected config to remain initialized")

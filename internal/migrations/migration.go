@@ -7,6 +7,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"gorm.io/gorm"
+	"gorm.io/gorm/schema"
 )
 
 // Migrate performs the database migration for the application.
@@ -59,9 +60,14 @@ func backfillTenantColumns(db *gorm.DB) error {
 			return fmt.Errorf("tenant backfill: %w", err)
 		}
 	}
+	ns := schema.NamingStrategy{}
 	for _, table := range []string{
-		"server_configs", "users", "mcp_clients", "tool_groups",
-		"upstream_oauth_pending_sessions", "upstream_oauth_tokens",
+		ns.TableName("ServerConfig"),
+		ns.TableName("User"),
+		ns.TableName("McpClient"),
+		ns.TableName("ToolGroup"),
+		ns.TableName("UpstreamOAuthPendingSession"),
+		ns.TableName("UpstreamOAuthToken"),
 	} {
 		if err := db.Exec("UPDATE "+table+" SET tenant_id = ? WHERE tenant_id = '' OR tenant_id IS NULL", def).Error; err != nil {
 			return fmt.Errorf("tenant backfill %s: %w", table, err)

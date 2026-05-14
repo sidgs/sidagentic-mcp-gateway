@@ -44,15 +44,11 @@ const (
 // unorderedCommand is a special value used to indicate that a command does not have any order specified.
 const unorderedCommand = -1
 
-// asciiArt contains the MCPJungle ASCII art banner
+// asciiArt prints the MCP GATEWAY startup banner (--version uses the same constant).
 const asciiArt = `
-███╗   ███╗ ██████╗██████╗       ██╗██╗   ██╗███╗   ██╗ ██████╗ ██╗     ███████╗
-████╗ ████║██╔════╝██╔══██╗      ██║██║   ██║████╗  ██║██╔════╝ ██║     ██╔════╝
-██╔████╔██║██║     ██████╔╝      ██║██║   ██║██╔██╗ ██║██║  ███╗██║     █████╗  
-██║╚██╔╝██║██║     ██╔═══╝  ██   ██║██║   ██║██║╚██╗██║██║   ██║██║     ██╔══╝  
-██║ ╚═╝ ██║╚██████╗██║      ╚█████╔╝╚██████╔╝██║ ╚████║╚██████╔╝███████╗███████╗
-╚═╝     ╚═╝ ╚═════╝╚═╝       ╚════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝╚══════╝
-
+=======================
+MCP GATEWAY
+=======================
 `
 
 // ErrSilent is a sentinel error used to indicate that the command should not print an error message
@@ -93,7 +89,7 @@ func Execute() error {
 
 	// Enable built-in --version behavior
 	rootCmd.Version = version.GetVersion()
-	rootCmd.SetVersionTemplate(asciiArt + "\nMCPJungle {{.Version}}\n")
+	rootCmd.SetVersionTemplate(asciiArt + "\nMCP GATEWAY {{.Version}}\n")
 
 	// only print usage and error messages if the command usage is incorrect
 	rootCmd.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {

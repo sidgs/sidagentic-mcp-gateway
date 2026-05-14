@@ -328,14 +328,14 @@ assert_status \
 assert_status \
   "dashboard overview api is hidden in enterprise mode" \
   "GET" \
-  "/api/dashboard/overview" \
+  "/dashboard/overview" \
   "404" \
   ""
 
 assert_status \
   "dashboard servers api is hidden in enterprise mode" \
   "GET" \
-  "/api/dashboard/servers" \
+  "/dashboard/servers" \
   "404" \
   ""
 

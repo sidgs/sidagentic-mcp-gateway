@@ -414,7 +414,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 
 	if s.dashboardService != nil {
 		dashboardAPI := g.Group(
-			"/api/dashboard",
+			"/dashboard",
 			s.requireInitialized(),
 			requireDashboardMode,
 		)

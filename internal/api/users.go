@@ -16,7 +16,7 @@ func (s *Server) createUserHandler() gin.HandlerFunc {
 			return
 		}
 
-		newUser, err := s.userService.CreateUser(&input)
+		newUser, err := s.userService.CreateUser(c.Request.Context(), &input)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -33,7 +33,7 @@ func (s *Server) createUserHandler() gin.HandlerFunc {
 
 func (s *Server) listUsersHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		users, err := s.userService.ListUsers()
+		users, err := s.userService.ListUsers(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -65,7 +65,7 @@ func (s *Server) updateUserHandler() gin.HandlerFunc {
 			return
 		}
 
-		updatedUser, err := s.userService.UpdateUser(&input)
+		updatedUser, err := s.userService.UpdateUser(c.Request.Context(), &input)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -88,7 +88,7 @@ func (s *Server) deleteUserHandler() gin.HandlerFunc {
 			return
 		}
 
-		err := s.userService.DeleteUser(username)
+		err := s.userService.DeleteUser(c.Request.Context(), username)
 		if err != nil {
 			handleServiceError(c, err)
 			return

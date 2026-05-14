@@ -140,7 +140,7 @@ func (s *Service) Tools() (*types.DashboardToolsResponse, error) {
 	if len(resp.Tools) == 0 {
 		resp.EmptyState = emptyState(
 			"No tools discovered yet",
-			"MCPJungle is running, but it has not discovered any tools from registered servers yet.",
+			"MCP Gateway is running, but it has not discovered any tools from registered servers yet.",
 			[]string{
 				fmt.Sprintf("%s list tools --server context7", cliapp.ExecutableName),
 				fmt.Sprintf("%s usage <tool-name>", cliapp.ExecutableName),

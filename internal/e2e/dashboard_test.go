@@ -23,7 +23,7 @@ func TestDashboardRootServedInDevMode(t *testing.T) {
 
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	body := readBody(t, resp)
-	require.Contains(t, body, "MCPJungle Dashboard")
+	require.Contains(t, body, "MCP Gateway Dashboard")
 }
 
 func TestDashboardRootHiddenInEnterpriseMode(t *testing.T) {
@@ -38,7 +38,7 @@ func TestDashboardRootHiddenInEnterpriseMode(t *testing.T) {
 func TestDashboardAPIHiddenInEnterpriseMode(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
-	resp := env.do(t, http.MethodGet, "/api/dashboard/overview", nil, env.adminToken)
+	resp := env.do(t, http.MethodGet, "/dashboard/overview", nil, env.adminToken)
 	defer drain(resp)
 
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -47,7 +47,7 @@ func TestDashboardAPIHiddenInEnterpriseMode(t *testing.T) {
 func TestDashboardAPIEmptyStates(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 
-	overviewResp := env.do(t, http.MethodGet, "/api/dashboard/overview", nil, "")
+	overviewResp := env.do(t, http.MethodGet, "/dashboard/overview", nil, "")
 	defer drain(overviewResp)
 	require.Equal(t, http.StatusOK, overviewResp.StatusCode)
 
@@ -56,7 +56,7 @@ func TestDashboardAPIEmptyStates(t *testing.T) {
 	require.Equal(t, float64(0), overview["server_count"])
 	require.NotNil(t, overview["empty_state"])
 
-	serversResp := env.do(t, http.MethodGet, "/api/dashboard/servers", nil, "")
+	serversResp := env.do(t, http.MethodGet, "/dashboard/servers", nil, "")
 	defer drain(serversResp)
 	require.Equal(t, http.StatusOK, serversResp.StatusCode)
 
@@ -71,13 +71,13 @@ func TestDashboardAPIValidJSON(t *testing.T) {
 	registerEverythingServer(t, env, "")
 
 	paths := []string{
-		"/api/dashboard/overview",
-		"/api/dashboard/servers",
-		"/api/dashboard/tools",
-		"/api/dashboard/tool-groups",
-		"/api/dashboard/prompts",
-		"/api/dashboard/resources",
-		"/api/dashboard/diagnostics",
+		"/dashboard/overview",
+		"/dashboard/servers",
+		"/dashboard/tools",
+		"/dashboard/tool-groups",
+		"/dashboard/prompts",
+		"/dashboard/resources",
+		"/dashboard/diagnostics",
 	}
 
 	for _, path := range paths {
@@ -107,7 +107,7 @@ func TestDashboardServerSummariesDoNotExposeSecrets(t *testing.T) {
 	require.NoError(t, err)
 	require.NoError(t, env.db.Create(serverModel).Error)
 
-	resp := env.do(t, http.MethodGet, "/api/dashboard/servers", nil, "")
+	resp := env.do(t, http.MethodGet, "/dashboard/servers", nil, "")
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -122,7 +122,7 @@ func TestDashboardServerSummariesDoNotExposeSecrets(t *testing.T) {
 func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 
-	registerResp := env.do(t, http.MethodPost, "/api/dashboard/servers", map[string]any{
+	registerResp := env.do(t, http.MethodPost, "/dashboard/servers", map[string]any{
 		"name":        "dashsrv",
 		"description": "Dashboard mutation test server",
 		"transport":   "stdio",
@@ -132,7 +132,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	defer drain(registerResp)
 	require.Equal(t, http.StatusCreated, registerResp.StatusCode)
 
-	serversResp := env.do(t, http.MethodGet, "/api/dashboard/servers", nil, "")
+	serversResp := env.do(t, http.MethodGet, "/dashboard/servers", nil, "")
 	defer drain(serversResp)
 	require.Equal(t, http.StatusOK, serversResp.StatusCode)
 	var serversPayload map[string]any
@@ -143,7 +143,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.Equal(t, "dashsrv", server["name"])
 	require.Equal(t, true, server["enabled"])
 
-	toolsResp := env.do(t, http.MethodGet, "/api/dashboard/tools", nil, "")
+	toolsResp := env.do(t, http.MethodGet, "/dashboard/tools", nil, "")
 	defer drain(toolsResp)
 	require.Equal(t, http.StatusOK, toolsResp.StatusCode)
 	var toolsPayload map[string]any
@@ -152,7 +152,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	firstTool := toolsPayload["tools"].([]any)[0].(map[string]any)
 	require.Equal(t, true, firstTool["enabled"])
 
-	promptsResp := env.do(t, http.MethodGet, "/api/dashboard/prompts", nil, "")
+	promptsResp := env.do(t, http.MethodGet, "/dashboard/prompts", nil, "")
 	defer drain(promptsResp)
 	require.Equal(t, http.StatusOK, promptsResp.StatusCode)
 	var promptsPayload map[string]any
@@ -169,7 +169,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, promptResultNames(promptsBefore.Prompts), "dashsrv__simple-prompt")
 
-	disableToolResp := env.do(t, http.MethodPatch, "/api/dashboard/tools/dashsrv__echo/enabled", map[string]any{
+	disableToolResp := env.do(t, http.MethodPatch, "/dashboard/tools/dashsrv__echo/enabled", map[string]any{
 		"enabled": false,
 	}, "")
 	defer drain(disableToolResp)
@@ -178,7 +178,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, toolResultNames(toolsAfterDisable.Tools), "dashsrv__echo")
 
-	disablePromptResp := env.do(t, http.MethodPatch, "/api/dashboard/prompts/dashsrv__simple-prompt/enabled", map[string]any{
+	disablePromptResp := env.do(t, http.MethodPatch, "/dashboard/prompts/dashsrv__simple-prompt/enabled", map[string]any{
 		"enabled": false,
 	}, "")
 	defer drain(disablePromptResp)
@@ -187,13 +187,13 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, promptResultNames(promptsAfterDisable.Prompts), "dashsrv__simple-prompt")
 
-	disableServerResp := env.do(t, http.MethodPatch, "/api/dashboard/servers/dashsrv/enabled", map[string]any{
+	disableServerResp := env.do(t, http.MethodPatch, "/dashboard/servers/dashsrv/enabled", map[string]any{
 		"enabled": false,
 	}, "")
 	defer drain(disableServerResp)
 	require.Equal(t, http.StatusOK, disableServerResp.StatusCode)
 
-	toolsAfterServerDisableResp := env.do(t, http.MethodGet, "/api/dashboard/tools", nil, "")
+	toolsAfterServerDisableResp := env.do(t, http.MethodGet, "/dashboard/tools", nil, "")
 	defer drain(toolsAfterServerDisableResp)
 	require.Equal(t, http.StatusOK, toolsAfterServerDisableResp.StatusCode)
 	var toolsAfterServerDisablePayload map[string]any
@@ -210,7 +210,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.Equal(t, false, echoTool["enabled"])
 	require.Equal(t, false, echoTool["server_enabled"])
 
-	promptsAfterServerDisableResp := env.do(t, http.MethodGet, "/api/dashboard/prompts", nil, "")
+	promptsAfterServerDisableResp := env.do(t, http.MethodGet, "/dashboard/prompts", nil, "")
 	defer drain(promptsAfterServerDisableResp)
 	require.Equal(t, http.StatusOK, promptsAfterServerDisableResp.StatusCode)
 	var promptsAfterServerDisablePayload map[string]any
@@ -234,7 +234,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.NoError(t, err)
 	require.NotContains(t, promptResultNames(promptsAfterServerDisable.Prompts), "dashsrv__simple-prompt")
 
-	overviewResp := env.do(t, http.MethodGet, "/api/dashboard/overview", nil, "")
+	overviewResp := env.do(t, http.MethodGet, "/dashboard/overview", nil, "")
 	defer drain(overviewResp)
 	require.Equal(t, http.StatusOK, overviewResp.StatusCode)
 	var overview map[string]any
@@ -243,19 +243,19 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.Greater(t, overview["tool_count"].(float64), float64(0))
 	require.Greater(t, overview["prompt_count"].(float64), float64(0))
 
-	enableServerResp := env.do(t, http.MethodPatch, "/api/dashboard/servers/dashsrv/enabled", map[string]any{
+	enableServerResp := env.do(t, http.MethodPatch, "/dashboard/servers/dashsrv/enabled", map[string]any{
 		"enabled": true,
 	}, "")
 	defer drain(enableServerResp)
 	require.Equal(t, http.StatusOK, enableServerResp.StatusCode)
 
-	enableToolResp := env.do(t, http.MethodPatch, "/api/dashboard/tools/dashsrv__echo/enabled", map[string]any{
+	enableToolResp := env.do(t, http.MethodPatch, "/dashboard/tools/dashsrv__echo/enabled", map[string]any{
 		"enabled": true,
 	}, "")
 	defer drain(enableToolResp)
 	require.Equal(t, http.StatusOK, enableToolResp.StatusCode)
 
-	enablePromptResp := env.do(t, http.MethodPatch, "/api/dashboard/prompts/dashsrv__simple-prompt/enabled", map[string]any{
+	enablePromptResp := env.do(t, http.MethodPatch, "/dashboard/prompts/dashsrv__simple-prompt/enabled", map[string]any{
 		"enabled": true,
 	}, "")
 	defer drain(enablePromptResp)
@@ -268,11 +268,11 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, promptResultNames(promptsAfterEnable.Prompts), "dashsrv__simple-prompt")
 
-	deleteResp := env.do(t, http.MethodDelete, "/api/dashboard/servers/dashsrv", nil, "")
+	deleteResp := env.do(t, http.MethodDelete, "/dashboard/servers/dashsrv", nil, "")
 	defer drain(deleteResp)
 	require.Equal(t, http.StatusOK, deleteResp.StatusCode)
 
-	finalServersResp := env.do(t, http.MethodGet, "/api/dashboard/servers", nil, "")
+	finalServersResp := env.do(t, http.MethodGet, "/dashboard/servers", nil, "")
 	defer drain(finalServersResp)
 	require.Equal(t, http.StatusOK, finalServersResp.StatusCode)
 	var finalServers map[string]any
@@ -284,7 +284,7 @@ func TestDashboardToolGroupsCRUDAndValidation(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 	registerEverythingServer(t, env, "")
 
-	listResp := env.do(t, http.MethodGet, "/api/dashboard/tool-groups", nil, "")
+	listResp := env.do(t, http.MethodGet, "/dashboard/tool-groups", nil, "")
 	defer drain(listResp)
 	require.Equal(t, http.StatusOK, listResp.StatusCode)
 	var emptyPayload map[string]any
@@ -292,14 +292,14 @@ func TestDashboardToolGroupsCRUDAndValidation(t *testing.T) {
 	require.Empty(t, emptyPayload["tool_groups"])
 	require.NotNil(t, emptyPayload["empty_state"])
 
-	invalidResp := env.do(t, http.MethodPost, "/api/dashboard/tool-groups", map[string]any{
+	invalidResp := env.do(t, http.MethodPost, "/dashboard/tool-groups", map[string]any{
 		"name":  "empty-group",
 		"tools": []string{},
 	}, "")
 	defer drain(invalidResp)
 	require.Equal(t, http.StatusBadRequest, invalidResp.StatusCode)
 
-	createResp := env.do(t, http.MethodPost, "/api/dashboard/tool-groups", map[string]any{
+	createResp := env.do(t, http.MethodPost, "/dashboard/tool-groups", map[string]any{
 		"name":        "coding",
 		"description": "Coding helpers",
 		"tools":       []string{"everything__echo", "everything__get-sum"},
@@ -312,7 +312,7 @@ func TestDashboardToolGroupsCRUDAndValidation(t *testing.T) {
 	require.Equal(t, "coding", created["name"])
 	require.Equal(t, float64(2), created["tool_count"])
 
-	getResp := env.do(t, http.MethodGet, "/api/dashboard/tool-groups/coding", nil, "")
+	getResp := env.do(t, http.MethodGet, "/dashboard/tool-groups/coding", nil, "")
 	defer drain(getResp)
 	require.Equal(t, http.StatusOK, getResp.StatusCode)
 	var fetched map[string]any
@@ -321,11 +321,11 @@ func TestDashboardToolGroupsCRUDAndValidation(t *testing.T) {
 	tools := fetched["tools"].([]any)
 	require.Len(t, tools, 2)
 
-	deleteResp := env.do(t, http.MethodDelete, "/api/dashboard/tool-groups/coding", nil, "")
+	deleteResp := env.do(t, http.MethodDelete, "/dashboard/tool-groups/coding", nil, "")
 	defer drain(deleteResp)
 	require.Equal(t, http.StatusOK, deleteResp.StatusCode)
 
-	finalListResp := env.do(t, http.MethodGet, "/api/dashboard/tool-groups", nil, "")
+	finalListResp := env.do(t, http.MethodGet, "/dashboard/tool-groups", nil, "")
 	defer drain(finalListResp)
 	require.Equal(t, http.StatusOK, finalListResp.StatusCode)
 	var finalPayload map[string]any
@@ -337,7 +337,7 @@ func TestDashboardRegisterServerHandlesOAuth(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 	upstream := newMockOAuthMCPServer(t)
 
-	registerResp := env.do(t, http.MethodPost, "/api/dashboard/servers", map[string]any{
+	registerResp := env.do(t, http.MethodPost, "/dashboard/servers", map[string]any{
 		"name":        "oauthdash",
 		"description": "Dashboard OAuth server",
 		"transport":   "streamable_http",
@@ -355,7 +355,7 @@ func TestDashboardRegisterServerHandlesOAuth(t *testing.T) {
 	sessionResp := env.do(
 		t,
 		http.MethodGet,
-		"/api/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
+		"/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
 		nil,
 		"",
 	)
@@ -388,7 +388,7 @@ func TestDashboardRegisterServerHandlesOAuth(t *testing.T) {
 	completedResp := env.do(
 		t,
 		http.MethodGet,
-		"/api/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
+		"/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
 		nil,
 		"",
 	)
@@ -399,7 +399,7 @@ func TestDashboardRegisterServerHandlesOAuth(t *testing.T) {
 	decodeJSON(t, completedResp, &completedPayload)
 	require.Equal(t, "completed", completedPayload["status"])
 
-	serversResp := env.do(t, http.MethodGet, "/api/dashboard/servers", nil, "")
+	serversResp := env.do(t, http.MethodGet, "/dashboard/servers", nil, "")
 	defer drain(serversResp)
 	require.Equal(t, http.StatusOK, serversResp.StatusCode)
 	require.Contains(t, readBody(t, serversResp), "oauthdash")
@@ -413,7 +413,7 @@ func TestDashboardRegisterServerHandlesOAuth(t *testing.T) {
 func TestDashboardOAuthCallbackMissingParams(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 
-	resp := env.do(t, http.MethodGet, "/api/dashboard/oauth/callback", nil, "")
+	resp := env.do(t, http.MethodGet, "/dashboard/oauth/callback", nil, "")
 	defer drain(resp)
 	require.Equal(t, http.StatusBadRequest, resp.StatusCode)
 	require.Contains(t, readBody(t, resp), "Missing required OAuth callback parameters")
@@ -423,7 +423,7 @@ func TestDashboardOAuthCallbackFailureIsTracked(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 	upstream := newMockOAuthMCPServer(t)
 
-	registerResp := env.do(t, http.MethodPost, "/api/dashboard/servers", map[string]any{
+	registerResp := env.do(t, http.MethodPost, "/dashboard/servers", map[string]any{
 		"name":      "oauthfail",
 		"transport": "streamable_http",
 		"url":       upstream.server.URL + "/mcp",
@@ -445,7 +445,7 @@ func TestDashboardOAuthCallbackFailureIsTracked(t *testing.T) {
 	callbackResp := env.do(
 		t,
 		http.MethodGet,
-		"/api/dashboard/oauth/callback?error=access_denied&state="+url.QueryEscape(state),
+		"/dashboard/oauth/callback?error=access_denied&state="+url.QueryEscape(state),
 		nil,
 		"",
 	)
@@ -456,7 +456,7 @@ func TestDashboardOAuthCallbackFailureIsTracked(t *testing.T) {
 	sessionResp := env.do(
 		t,
 		http.MethodGet,
-		"/api/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
+		"/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
 		nil,
 		"",
 	)
@@ -472,7 +472,7 @@ func TestDashboardOAuthSessionExpiresAndCleansUp(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 	upstream := newMockOAuthMCPServer(t)
 
-	registerResp := env.do(t, http.MethodPost, "/api/dashboard/servers", map[string]any{
+	registerResp := env.do(t, http.MethodPost, "/dashboard/servers", map[string]any{
 		"name":      "oauthexpire",
 		"transport": "streamable_http",
 		"url":       upstream.server.URL + "/mcp",
@@ -493,7 +493,7 @@ func TestDashboardOAuthSessionExpiresAndCleansUp(t *testing.T) {
 	sessionResp := env.do(
 		t,
 		http.MethodGet,
-		"/api/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
+		"/dashboard/oauth/session/"+registerPayload.AuthorizationRequired.SessionID,
 		nil,
 		"",
 	)

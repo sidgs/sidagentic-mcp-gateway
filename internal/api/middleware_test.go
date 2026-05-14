@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -28,7 +29,7 @@ func TestRequireInitialized(t *testing.T) {
 			name: "server is initialized",
 			setupConfig: func(testDB *gorm.DB) error {
 				configService := config.NewServerConfigService(testDB)
-				_, err := configService.Init(model.ModeDev)
+				_, err := configService.Init(context.Background(), model.ModeDev)
 				return err
 			},
 			expectedStatus: http.StatusOK,
@@ -111,7 +112,7 @@ func TestVerifyUserAuthForAPIAccess(t *testing.T) {
 			mode:       model.ModeEnterprise,
 			authHeader: "Bearer test-token",
 			setupUser: func() error {
-				_, err := userService.CreateAdminUser()
+				_, err := userService.CreateAdminUser(context.Background())
 				if err != nil {
 					return err
 				}
@@ -373,7 +374,7 @@ func TestCheckAuthForMcpProxyAccess(t *testing.T) {
 					Description: "Test client",
 					AllowList:   []byte("[]"),
 				}
-				_, err := mcpClientService.CreateClient(client)
+				_, err := mcpClientService.CreateClient(context.Background(), client)
 				if err != nil {
 					return err
 				}
@@ -445,13 +446,13 @@ func TestMiddlewareIntegration(t *testing.T) {
 	userService := user.NewUserService(testDB)
 
 	// Setup config
-	_, err := configService.Init(model.ModeEnterprise)
+	_, err := configService.Init(context.Background(), model.ModeEnterprise)
 	if err != nil {
 		t.Fatalf("Setup config failed: %v", err)
 	}
 
 	// Setup user
-	_, err = userService.CreateAdminUser()
+	_, err = userService.CreateAdminUser(context.Background())
 	if err != nil {
 		t.Fatalf("Setup user failed: %v", err)
 	}

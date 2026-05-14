@@ -531,7 +531,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 
 	// Display startup banner when the server is started
 	cmd.Print(asciiArt)
-	cmd.Printf("MCPJungle HTTP server listening on :%s\n\n", bindPort)
+	cmd.Printf("MCP GATEWAY HTTP server listening on :%s\n\n", bindPort)
 
 	// Create a cancellable base context for all requests - when cancelled, all active connections terminate
 	requestBaseCtx, cancelRequests := context.WithCancel(context.Background())

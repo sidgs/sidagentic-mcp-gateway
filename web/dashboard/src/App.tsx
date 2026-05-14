@@ -1,5 +1,22 @@
 import { Fragment, useEffect, useMemo, useState } from "react";
-import logoUrl from "@repo-assets/logo.png";
+import Alert from "@mui/material/Alert";
+import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
+import CircularProgress from "@mui/material/CircularProgress";
+import Dialog from "@mui/material/Dialog";
+import DialogActions from "@mui/material/DialogActions";
+import DialogContent from "@mui/material/DialogContent";
+import DialogTitle from "@mui/material/DialogTitle";
+import FormControl from "@mui/material/FormControl";
+import IconButton from "@mui/material/IconButton";
+import InputLabel from "@mui/material/InputLabel";
+import MenuItem from "@mui/material/MenuItem";
+import Paper from "@mui/material/Paper";
+import Select from "@mui/material/Select";
+import Stack from "@mui/material/Stack";
+import TextField from "@mui/material/TextField";
+import Typography from "@mui/material/Typography";
 import { api } from "@/lib/api";
 import type {
   AppSection,
@@ -24,6 +41,7 @@ import { EmptyStateCard } from "@/components/EmptyStateCard";
 import { NavSidebar } from "@/components/NavSidebar";
 import { SectionCard } from "@/components/SectionCard";
 import { StatusBadge } from "@/components/StatusBadge";
+import { monospaceFontFamily } from "@/theme";
 
 function TrashIcon() {
   return (
@@ -113,7 +131,7 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
   },
   prompts: {
     title: "Prompts",
-    subtitle: "Prompt templates currently exposed through MCPJungle.",
+    subtitle: "Prompt templates currently exposed through MCP Gateway.",
   },
   resources: {
     title: "Resources",
@@ -828,7 +846,7 @@ export default function App() {
 
   async function deleteServer(server: DashboardServer) {
     const confirmed = window.confirm(
-      `Delete server "${server.name}"? This removes the registration and all discovered tools, prompts, and resources from MCPJungle.`,
+      `Delete server "${server.name}"? This removes the registration and all discovered tools, prompts, and resources from MCP Gateway.`,
     );
     if (!confirmed) {
       return;
@@ -923,54 +941,134 @@ export default function App() {
   }
 
   return (
-    <div className="app-shell">
-      <NavSidebar active={section} logoUrl={logoUrl} onSelect={setSection} />
-      <main className="main-shell">
-        <header className="topbar">
-          <div>
-            <h1>{currentSectionMeta.title}</h1>
+    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+      <NavSidebar active={section} onSelect={setSection} />
+      <Box component="main" sx={{ flex: 1, minWidth: 0, overflowX: "auto", p: "18px" }}>
+        <Stack component="header" direction={{ xs: "column", lg: "row" }} spacing={2} sx={{ mb: 2 }}>
+          <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+            <Typography variant="h4" component="h1" sx={{ mt: "2px", fontWeight: 700, lineHeight: 1.1 }}>
+              {currentSectionMeta.title}
+            </Typography>
             {currentSectionMeta.subtitle ? (
-              <p className="topbar-subtitle">{currentSectionMeta.subtitle}</p>
+              <Typography color="text.secondary" sx={{ mt: "6px" }}>
+                {currentSectionMeta.subtitle}
+              </Typography>
             ) : null}
-          </div>
-          <div className="topbar-meta">
+          </Box>
+          <Stack
+            direction="row"
+            spacing={1}
+            sx={{
+              flexWrap: "wrap",
+              alignItems: "center",
+              justifyContent: "flex-end",
+              maxWidth: { lg: 720 },
+            }}
+          >
             {overview?.version ? (
-              <span className="version-chip">{`Server version ${shortVersion(overview.version)}`}</span>
+              <Chip
+                label={`Server version ${shortVersion(overview.version)}`}
+                variant="outlined"
+                size="small"
+                sx={{ fontSize: "0.88rem", minHeight: 36, borderRadius: "14px" }}
+              />
             ) : null}
             {overview?.endpoints[0] ? (
-              <div className="topbar-endpoint">
-                <span className="topbar-endpoint-label">Endpoint</span>
-                <code title={overview.endpoints[0].url}>{overview.endpoints[0].url}</code>
+              <Stack
+                direction="row"
+                spacing={1}
+                sx={{
+                  alignItems: "center",
+                  minWidth: 0,
+                  maxWidth: "100%",
+                  px: 1,
+                  py: 0.75,
+                  borderRadius: "14px",
+                  border: 1,
+                  borderColor: "divider",
+                  bgcolor: "background.paper",
+                }}
+              >
+                <Typography
+                  component="span"
+                  variant="caption"
+                  color="text.secondary"
+                  sx={{ display: { xs: "none", sm: "inline" } }}
+                >
+                  Endpoint
+                </Typography>
+                <Typography
+                  component="code"
+                  variant="body2"
+                  sx={{
+                    flex: 1,
+                    minWidth: 0,
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    fontFamily: monospaceFontFamily,
+                  }}
+                  title={overview.endpoints[0].url}
+                >
+                  {overview.endpoints[0].url}
+                </Typography>
                 <CopyButton ariaLabel="Copy endpoint" title="Copy endpoint" value={overview.endpoints[0].url} />
-              </div>
+              </Stack>
             ) : null}
-          </div>
-        </header>
+          </Stack>
+        </Stack>
 
         {feedback ? (
-          <section className={`feedback-banner feedback-${feedback.tone}`}>
+          <Alert
+            severity={feedback.tone === "success" ? "success" : "error"}
+            sx={{ mb: 2 }}
+            onClose={() => setFeedback(null)}
+          >
             <strong>{feedback.tone === "success" ? "Updated" : "Request failed"}</strong>
-            <span>{feedback.message}</span>
-          </section>
+            <span> {feedback.message}</span>
+          </Alert>
         ) : null}
 
         {loadState === "loading" ? (
-          <section className="loading-screen panel">
-            <h2>Loading dashboard</h2>
-            <p>Querying local MCPJungle state, servers, tools, prompts, and resources.</p>
-          </section>
+          <Paper variant="outlined" sx={{ p: 4, borderRadius: 2 }}>
+            <Stack spacing={2} sx={{ alignItems: "center" }}>
+              <CircularProgress />
+              <Typography variant="h5" component="h2">
+                Loading dashboard
+              </Typography>
+              <Typography color="text.secondary" sx={{ textAlign: "center" }}>
+                Querying local MCP Gateway state, servers, tools, prompts, and resources.
+              </Typography>
+            </Stack>
+          </Paper>
         ) : null}
 
         {loadState === "error" ? (
-          <section className="loading-screen panel error-screen">
-            <h2>Dashboard API unavailable</h2>
-            <p>Failed to load dashboard data from the local server.</p>
-            <code>{errorMessage}</code>
-          </section>
+          <Paper variant="outlined" sx={{ p: 4, borderRadius: 2, borderColor: "error.light" }}>
+            <Typography variant="h5" component="h2" gutterBottom>
+              Dashboard API unavailable
+            </Typography>
+            <Typography color="text.secondary" gutterBottom>
+              Failed to load dashboard data from the local server.
+            </Typography>
+            <Typography
+              component="code"
+              sx={{
+                display: "block",
+                mt: 2,
+                p: 1.5,
+                bgcolor: "grey.100",
+                borderRadius: 1,
+                fontFamily: monospaceFontFamily,
+                wordBreak: "break-word",
+              }}
+            >
+              {errorMessage}
+            </Typography>
+          </Paper>
         ) : null}
 
         {loadState === "ready" ? (
-          <div className="content-grid">
+          <div className="flex flex-col gap-[14px]">
             {section === "servers" && data.servers ? (
               <>
                 {overview ? (
@@ -998,17 +1096,18 @@ export default function App() {
                   title="Servers"
                   subtitle="Registered MCP servers"
                   action={
-                    <div className="toolbar-cluster">
-                      <input
-                        className="table-filter compact-filter"
-                        onChange={(event) => setServerFilter(event.target.value)}
+                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}>
+                      <TextField
+                        size="small"
                         placeholder="Search servers"
                         value={serverFilter}
+                        onChange={(event) => setServerFilter(event.target.value)}
+                        sx={{ minWidth: { sm: 220 } }}
                       />
-                      <button className="primary-action" onClick={openRegisterModal} type="button">
+                      <Button variant="contained" onClick={openRegisterModal}>
                         + Add Server
-                      </button>
-                    </div>
+                      </Button>
+                    </Stack>
                   }
                 >
                   {data.servers.empty_state && filteredServers.length === 0 ? (
@@ -1050,30 +1149,30 @@ export default function App() {
                                     <strong>{server.tool_count} tools</strong>
                                   </div>
                                   <div className="server-meta-cell">
-                                    <button
-                                      className="secondary-action server-action-button"
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
                                       disabled={isBusy(`server-toggle:${server.name}`)}
                                       onClick={() => void toggleServerEnabled(server)}
-                                      type="button"
                                     >
                                       {isBusy(`server-toggle:${server.name}`)
                                         ? "Saving..."
                                         : server.enabled
                                           ? "Disable"
                                           : "Enable"}
-                                    </button>
+                                    </Button>
                                   </div>
                                   <div className="server-meta-cell">
-                                    <button
+                                    <IconButton
                                       aria-label="Delete server"
-                                      className="danger-action server-action-button icon-button danger-icon-button"
+                                      color="error"
                                       disabled={isBusy(`server-delete:${server.name}`)}
                                       onClick={() => void deleteServer(server)}
                                       title="Delete server"
-                                      type="button"
+                                      size="small"
                                     >
                                       <TrashIcon />
-                                    </button>
+                                    </IconButton>
                                   </div>
                                 </div>
                               </div>
@@ -1235,18 +1334,18 @@ export default function App() {
                                       title="Copy canonical name"
                                       value={tool.canonical_name}
                                     />
-                                    <button
-                                      className="secondary-action"
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
                                       disabled={isBusy(`tool-toggle:${tool.canonical_name}`)}
                                       onClick={() => void toggleToolEnabled(tool)}
-                                      type="button"
                                     >
                                       {isBusy(`tool-toggle:${tool.canonical_name}`)
                                         ? "Saving..."
                                         : tool.enabled
                                           ? "Disable"
                                           : "Enable"}
-                                    </button>
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -1353,9 +1452,9 @@ export default function App() {
                 title="Configured tool groups"
                 subtitle=""
                 action={
-                  <button className="primary-action" onClick={openToolGroupModal} type="button">
+                  <Button variant="contained" onClick={openToolGroupModal}>
                     + Add Tool Group
-                  </button>
+                  </Button>
                 }
               >
                 {data.toolGroups.empty_state && data.toolGroups.tool_groups.length === 0 ? (
@@ -1398,16 +1497,16 @@ export default function App() {
                                 </td>
                                 <td>
                                   <div className="row-actions" onClick={(event) => event.stopPropagation()}>
-                                    <button
+                                    <IconButton
                                       aria-label="Delete tool group"
-                                      className="danger-action icon-button danger-icon-button"
+                                      color="error"
                                       disabled={isBusy(`tool-group-delete:${group.name}`)}
                                       onClick={() => void deleteToolGroup(group)}
                                       title="Delete tool group"
-                                      type="button"
+                                      size="small"
                                     >
                                       <TrashIcon />
-                                    </button>
+                                    </IconButton>
                                   </div>
                                 </td>
                               </tr>
@@ -1598,18 +1697,18 @@ export default function App() {
                                       title="Copy canonical name"
                                       value={prompt.canonical_name}
                                     />
-                                    <button
-                                      className="secondary-action"
+                                    <Button
+                                      variant="outlined"
+                                      size="small"
                                       disabled={isBusy(`prompt-toggle:${prompt.canonical_name}`)}
                                       onClick={() => void togglePromptEnabled(prompt)}
-                                      type="button"
                                     >
                                       {isBusy(`prompt-toggle:${prompt.canonical_name}`)
                                         ? "Saving..."
                                         : prompt.enabled
                                           ? "Disable"
                                           : "Enable"}
-                                    </button>
+                                    </Button>
                                   </div>
                                 </td>
                               </tr>
@@ -1801,410 +1900,442 @@ export default function App() {
           </div>
         ) : null}
 
-        {toolGroupOpen ? (
-          <div className="modal-backdrop" onClick={closeToolGroupModal} role="presentation">
-            <section className="modal-panel" onClick={(event) => event.stopPropagation()}>
-              <div className="modal-header">
-                <div>
-                  <p className="panel-label">Tool Groups</p>
-                  <h2>Add Tool Group</h2>
-                </div>
-                <button className="secondary-action" onClick={closeToolGroupModal} type="button">
-                  Close
-                </button>
-              </div>
+        <Dialog open={toolGroupOpen} onClose={closeToolGroupModal} maxWidth="md" fullWidth scroll="paper">
+          <DialogTitle sx={{ pr: 6 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
+            >
+              <Box>
+                <Typography variant="caption" sx={{ letterSpacing: "0.12em", fontWeight: 600 }}>
+                  Tool Groups
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.5 }}>
+                  Add Tool Group
+                </Typography>
+              </Box>
+              <Button variant="outlined" size="small" onClick={closeToolGroupModal}>
+                Close
+              </Button>
+            </Stack>
+          </DialogTitle>
 
-              <div className="modal-form">
-                <label className="form-field">
-                  <span>Group name</span>
-                  <input
-                    className="table-filter form-input"
-                    onChange={(event) => setToolGroupForm((current) => ({ ...current, name: event.target.value }))}
-                    placeholder="coding"
-                    value={toolGroupForm.name}
-                  />
-                </label>
+          <DialogContent dividers>
+            <Stack spacing={2}>
+              <TextField
+                label="Group name"
+                placeholder="coding"
+                fullWidth
+                size="small"
+                value={toolGroupForm.name}
+                onChange={(event) => setToolGroupForm((current) => ({ ...current, name: event.target.value }))}
+              />
+              <TextField
+                label="Description"
+                placeholder="Tools useful for coding workflows"
+                fullWidth
+                size="small"
+                value={toolGroupForm.description}
+                onChange={(event) =>
+                  setToolGroupForm((current) => ({ ...current, description: event.target.value }))
+                }
+              />
 
-                <label className="form-field">
-                  <span>Description</span>
-                  <input
-                    className="table-filter form-input"
-                    onChange={(event) =>
-                      setToolGroupForm((current) => ({ ...current, description: event.target.value }))
-                    }
-                    placeholder="Tools useful for coding workflows"
-                    value={toolGroupForm.description}
-                  />
-                </label>
-
-                <div className="tool-group-builder">
-                  <div className="tool-group-selector panel">
-                    <div className="tool-group-selector-header">
-                      <strong>Available tools</strong>
-                    </div>
-                    {(data.tools?.tools.length ?? 0) > 0 ? (
-                      <>
-                        <div className="toolbar-cluster">
-                          <input
-                            className="table-filter compact-filter"
-                            onChange={(event) => setToolGroupToolFilter(event.target.value)}
-                            placeholder="Search tools"
-                            value={toolGroupToolFilter}
-                          />
-                          <select
-                            className="table-filter compact-filter compact-select"
-                            onChange={(event) => setToolGroupToolServerFilter(event.target.value)}
+              <div className="tool-group-builder">
+                <div className="tool-group-selector panel">
+                  <div className="tool-group-selector-header">
+                    <strong>Available tools</strong>
+                  </div>
+                  {(data.tools?.tools.length ?? 0) > 0 ? (
+                    <>
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1 }}>
+                        <TextField
+                          placeholder="Search tools"
+                          size="small"
+                          value={toolGroupToolFilter}
+                          onChange={(event) => setToolGroupToolFilter(event.target.value)}
+                          sx={{ flex: 1, minWidth: 0 }}
+                        />
+                        <FormControl size="small" sx={{ minWidth: 160 }}>
+                          <InputLabel id="tg-server-filter">Server</InputLabel>
+                          <Select
+                            labelId="tg-server-filter"
+                            label="Server"
                             value={toolGroupToolServerFilter}
+                            onChange={(event) => setToolGroupToolServerFilter(event.target.value)}
                           >
-                            <option value="all">All servers</option>
+                            <MenuItem value="all">All servers</MenuItem>
                             {uniqueToolServers.map((server) => (
-                              <option key={server} value={server}>
+                              <MenuItem key={server} value={server}>
                                 {server}
-                              </option>
+                              </MenuItem>
                             ))}
-                          </select>
-                        </div>
-                        <div className="tool-pick-list">
-                          {availableToolGroupTools.map((tool) => {
-                            const selected = toolGroupForm.selectedTools.includes(tool.canonical_name);
-                            return (
-                              <button
-                                className={`tool-pick-item ${selected ? "is-selected" : ""}`}
-                                key={tool.canonical_name}
-                                onClick={() => toggleToolGroupSelection(tool.canonical_name)}
-                                type="button"
-                              >
-                                <div className="table-primary">{tool.name}</div>
-                                <code className="identifier-code" title={tool.canonical_name}>
-                                  {tool.canonical_name}
-                                </code>
-                                <div className="table-secondary">{tool.server}</div>
-                              </button>
-                            );
-                          })}
-                        </div>
-                      </>
-                    ) : (
-                      <p className="empty-inline">Register MCP servers first so tools are available to group.</p>
-                    )}
-                  </div>
-
-                  <div className="tool-group-selector panel">
-                    <div className="tool-group-selector-header">
-                      <strong>Selected tools</strong>
-                    </div>
-                    {toolGroupForm.selectedTools.length > 0 ? (
-                      <div className="selected-tool-list">
-                        {toolGroupForm.selectedTools.map((toolName) => (
-                          <button
-                            className="selected-tool-chip"
-                            key={toolName}
-                            onClick={() => removeToolGroupSelection(toolName)}
-                            type="button"
-                          >
-                            <code>{toolName}</code>
-                            <span>Remove</span>
-                          </button>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="empty-inline">Select at least one tool.</p>
-                    )}
-                  </div>
-                </div>
-
-                {toolGroupError ? <p className="form-error">{toolGroupError}</p> : null}
-              </div>
-
-              <div className="modal-footer">
-                <button className="secondary-action" onClick={closeToolGroupModal} type="button">
-                  Cancel
-                </button>
-                <button
-                  className="primary-action"
-                  disabled={isBusy("tool-group-create")}
-                  onClick={() => void submitToolGroup()}
-                  type="button"
-                >
-                  {isBusy("tool-group-create") ? "Saving..." : "+ Add Tool Group"}
-                </button>
-              </div>
-            </section>
-          </div>
-        ) : null}
-
-        {registerOpen ? (
-          <div className="modal-backdrop" onClick={closeRegisterModal} role="presentation">
-            <section className="modal-panel" onClick={(event) => event.stopPropagation()}>
-              <div className="modal-header">
-                <div>
-                  <p className="panel-label">Add server</p>
-                  <h2>{registerOAuth ? "Complete OAuth authorization" : "Register an MCP server"}</h2>
-                </div>
-                <button className="secondary-action" onClick={closeRegisterModal} type="button">
-                  Close
-                </button>
-              </div>
-
-              {registerOAuth ? (
-                <div className="modal-form oauth-step">
-                  <p className="oauth-message">
-                    This MCP server requires OAuth authorization. Continue in your browser to complete
-                    registration.
-                  </p>
-                  <div className="oauth-status-card">
-                    <div>
-                      <span className="oauth-status-label">Status</span>
-                      <strong>
-                        {registerOAuth.hasOpenedBrowser
-                          ? "Waiting for OAuth authorization..."
-                          : "Authorization required"}
-                      </strong>
-                    </div>
-                    {registerOAuth.authorization.expires_at ? (
-                      <p className="oauth-status-meta">
-                        Expires {new Date(registerOAuth.authorization.expires_at).toLocaleTimeString()}
-                      </p>
-                    ) : null}
-                  </div>
-                  {registerOAuth.error ? <p className="form-error">{registerOAuth.error}</p> : null}
-                </div>
-              ) : (
-                <>
-                  <div className="modal-form">
-                    <label className="form-field">
-                      <span>Server name</span>
-                      <input
-                        className="table-filter form-input"
-                        onChange={(event) => updateRegisterField("name", event.target.value)}
-                        placeholder={registerForm.transport === "streamable_http" ? "context7" : "filesystem"}
-                        value={registerForm.name}
-                      />
-                    </label>
-
-                    <label className="form-field">
-                      <span>Description</span>
-                      <input
-                        className="table-filter form-input"
-                        onChange={(event) => updateRegisterField("description", event.target.value)}
-                        placeholder={
-                          registerForm.transport === "streamable_http"
-                            ? "context7 mcp server"
-                            : "Local filesystem access"
-                        }
-                        value={registerForm.description}
-                      />
-                    </label>
-
-                    <div className="form-grid">
-                      <label className="form-field">
-                        <span>Transport</span>
-                        <select
-                          className="table-filter form-input compact-select"
-                          onChange={(event) =>
-                            updateRegisterField(
-                              "transport",
-                              event.target.value as RegisterServerFormState["transport"],
-                            )
-                          }
-                          value={registerForm.transport}
-                        >
-                          <option value="stdio">stdio</option>
-                          <option value="streamable_http">streamable_http</option>
-                          <option value="sse">sse</option>
-                        </select>
-                      </label>
-
-                      <label className="form-field">
-                        <span>Session mode</span>
-                        <select
-                          className="table-filter form-input compact-select"
-                          onChange={(event) =>
-                            updateRegisterField(
-                              "session_mode",
-                              event.target.value as RegisterServerFormState["session_mode"],
-                            )
-                          }
-                          value={registerForm.session_mode}
-                        >
-                          <option value="stateless">stateless</option>
-                          <option value="stateful">stateful</option>
-                        </select>
-                      </label>
-                    </div>
-
-                    {registerForm.transport === "stdio" ? (
-                      <>
-                        <label className="form-field">
-                          <span>Command</span>
-                          <input
-                            className="table-filter form-input"
-                            onChange={(event) => updateRegisterField("command", event.target.value)}
-                            placeholder="npx"
-                            value={registerForm.command}
-                          />
-                        </label>
-
-                        <label className="form-field">
-                          <span>Arguments</span>
-                          <textarea
-                            className="table-filter form-input form-textarea"
-                            onChange={(event) => updateRegisterField("args_text", event.target.value)}
-                            placeholder="-y&#10;@modelcontextprotocol/server-filesystem"
-                            value={registerForm.args_text}
-                          />
-                        </label>
-
-                        <div className="form-field">
-                          <span>Environment variables</span>
-                          <div className="key-value-list">
-                            {registerForm.env_rows.map((row, index) => (
-                              <div className="key-value-row" key={`env-${index}`}>
-                                <input
-                                  className="table-filter form-input"
-                                  onChange={(event) =>
-                                    updateKeyValueRow("env_rows", index, "key", event.target.value)
-                                  }
-                                  placeholder="KEY"
-                                  value={row.key}
-                                />
-                                <input
-                                  className="table-filter form-input"
-                                  onChange={(event) =>
-                                    updateKeyValueRow("env_rows", index, "value", event.target.value)
-                                  }
-                                  placeholder="value"
-                                  value={row.value}
-                                />
-                                <button
-                                  className="secondary-action"
-                                  onClick={() => removeKeyValueRow("env_rows", index)}
-                                  type="button"
-                                >
-                                  Remove
-                                </button>
-                              </div>
-                            ))}
-                          </div>
-                          <button
-                            className="secondary-action inline-action"
-                            onClick={() => addKeyValueRow("env_rows")}
-                            type="button"
-                          >
-                            Add env var
-                          </button>
-                        </div>
-                      </>
-                    ) : (
-                      <>
-                        <label className="form-field">
-                          <span>Target URL</span>
-                          <input
-                            className="table-filter form-input"
-                            onChange={(event) => updateRegisterField("url", event.target.value)}
-                            placeholder={
-                              registerForm.transport === "streamable_http"
-                                ? "https://mcp.context7.com/mcp"
-                                : "http://127.0.0.1:8000/mcp"
-                            }
-                            value={registerForm.url}
-                          />
-                        </label>
-
-                        <label className="form-field">
-                          <span>Bearer token</span>
-                          <input
-                            className="table-filter form-input"
-                            onChange={(event) => updateRegisterField("bearer_token", event.target.value)}
-                            placeholder="Optional"
-                            type="password"
-                            value={registerForm.bearer_token}
-                          />
-                        </label>
-
-                        {registerForm.transport === "streamable_http" ? (
-                          <div className="form-field">
-                            <span>Headers</span>
-                            <div className="key-value-list">
-                              {registerForm.header_rows.map((row, index) => (
-                                <div className="key-value-row" key={`header-${index}`}>
-                                  <input
-                                    className="table-filter form-input"
-                                    onChange={(event) =>
-                                      updateKeyValueRow("header_rows", index, "key", event.target.value)
-                                    }
-                                    placeholder="Header"
-                                    value={row.key}
-                                  />
-                                  <input
-                                    className="table-filter form-input"
-                                    onChange={(event) =>
-                                      updateKeyValueRow("header_rows", index, "value", event.target.value)
-                                    }
-                                    placeholder="Value"
-                                    value={row.value}
-                                  />
-                                  <button
-                                    className="secondary-action"
-                                    onClick={() => removeKeyValueRow("header_rows", index)}
-                                    type="button"
-                                  >
-                                    Remove
-                                  </button>
-                                </div>
-                              ))}
-                            </div>
+                          </Select>
+                        </FormControl>
+                      </Stack>
+                      <div className="tool-pick-list">
+                        {availableToolGroupTools.map((tool) => {
+                          const selected = toolGroupForm.selectedTools.includes(tool.canonical_name);
+                          return (
                             <button
-                              className="secondary-action inline-action"
-                              onClick={() => addKeyValueRow("header_rows")}
+                              className={`tool-pick-item ${selected ? "is-selected" : ""}`}
+                              key={tool.canonical_name}
+                              onClick={() => toggleToolGroupSelection(tool.canonical_name)}
                               type="button"
                             >
-                              Add header
+                              <div className="table-primary">{tool.name}</div>
+                              <code className="identifier-code" title={tool.canonical_name}>
+                                {tool.canonical_name}
+                              </code>
+                              <div className="table-secondary">{tool.server}</div>
                             </button>
-                          </div>
-                        ) : null}
-                      </>
-                    )}
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="empty-inline">Register MCP servers first so tools are available to group.</p>
+                  )}
+                </div>
 
-                    {registerError ? <p className="form-error">{registerError}</p> : null}
+                <div className="tool-group-selector panel">
+                  <div className="tool-group-selector-header">
+                    <strong>Selected tools</strong>
                   </div>
-                </>
-              )}
-
-              <div className="modal-footer">
-                {registerOAuth ? (
-                  <>
-                    <button
-                      className="secondary-action"
-                      onClick={() => resetRegisterOAuthStep("Start registration again to retry OAuth.")}
-                      type="button"
-                    >
-                      Start over
-                    </button>
-                    <button className="primary-action" onClick={startRegisterOAuth} type="button">
-                      {registerOAuth.hasOpenedBrowser ? "Open OAuth again" : "Continue OAuth"}
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button className="secondary-action" onClick={closeRegisterModal} type="button">
-                      Cancel
-                    </button>
-                    <button
-                      className="primary-action"
-                      disabled={isBusy("register-server")}
-                      onClick={() => void submitRegisterServer()}
-                      type="button"
-                    >
-                      {isBusy("register-server") ? "Registering..." : "+ Add Server"}
-                    </button>
-                  </>
-                )}
+                  {toolGroupForm.selectedTools.length > 0 ? (
+                    <div className="selected-tool-list">
+                      {toolGroupForm.selectedTools.map((toolName) => (
+                        <button
+                          className="selected-tool-chip"
+                          key={toolName}
+                          onClick={() => removeToolGroupSelection(toolName)}
+                          type="button"
+                        >
+                          <code>{toolName}</code>
+                          <span>Remove</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty-inline">Select at least one tool.</p>
+                  )}
+                </div>
               </div>
-            </section>
-          </div>
-        ) : null}
-      </main>
-    </div>
+
+              {toolGroupError ? (
+                <Typography color="error" variant="body2">
+                  {toolGroupError}
+                </Typography>
+              ) : null}
+            </Stack>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" onClick={closeToolGroupModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              disabled={isBusy("tool-group-create")}
+              onClick={() => void submitToolGroup()}
+            >
+              {isBusy("tool-group-create") ? "Saving..." : "+ Add Tool Group"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={registerOpen} onClose={closeRegisterModal} maxWidth="sm" fullWidth scroll="paper">
+          <DialogTitle sx={{ pr: 6 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
+            >
+              <Box>
+                <Typography variant="caption" sx={{ letterSpacing: "0.12em", fontWeight: 600 }}>
+                  Add server
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.5 }}>
+                  {registerOAuth ? "Complete OAuth authorization" : "Register an MCP server"}
+                </Typography>
+              </Box>
+              <Button variant="outlined" size="small" onClick={closeRegisterModal}>
+                Close
+              </Button>
+            </Stack>
+          </DialogTitle>
+
+          <DialogContent dividers>
+            {registerOAuth ? (
+              <Stack spacing={2} className="oauth-step">
+                <Typography>
+                  This MCP server requires OAuth authorization. Continue in your browser to complete registration.
+                </Typography>
+                <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                  <Stack spacing={0.5}>
+                    <Typography variant="caption" color="text.secondary">
+                      Status
+                    </Typography>
+                    <Typography variant="body1" sx={{ fontWeight: 600 }}>
+                      {registerOAuth.hasOpenedBrowser
+                        ? "Waiting for OAuth authorization..."
+                        : "Authorization required"}
+                    </Typography>
+                    {registerOAuth.authorization.expires_at ? (
+                      <Typography variant="body2" color="text.secondary">
+                        Expires {new Date(registerOAuth.authorization.expires_at).toLocaleTimeString()}
+                      </Typography>
+                    ) : null}
+                  </Stack>
+                </Paper>
+                {registerOAuth.error ? (
+                  <Typography color="error" variant="body2">
+                    {registerOAuth.error}
+                  </Typography>
+                ) : null}
+              </Stack>
+            ) : (
+              <Stack spacing={2}>
+                <TextField
+                  label="Server name"
+                  placeholder={registerForm.transport === "streamable_http" ? "context7" : "filesystem"}
+                  fullWidth
+                  size="small"
+                  value={registerForm.name}
+                  onChange={(event) => updateRegisterField("name", event.target.value)}
+                />
+                <TextField
+                  label="Description"
+                  placeholder={
+                    registerForm.transport === "streamable_http"
+                      ? "context7 mcp server"
+                      : "Local filesystem access"
+                  }
+                  fullWidth
+                  size="small"
+                  value={registerForm.description}
+                  onChange={(event) => updateRegisterField("description", event.target.value)}
+                />
+
+                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="reg-transport">Transport</InputLabel>
+                    <Select
+                      labelId="reg-transport"
+                      label="Transport"
+                      value={registerForm.transport}
+                      onChange={(event) =>
+                        updateRegisterField(
+                          "transport",
+                          event.target.value as RegisterServerFormState["transport"],
+                        )
+                      }
+                    >
+                      <MenuItem value="stdio">stdio</MenuItem>
+                      <MenuItem value="streamable_http">streamable_http</MenuItem>
+                      <MenuItem value="sse">sse</MenuItem>
+                    </Select>
+                  </FormControl>
+                  <FormControl fullWidth size="small">
+                    <InputLabel id="reg-session">Session mode</InputLabel>
+                    <Select
+                      labelId="reg-session"
+                      label="Session mode"
+                      value={registerForm.session_mode}
+                      onChange={(event) =>
+                        updateRegisterField(
+                          "session_mode",
+                          event.target.value as RegisterServerFormState["session_mode"],
+                        )
+                      }
+                    >
+                      <MenuItem value="stateless">stateless</MenuItem>
+                      <MenuItem value="stateful">stateful</MenuItem>
+                    </Select>
+                  </FormControl>
+                </Stack>
+
+                {registerForm.transport === "stdio" ? (
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Command"
+                      placeholder="npx"
+                      fullWidth
+                      size="small"
+                      value={registerForm.command}
+                      onChange={(event) => updateRegisterField("command", event.target.value)}
+                    />
+                    <TextField
+                      label="Arguments"
+                      placeholder="-y\n@modelcontextprotocol/server-filesystem"
+                      fullWidth
+                      size="small"
+                      multiline
+                      minRows={3}
+                      value={registerForm.args_text}
+                      onChange={(event) => updateRegisterField("args_text", event.target.value)}
+                    />
+                    <Box>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Environment variables
+                      </Typography>
+                      <Stack spacing={1}>
+                        {registerForm.env_rows.map((row, index) => (
+                          <Stack direction={{ xs: "column", sm: "row" }} spacing={1} key={`env-${index}`}>
+                            <TextField
+                              size="small"
+                              label="KEY"
+                              placeholder="KEY"
+                              value={row.key}
+                              onChange={(event) =>
+                                updateKeyValueRow("env_rows", index, "key", event.target.value)
+                              }
+                              sx={{ flex: 1 }}
+                            />
+                            <TextField
+                              size="small"
+                              label="value"
+                              placeholder="value"
+                              value={row.value}
+                              onChange={(event) =>
+                                updateKeyValueRow("env_rows", index, "value", event.target.value)
+                              }
+                              sx={{ flex: 1 }}
+                            />
+                            <Button
+                              variant="outlined"
+                              onClick={() => removeKeyValueRow("env_rows", index)}
+                              sx={{ alignSelf: { sm: "center" } }}
+                            >
+                              Remove
+                            </Button>
+                          </Stack>
+                        ))}
+                      </Stack>
+                      <Button
+                        variant="outlined"
+                        size="small"
+                        sx={{ mt: 1 }}
+                        onClick={() => addKeyValueRow("env_rows")}
+                      >
+                        Add env var
+                      </Button>
+                    </Box>
+                  </Stack>
+                ) : (
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Target URL"
+                      fullWidth
+                      size="small"
+                      placeholder={
+                        registerForm.transport === "streamable_http"
+                          ? "https://mcp.context7.com/mcp"
+                          : "http://127.0.0.1:8000/mcp"
+                      }
+                      value={registerForm.url}
+                      onChange={(event) => updateRegisterField("url", event.target.value)}
+                    />
+                    <TextField
+                      label="Bearer token"
+                      fullWidth
+                      size="small"
+                      type="password"
+                      placeholder="Optional"
+                      value={registerForm.bearer_token}
+                      onChange={(event) => updateRegisterField("bearer_token", event.target.value)}
+                    />
+                    {registerForm.transport === "streamable_http" ? (
+                      <Box>
+                        <Typography variant="subtitle2" gutterBottom>
+                          Headers
+                        </Typography>
+                        <Stack spacing={1}>
+                          {registerForm.header_rows.map((row, index) => (
+                            <Stack direction={{ xs: "column", sm: "row" }} spacing={1} key={`header-${index}`}>
+                              <TextField
+                                size="small"
+                                label="Header"
+                                placeholder="Header"
+                                value={row.key}
+                                onChange={(event) =>
+                                  updateKeyValueRow("header_rows", index, "key", event.target.value)
+                                }
+                                sx={{ flex: 1 }}
+                              />
+                              <TextField
+                                size="small"
+                                label="Value"
+                                placeholder="Value"
+                                value={row.value}
+                                onChange={(event) =>
+                                  updateKeyValueRow("header_rows", index, "value", event.target.value)
+                                }
+                                sx={{ flex: 1 }}
+                              />
+                              <Button
+                                variant="outlined"
+                                onClick={() => removeKeyValueRow("header_rows", index)}
+                                sx={{ alignSelf: { sm: "center" } }}
+                              >
+                                Remove
+                              </Button>
+                            </Stack>
+                          ))}
+                        </Stack>
+                        <Button
+                          variant="outlined"
+                          size="small"
+                          sx={{ mt: 1 }}
+                          onClick={() => addKeyValueRow("header_rows")}
+                        >
+                          Add header
+                        </Button>
+                      </Box>
+                    ) : null}
+                  </Stack>
+                )}
+
+                {registerError ? (
+                  <Typography color="error" variant="body2">
+                    {registerError}
+                  </Typography>
+                ) : null}
+              </Stack>
+            )}
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2, flexWrap: "wrap", gap: 1 }}>
+            {registerOAuth ? (
+              <>
+                <Button
+                  variant="outlined"
+                  onClick={() => resetRegisterOAuthStep("Start registration again to retry OAuth.")}
+                >
+                  Start over
+                </Button>
+                <Button variant="contained" onClick={startRegisterOAuth}>
+                  {registerOAuth.hasOpenedBrowser ? "Open OAuth again" : "Continue OAuth"}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button variant="outlined" onClick={closeRegisterModal}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="contained"
+                  disabled={isBusy("register-server")}
+                  onClick={() => void submitRegisterServer()}
+                >
+                  {isBusy("register-server") ? "Registering..." : "+ Add Server"}
+                </Button>
+              </>
+            )}
+          </DialogActions>
+        </Dialog>
+      </Box>
+    </Box>
   );
 }

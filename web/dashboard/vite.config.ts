@@ -10,6 +10,8 @@ export default defineConfig(({ mode }) => {
   const proxy: Record<string, { target: string; changeOrigin: boolean }> = {};
   if (rawBase === "") {
     proxy["/api"] = { target: "http://localhost:8080", changeOrigin: true };
+    // Dashboard JSON API when HTTP_PATH_PREFIX is unset (same host root as Vite script).
+    proxy["/dashboard"] = { target: "http://localhost:8080", changeOrigin: true };
   } else {
     const prefix = rawBase.replace(/\/$/, "");
     proxy[`^${prefix}`] = { target: "http://localhost:8080", changeOrigin: true };

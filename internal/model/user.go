@@ -2,8 +2,6 @@
 package model
 
 import (
-	"context"
-
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"gorm.io/gorm"
 )
