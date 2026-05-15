@@ -1,32 +1,32 @@
 <h1 align="center">
-  MCPJungle
+  MCPGateway
 </h1>
 <p align="center">
   <strong>Run all your MCP servers behind one endpoint</strong>
 </p>
 <p align="center">
-  <a href="https://docs.mcpjungle.com" style="text-decoration: none;">
-    <img src="https://img.shields.io/badge/Documentation-docs.mcpjungle.com-blue?style=flat-square&logo=book" alt="Documentation" style="max-width: 100%;">
+  <a href="https://docs.mcpgateway.com" style="text-decoration: none;">
+    <img src="https://img.shields.io/badge/Documentation-docs.mcpgateway.com-blue?style=flat-square&logo=book" alt="Documentation" style="max-width: 100%;">
   </a>
 
-  <a href="https://github.com/mcpjungle/mcpjungle/pkgs/container/mcpjungle" style="text-decoration: none;">
+  <a href="https://github.com/mcpgateway/mcpgateway/pkgs/container/mcpgateway" style="text-decoration: none;">
     <img src="https://img.shields.io/badge/GHCR-available-green.svg?style=flat-square&logo=github" alt="GHCR" style="max-width: 100%;">
   </a>
 
   <a href="https://discord.gg/CapV4Z3krk" style="text-decoration: none;">
-    <img src="https://img.shields.io/badge/Discord-MCPJungle-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" style="max-width: 100%;">
+    <img src="https://img.shields.io/badge/Discord-MCPGateway-5865F2?style=flat-square&logo=discord&logoColor=white" alt="Discord" style="max-width: 100%;">
   </a>
 </p>
 
-MCPJungle is a self-hosted MCP gateway for developers and teams who want to manage multiple MCP servers without scattered client configurations, duplicated setup, or inconsistent access control.
+MCPGateway is a self-hosted MCP gateway for developers and teams who want to manage multiple MCP servers without scattered client configurations, duplicated setup, or inconsistent access control.
 
 Use it **locally** to keep your personal MCP setup clean, or run it as **shared infrastructure** for a team with centralized discovery, access control, and observability.
 
-![diagram](./assets/mcpjungle-diagram/april-2026/mcpjungle-diagram.png)
+![diagram](./assets/mcpgateway-diagram/april-2026/mcpgateway-diagram.svg)
 
-Instead of wiring every MCP server into every AI client, register your servers once in MCPJungle and let Claude, Cursor, Codex, or your own Agents connect to a single MCP endpoint.
+Instead of wiring every MCP server into every AI client, register your servers once in MCPGateway and let Claude, Cursor, Codex, or your own Agents connect to a single MCP endpoint.
 
-## Why MCPJungle?
+## Why MCPGateway?
 
 MCP is powerful, but managing many MCP servers gets messy fast.
 
@@ -38,7 +38,7 @@ Without a gateway:
 - 👥 Teams have no shared view of available MCP tools
 - 🛠️ Local setups become hard to reproduce
 
-MCPJungle gives you a single control point:
+MCPGateway gives you a single control point:
 
 - 🌐 One MCP endpoint for Claude, Cursor, Copilot, and custom agents
 - 🗂️ One place to register and manage MCP servers
@@ -48,53 +48,53 @@ MCPJungle gives you a single control point:
 
 Start with a local setup. Scale to a shared team gateway when you need it.
 
-![MCPJungle dashboard UI](./docs/images/dashboard-ui.png)
+![MCPGateway dashboard UI](./docs/images/dashboard-ui.png)
 
 ## Documentation
- Mcpjungle documentation has a new home: [https://docs.mcpjungle.com](https://docs.mcpjungle.com).
+ Mcpgateway documentation has a new home: [https://docs.mcpgateway.com](https://docs.mcpgateway.com).
  
  Please prefer the docs site over this README for the latest guides, reference, and operational details.
  
- Your AI Clients can also access the docs using its MCP server `https://docs.mcpjungle.com/mcp`!
+ Your AI Clients can also access the docs using its MCP server `https://docs.mcpgateway.com/mcp`!
 
 ## Quickstart
 
 This quickstart guide will show you how to:
-1. Start the mcpjungle server locally using `docker compose`
-2. Add an MCP server in mcpjungle
-3. Connect your Claude Desktop to mcpjungle to access your MCP tools
+1. Start the mcpgateway server locally using `docker compose`
+2. Add an MCP server in mcpgateway
+3. Connect your Claude Desktop to mcpgateway to access your MCP tools
 
 ### Start the server
-Fetch the `docker-compose.yaml` and start the mcpjungle server:
+Fetch the `docker-compose.yaml` and start the mcpgateway server:
 ```bash
-curl -O https://raw.githubusercontent.com/mcpjungle/MCPJungle/refs/heads/main/docker-compose.yaml
+curl -O https://raw.githubusercontent.com/mcpgateway/MCPGateway/refs/heads/main/docker-compose.yaml
 docker compose up -d
 ```
 
-This exposes mcpjungle's streamable http mcp server at `http://localhost:8080/mcp` by default.
+This exposes mcpgateway's streamable http mcp server at `http://localhost:8080/mcp` by default.
 
 ### Add an MCP server
-1. Download the `mcpjungle` CLI on your local machine either using brew or directly from the [Releases Page](https://github.com/mcpjungle/MCPJungle/releases).
+1. Download the `mcpgateway` CLI on your local machine either using brew or directly from the [Releases Page](https://github.com/mcpgateway/MCPGateway/releases).
 ```bash
-brew install mcpjungle/mcpjungle/mcpjungle
+brew install mcpgateway/mcpgateway/mcpgateway
 ```
 
- 2. Add the [context7](https://context7.com/) MCP server to mcpjungle using the CLI:
+ 2. Add the [context7](https://context7.com/) MCP server to mcpgateway using the CLI:
 ```bash
-mcpjungle register --name context7 --url https://mcp.context7.com/mcp
+mcpgateway register --name context7 --url https://mcp.context7.com/mcp
 ```
 
 You should see output similar to this:
 
 ![register-context7](./docs/images/register-context7.png)
 
-### Connect to mcpjungle
+### Connect to mcpgateway
 
-In your Claude Desktop, add the configuration for mcpjungle MCP server:
+In your Claude Desktop, add the configuration for mcpgateway MCP server:
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "mcpgateway": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -111,15 +111,15 @@ Once you have added the configuration, try asking claude something simple:
 Use context7 to get the documentation for `/lodash/lodash`
 ```
 
-Claude will then attempt to call the `context7__get-library-docs` tool via MCPJungle, which will return the documentation for the Lodash library.
+Claude will then attempt to call the `context7__get-library-docs` tool via MCPGateway, which will return the documentation for the Lodash library.
 
 <p align="center">
-  <img src="./assets/quickstart-claude-call-tool.png" alt="claude calls context7 tool via mcpjungle" height="400">
+  <img src="./assets/quickstart-claude-call-tool.png" alt="claude calls context7 tool via mcpgateway" height="400">
 </p>
 
 You now have a working MCP setup with a single unified endpoint!
 
-Next, explore the complete documentation at [docs.mcpjungle.com](https://docs.mcpjungle.com/) and the [public roadmap](https://docs.mcpjungle.com/roadmap).
+Next, explore the complete documentation at [docs.mcpgateway.com](https://docs.mcpgateway.com/) and the [public roadmap](https://docs.mcpgateway.com/roadmap).
 
 ---
 
@@ -131,8 +131,8 @@ Next, explore the complete documentation at [docs.mcpjungle.com](https://docs.mc
 - [Installation](#installation)
 - [Usage](#usage)
   - [Server](#server)
-    - [Running mcpjungle server inside Docker](#running-inside-docker)
-    - [Running mcpjungle server directly on the host machine](#running-directly-on-host)
+    - [Running mcpgateway server inside Docker](#running-inside-docker)
+    - [Running mcpgateway server directly on the host machine](#running-directly-on-host)
     - [Shutting down the server](#shutting-down)
   - [Client](#client)
     - [Adding Streamable HTTP-based MCP servers](#registering-streamable-http-based-servers)
@@ -140,9 +140,9 @@ Next, explore the complete documentation at [docs.mcpjungle.com](https://docs.mc
     - [Removing MCP servers](#deregistering-mcp-servers)
     - [Custom URL for server](#configuring-a-custom-registry-url)
   - [Cold-start problem & Stateful Connections](#cold-start-problem--stateful-connections)
-  - [Connect to mcpjungle from Claude](#claude)
-  - [Connect to mcpjungle from Cursor](#cursor)
-  - [Connect to mcpjungle from Copilot](#copilot)
+  - [Connect to mcpgateway from Claude](#claude)
+  - [Connect to mcpgateway from Cursor](#cursor)
+  - [Connect to mcpgateway from Copilot](#copilot)
   - [Enabling/Disabling Tools globally](#enablingdisabling-tools)
   - [Prompts](#prompts)
   - [Tool Groups](#tool-groups)
@@ -154,49 +154,49 @@ Next, explore the complete documentation at [docs.mcpjungle.com](https://docs.mc
 - [Contributing](#contributing-)
 
 # Installation
-MCPJungle is shipped as a stand-alone binary.
+MCPGateway is shipped as a stand-alone binary.
 
-You can either download it from the [Releases](https://github.com/mcpjungle/MCPJungle/releases) Page or use [Homebrew](https://brew.sh/) to install it:
+You can either download it from the [Releases](https://github.com/mcpgateway/MCPGateway/releases) Page or use [Homebrew](https://brew.sh/) to install it:
 
 ```bash
-brew install mcpjungle/mcpjungle/mcpjungle
+brew install mcpgateway/mcpgateway/mcpgateway
 ```
 
 Verify your installation by running
 
 ```bash
-mcpjungle version
+mcpgateway version
 ```
 
 > [!IMPORTANT]
 > On MacOS, you will have to use homebrew because the compiled binary is not [Notarized](https://developer.apple.com/documentation/security/notarizing-macos-software-before-distribution) yet.
 
-MCPJungle provides a Docker image which is useful for running the registry server (more about it later).
+MCPGateway provides a Docker image which is useful for running the registry server (more about it later).
 
 ```bash
-docker pull ghcr.io/mcpjungle/mcpjungle
+docker pull ghcr.io/mcpgateway/mcpgateway
 ```
 
 # Usage
-MCPJungle has a Client-Server architecture and the binary lets you run both the Server and the Client.
+MCPGateway has a Client-Server architecture and the binary lets you run both the Server and the Client.
 
 ## Server
-The MCPJungle server is responsible for managing all the MCP servers registered in it and providing a unified MCP gateway for AI Agents to discover and call tools provided by these registered servers.
+The MCPGateway server is responsible for managing all the MCP servers registered in it and providing a unified MCP gateway for AI Agents to discover and call tools provided by these registered servers.
 
 The gateway itself runs over streamable http transport and is accessible at the `/mcp` endpoint.
 
 ### Running inside Docker
-For running the MCPJungle server locally, docker compose is the recommended way:
+For running the MCPGateway server locally, docker compose is the recommended way:
 ```shell
-# docker-compose.yaml is optimized for individuals running mcpjungle on their local machines for personal use.
-# mcpjungle will run in `development` mode by default.
-curl -O https://raw.githubusercontent.com/mcpjungle/MCPJungle/refs/heads/main/docker-compose.yaml
+# docker-compose.yaml is optimized for individuals running mcpgateway on their local machines for personal use.
+# mcpgateway will run in `development` mode by default.
+curl -O https://raw.githubusercontent.com/mcpgateway/MCPGateway/refs/heads/main/docker-compose.yaml
 
 docker compose up -d
 
-# docker-compose.prod.yaml is optimized for orgs deploying mcpjungle on a remote server for multiple users.
-# mcpjungle will run in `enterprise` mode by default, which enables enterprise features.
-curl -O https://raw.githubusercontent.com/mcpjungle/MCPJungle/refs/heads/main/docker-compose.prod.yaml
+# docker-compose.prod.yaml is optimized for orgs deploying mcpgateway on a remote server for multiple users.
+# mcpgateway will run in `enterprise` mode by default, which enables enterprise features.
+curl -O https://raw.githubusercontent.com/mcpgateway/MCPGateway/refs/heads/main/docker-compose.prod.yaml
 
 docker compose -f docker-compose.prod.yaml up -d
 ```
@@ -205,16 +205,16 @@ docker compose -f docker-compose.prod.yaml up -d
 > The `enterprise` mode used to be called `production` mode.
 > The mode has now been renamed for clarity. Everything else remains the same.
 
-This will start the MCPJungle server along with a persistent Postgres database container.
+This will start the MCPGateway server along with a persistent Postgres database container.
 
 You can quickly verify that the server is running:
 ```bash
 curl http://localhost:8080/health
 ```
 
-If you plan on registering stdio-based MCP servers that rely on `npx` or `uvx`, use mcpjungle's `stdio` tagged docker image instead.
+If you plan on registering stdio-based MCP servers that rely on `npx` or `uvx`, use mcpgateway's `stdio` tagged docker image instead.
 ```bash
-MCPJUNGLE_IMAGE_TAG=latest-stdio docker compose up -d
+MCPGATEWAY_IMAGE_TAG=latest-stdio docker compose up -d
 ```
 
 > [!NOTE]
@@ -228,15 +228,15 @@ For example, if you only want to register remote mcp servers like context7 and d
 But if you also want to use stdio-based servers like `filesystem`, `time`, `github`, etc., you should use the `stdio`-tagged image instead.
 
 > [!NOTE]
-> If your stdio servers rely on tools other than `npx` or `uvx`, you will have to create a custom docker image that includes those dependencies along with the mcpjungle binary.
+> If your stdio servers rely on tools other than `npx` or `uvx`, you will have to create a custom docker image that includes those dependencies along with the mcpgateway binary.
 
 **Production Deployment**
 
-The default [MCPJungle Docker image](https://ghcr.io/mcpjungle/mcpjungle) is very lightweight - it only contains a minimal base image and the `mcpjungle` binary.
+The default [MCPGateway Docker image](https://ghcr.io/mcpgateway/mcpgateway) is very lightweight - it only contains a minimal base image and the `mcpgateway` binary.
 
 It is therefore suitable and recommended for production deployments.
 
-For the database, we recommend you deploy a separate Postgres DB cluster and supply its endpoint to mcpjungle (see [Database](#database) section below).
+For the database, we recommend you deploy a separate Postgres DB cluster and supply its endpoint to mcpgateway (see [Database](#database) section below).
 
 You can see the definitions of the [standard Docker image](./Dockerfile) and the [stdio Docker image](./stdio.Dockerfile).
 
@@ -244,34 +244,34 @@ You can see the definitions of the [standard Docker image](./Dockerfile) and the
 You can also run the server directly on your host machine using the binary:
 
 ```bash
-mcpjungle start
+mcpgateway start
 ```
 
 This starts the main registry server and MCP gateway, accessible on port `8080` by default.
 
 ### Shutting down
-It is important that the mcpjungle server shuts down gracefully to ensure proper cleanup.
+It is important that the mcpgateway server shuts down gracefully to ensure proper cleanup.
 
 The recommended way to stop the server process is to send a `SIGTERM` signal to it.
 
 
 
 ### Database
-The mcpjungle server relies on a database and by default, creates a SQLite DB file `mcpjungle.db` in the current working directory.
+The mcpgateway server relies on a database and by default, creates a SQLite DB file `mcpgateway.db` in the current working directory.
 
 This is okay when you're just testing things out locally.
 
-For more serious deployments, mcpjungle also supports Postgresql. You can supply the DSN to connect to it:
+For more serious deployments, mcpgateway also supports Postgresql. You can supply the DSN to connect to it:
 
 ```bash
 # You can supply the database DSN as an env var
-export DATABASE_URL=postgres://admin:root@localhost:5432/mcpjungle_db
+export DATABASE_URL=postgres://admin:root@localhost:5432/mcpgateway_db
 
 #run as container
-docker run ghcr.io/mcpjungle/mcpjungle:latest
+docker run ghcr.io/mcpgateway/mcpgateway:latest
 
 # or run directly
-mcpjungle start
+mcpgateway start
 ```
 
 You can also supply postgres-specific env vars or files if you don't prefer using the DSN:
@@ -286,38 +286,38 @@ export POSTGRES_USER_FILE=/path/to/user-file
 export POSTGRES_PASSWORD=secret
 export POSTGRES_PASSWORD_FILE=/path/to/password-file
 
-export POSTGRES_DB=mcpjungle_db
+export POSTGRES_DB=mcpgateway_db
 export POSTGRES_DB_FILE=/path/to/db-file
 
-mcpjungle start
+mcpgateway start
 ```
 
 ## Client
-Once the server is up, you can use the mcpjungle CLI to interact with it.
+Once the server is up, you can use the mcpgateway CLI to interact with it.
 
-MCPJungle currently supports MCP servers using [stdio](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio) and [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) Transports.
+MCPGateway currently supports MCP servers using [stdio](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio) and [Streamable HTTP](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) Transports.
 
 > [!NOTE]
 > Support for SSE (server-sent events) also exists but is currently not mature.
 
-Let's see how to register them in mcpjungle.
+Let's see how to register them in mcpgateway.
 
 ### Registering streamable HTTP-based servers
 Let's say you're already running a streamable http MCP server locally at `http://127.0.0.1:8000/mcp` which provides basic math tools like `add`, `subtract`, etc.
 
-You can register this MCP server with MCPJungle:
+You can register this MCP server with MCPGateway:
 ```bash
-mcpjungle register --name calculator --description "Provides some basic math tools" --url http://127.0.0.1:8000/mcp
+mcpgateway register --name calculator --description "Provides some basic math tools" --url http://127.0.0.1:8000/mcp
 ```
 
 If you used docker compose to run the server, and you're not on Linux, you will have to use `host.docker.internal` instead of your local loopback address.
 ```bash
-mcpjungle register --name calculator --description "Provides some basic math tools" --url http://host.docker.internal:8000/mcp
+mcpgateway register --name calculator --description "Provides some basic math tools" --url http://host.docker.internal:8000/mcp
 ```
 
 The registry will now start tracking this MCP server and load its tools.
 
-![register a MCP server in MCPJungle](./assets/register-mcp-server.png)
+![register a MCP server in MCPGateway](./assets/register-mcp-server.png)
 
 You can also provide a configuration file to register the MCP server:
 ```bash
@@ -329,30 +329,30 @@ cat ./calculator.json
   "url": "http://127.0.0.1:8000/mcp"
 }
 
-mcpjungle register -c ./calculator.json
+mcpgateway register -c ./calculator.json
 ```
 
-All tools provided by this server are now accessible via MCPJungle:
+All tools provided by this server are now accessible via MCPGateway:
 
 ```bash
-mcpjungle list tools
+mcpgateway list tools
 
 # Check tool usage
-mcpjungle usage calculator__multiply
+mcpgateway usage calculator__multiply
 
 # Call a tool
-mcpjungle invoke calculator__multiply --input '{"a": 100, "b": 50}'
+mcpgateway invoke calculator__multiply --input '{"a": 100, "b": 50}'
 ```
 
-![Call a tool via MCPJungle Proxy MCP server](./assets/tool-call.png)
+![Call a tool via MCPGateway Proxy MCP server](./assets/tool-call.png)
 
 > [!NOTE]
-> A tool in MCPJungle must be referred to by its canonical name which follows the pattern `<mcp-server-name>__<tool-name>`.
+> A tool in MCPGateway must be referred to by its canonical name which follows the pattern `<mcp-server-name>__<tool-name>`.
 > Server name and tool name are separated by a double underscore `__`.
 >
-> eg- If you register a MCP server `github` which provides a tool called `git_commit`, you can invoke it in MCPJungle using the name `github__git_commit`.
+> eg- If you register a MCP server `github` which provides a tool called `git_commit`, you can invoke it in MCPGateway using the name `github__git_commit`.
 > 
-> Your MCP client must also use this canonical name to call the tool via MCPJungle.
+> Your MCP client must also use this canonical name to call the tool via MCPGateway.
 
 The config file format for registering a Streamable HTTP-based MCP server is:
 ```json
@@ -382,10 +382,10 @@ Here's an example configuration file (let's call it `filesystem.json`) for a MCP
 }
 ```
 
-You can register this MCP server in MCPJungle by providing the configuration file:
+You can register this MCP server in MCPGateway by providing the configuration file:
 ```bash
 # Save the JSON configuration to a file (e.g., filesystem.json)
-mcpjungle register -c ./filesystem.json
+mcpgateway register -c ./filesystem.json
 ```
 
 The config file format for registering a STDIO-based MCP server is:
@@ -406,7 +406,7 @@ The config file format for registering a STDIO-based MCP server is:
 You can also watch a quick video on [How to register a STDIO-based MCP server](https://youtu.be/YqHiuexR5fw).
 
 > [!TIP]
-> If your STDIO server fails or throws errors for some reason, check the mcpjungle server's logs to view its `stderr` output.
+> If your STDIO server fails or throws errors for some reason, check the mcpgateway server's logs to view its `stderr` output.
 
 #### Environment variables in JSON config files
 
@@ -449,15 +449,15 @@ Example STDIO config:
 
 **Caveat** ⚠️
 
-When running mcpjungle inside Docker, you need some extra configuration to run the `filesystem` mcp server.
+When running mcpgateway inside Docker, you need some extra configuration to run the `filesystem` mcp server.
 
-By default, mcpjungle inside container does not have access to your host filesystem.
+By default, mcpgateway inside container does not have access to your host filesystem.
 
 So you must:
 - mount the host directory you want to access as a volume in the container
 - specify the mount path as the directory in the filesystem mcp server command args
 
-The `docker-compose.yaml` provided by mcpjungle mounts the current working directory as `/host` in the container.
+The `docker-compose.yaml` provided by mcpgateway mounts the current working directory as `/host` in the container.
 
 So you can use the following configuration for the filesystem mcp server:
 
@@ -475,42 +475,42 @@ Then, the mcp has access to `/host`, ie, the current working directory on your h
 See [DEVELOPMENT.md](./DEVELOPMENT.md#docker-filesystem-access) for more details.
 
 #### Running CLI commands from a Docker or Kubernetes deployment
-If your MCPJungle server is running in a remote Docker container or Kubernetes cluster, you can also execute the `mcpjungle` binary directly inside the container:
+If your MCPGateway server is running in a remote Docker container or Kubernetes cluster, you can also execute the `mcpgateway` binary directly inside the container:
 
 ```bash
-docker exec -it <container_name> /mcpjungle
-kubectl -n <namespace> exec -it po/<pod_name> -- /mcpjungle
+docker exec -it <container_name> /mcpgateway
+kubectl -n <namespace> exec -it po/<pod_name> -- /mcpgateway
 ```
 
 > [!NOTE]
-> The standard image does not include a shell. Run `/mcpjungle` directly via `docker exec` or `kubectl exec`.
+> The standard image does not include a shell. Run `/mcpgateway` directly via `docker exec` or `kubectl exec`.
 
 This is useful for running CLI commands from the same environment where the server is running.
 
 ### Deregistering MCP servers
-You can remove a MCP server from mcpjungle.
+You can remove a MCP server from mcpgateway.
 
 ```bash
-mcpjungle deregister calculator
-mcpjungle deregister filesystem
+mcpgateway deregister calculator
+mcpgateway deregister filesystem
 ```
 
 Once removed, this mcp server and its tools are no longer available to you or your MCP clients.
 
 ### Configuring a custom registry URL
 
-By default, the CLI connects to the mcpjungle server at `http://127.0.0.1:8000`.
+By default, the CLI connects to the mcpgateway server at `http://127.0.0.1:8000`.
 
 If your server is running on a different host or port (e.g., a remote deployment), you can configure the registry URL in two ways:
 
 **Option 1: Use the `--registry` flag**
 ```bash
-mcpjungle --registry http://my-server:9000 list tools
+mcpgateway --registry http://my-server:9000 list tools
 ```
 
 **Option 2: Set it in the config file**
 
-Create or edit `~/.mcpjungle.conf`:
+Create or edit `~/.mcpgateway.conf`:
 ```yaml
 registry_url: http://my-server:9000
 ```
@@ -519,7 +519,7 @@ This avoids having to pass the `--registry` flag on every command.
 
 
 ## Cold-start problem & Stateful Connections
-By default, MCPJungle always creates a new connection with the upstream MCP server when a tool is called.
+By default, MCPGateway always creates a new connection with the upstream MCP server when a tool is called.
 
 When the tool call is complete, the connection is closed.
 
@@ -527,7 +527,7 @@ This keeps the system clean and avoids memory leaks.
 
 But sometimes this can cause a latency overhead. For eg- a new process is spawned every time you call a tool of a STDIO-based mcp server. If the server takes several seconds to start up, this slows down the tool call and the overall interaction.
 
-To solve this, MCPJungle also supports stateful connections.
+To solve this, MCPGateway also supports stateful connections.
 
 You can set the `session_mode` to `stateful` (default is `stateless`) in you MCP server configuration:
 ```json
@@ -540,25 +540,25 @@ You can set the `session_mode` to `stateful` (default is `stateless`) in you MCP
 }
 ```
 
-mcpjungle will create a new connection with this mcp server **the first time you call one of its tools**.
+mcpgateway will create a new connection with this mcp server **the first time you call one of its tools**.
 
 This connection is not closed when the tool call is complete. Subsequent tool calls to this server reuse the same connection, avoiding the cold-start overhead.
 
 The connection is only closed when:
-1. mcpjungle server is stopped
-2. the mcp server is deregistered from mcpjungle
-3. the connection times out after a period of inactivity. You can set the number of seconds using the `SESSION_IDLE_TIMEOUT_SEC` env var to configure this globally in mcpjungle server (default value is -1, which means no timeout).
+1. mcpgateway server is stopped
+2. the mcp server is deregistered from mcpgateway
+3. the connection times out after a period of inactivity. You can set the number of seconds using the `SESSION_IDLE_TIMEOUT_SEC` env var to configure this globally in mcpgateway server (default value is -1, which means no timeout).
 
 When possible, it is recommended that you use stateless connections (default setting).
 
 ## Integration with other MCP Clients
-Assuming that MCPJungle is running on `http://localhost:8080`, use the following configurations to connect to it:
+Assuming that MCPGateway is running on `http://localhost:8080`, use the following configurations to connect to it:
 
 ### Claude
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "mcpgateway": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -574,24 +574,24 @@ Assuming that MCPJungle is running on `http://localhost:8080`, use the following
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "mcpgateway": {
       "url": "http://localhost:8080/mcp"
     }
   }
 }
 ```
 
-You can watch a quick video on [How to connect Cursor to MCPJungle](https://youtu.be/SaUqj-eLPnw).
+You can watch a quick video on [How to connect Cursor to MCPGateway](https://youtu.be/SaUqj-eLPnw).
 
 ### Copilot
 
 Follow Copilot's doc on [configuraing a MCP server manually](https://docs.github.com/en/copilot/how-tos/provide-context/use-mcp/extend-copilot-chat-with-mcp#configuring-mcp-servers-manually-1).
 
-Your mcp.json config file should look like this after adding mcpjungle to it:
+Your mcp.json config file should look like this after adding mcpgateway to it:
 ```json
 {
   "servers": {
-    "mcpjungle": {
+    "mcpgateway": {
       "url": "http://localhost:8080/mcp"
     }
   }
@@ -599,67 +599,67 @@ Your mcp.json config file should look like this after adding mcpjungle to it:
 ```
 
 > [!NOTE]
-> You may have to click on `Start` for Copilot to actually start interacting with mcpjungle.
+> You may have to click on `Start` for Copilot to actually start interacting with mcpgateway.
 
 ## Enabling/Disabling Tools
 You can disable and re-enable a specific tool or all the tools provided by an MCP Server.
 
-If a tool is disabled, it is not available via the MCPJungle Proxy or any of the Tool Groups, so no MCP clients can view or call it.
+If a tool is disabled, it is not available via the MCPGateway Proxy or any of the Tool Groups, so no MCP clients can view or call it.
 
 You can disable and enable Prompts as well.
 
 ```bash
 # disable the `get-library-docs` tool provided by the `context7` MCP server
-mcpjungle disable tool context7__get-library-docs
+mcpgateway disable tool context7__get-library-docs
 
 # re-enable the tool
-mcpjungle enable tool context7__get-library-docs
+mcpgateway enable tool context7__get-library-docs
 
 # disable all tools in context7
-mcpjungle disable tool context7
+mcpgateway disable tool context7
 
 # disable the whole `context7` MCP server (disables all tools & prompts)
-mcpjungle disable server context7
+mcpgateway disable server context7
 
 # re-enable `context7`
-mcpjungle enable server context7
+mcpgateway enable server context7
 
 # disable a prompt
-mcpjungle disable prompt "huggingface_Model Details"
+mcpgateway disable prompt "huggingface_Model Details"
 
 # disable all prompts in context7
-mcpjungle disable prompt context7
+mcpgateway disable prompt context7
 ```
 
-A disabled tool is still accessible via mcpjungle's HTTP API, so humans can still manage it from the CLI (or any other HTTP client).
+A disabled tool is still accessible via mcpgateway's HTTP API, so humans can still manage it from the CLI (or any other HTTP client).
 
 > [!NOTE]
-> When a new server is registered in MCPJungle, all its tools & prompts are **enabled** by default.
+> When a new server is registered in MCPGateway, all its tools & prompts are **enabled** by default.
 
 ## Prompts
-Mcpjungle supports [Prompts](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts).
+Mcpgateway supports [Prompts](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts).
 
-When you register a new MCP server, if it provides prompts, they're registered in mcpjungle too.
+When you register a new MCP server, if it provides prompts, they're registered in mcpgateway too.
 
 Here are some examples of how you can interact with Prompts using the CLI:
 ```bash
 # list all prompts provided by the huggingface mcp
-$ mcpjungle list prompts --server huggingface
+$ mcpgateway list prompts --server huggingface
 
 # Retrieve the "Model Details" prompt, supply custom arguments
-$ mcpjungle get prompt "huggingface__Model Details" --arg model_id="openai/gpt-oss-120b"
+$ mcpgateway get prompt "huggingface__Model Details" --arg model_id="openai/gpt-oss-120b"
 ```
 
 ## Tool Groups
-As you add more MCP servers to MCPJungle, the number of tools available through the Gateway can grow significantly.
+As you add more MCP servers to MCPGateway, the number of tools available through the Gateway can grow significantly.
 
 If your MCP client is exposed to hundreds of tools through the gateway MCP, its performance may degrade.
 
-MCPJungle allows you to **expose only a subset of all available tools to your MCP clients using Tool Groups**.
+MCPGateway allows you to **expose only a subset of all available tools to your MCP clients using Tool Groups**.
 
 You can create a new group and only include specific tools that you wish to expose.
 
-Once a group is created, mcpjungle returns a unique endpoint for it.
+Once a group is created, mcpgateway returns a unique endpoint for it.
 
 You can then configure your MCP client to use this group-specific endpoint instead of the main gateway endpoint.
 
@@ -714,9 +714,9 @@ You can combine all three fields for maximum flexibility:
 
 This includes `filesystem__read_file` plus all tools from the `time` server except `time__convert_time`.
 
-You can create this group in mcpjungle:
+You can create this group in mcpgateway:
 ```bash
-$ mcpjungle create group -c ./claude-tools-group.json
+$ mcpgateway create group -c ./claude-tools-group.json
 
 Tool Group claude-tools created successfully
 It is now accessible at the following streamable http endpoint:
@@ -727,10 +727,10 @@ It is now accessible at the following streamable http endpoint:
 
 You can then configure Claude (or any other MCP client) to use this group-specific endpoint to access the MCP server.
 
-The client will then ONLY see and be able to use these 3 tools and will not be aware of any other tools registered in MCPJungle.
+The client will then ONLY see and be able to use these 3 tools and will not be aware of any other tools registered in MCPGateway.
 
 > [!TIP]
-> You can run `mcpjungle list tools` to view all available tools and pick the ones you want to include in your group.
+> You can run `mcpgateway list tools` to view all available tools and pick the ones you want to include in your group.
 
 You can also watch a [Video on using Tool Groups](https://youtu.be/A21rfGgo38A).
 
@@ -739,20 +739,20 @@ You can also watch a [Video on using Tool Groups](https://youtu.be/A21rfGgo38A).
 > So if you add a tool to `included_tools` and also list it in `excluded_tools`, it will be excluded from the final group.
 
 #### Limitation 🚧
-[Prompts](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts) are currently not supported in Tool Groups. We're working to fix this [issue](https://github.com/mcpjungle/MCPJungle/issues/136) 🛠️
+[Prompts](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts) are currently not supported in Tool Groups. We're working to fix this [issue](https://github.com/mcpgateway/MCPGateway/issues/136) 🛠️
 
 ### Managing tool groups
 You can currently perform operations like listing all groups, viewing details of a specific group and deleting a group.
 
 ```bash
 # list all tool groups
-mcpjungle list groups
+mcpgateway list groups
 
 # view details of a specific group
-mcpjungle get group claude-tools
+mcpgateway get group claude-tools
 
 # delete a group
-mcpjungle delete group claude-tools
+mcpgateway delete group claude-tools
 ```
 
 ### Working with tools in groups
@@ -760,10 +760,10 @@ You can list and invoke tools within specific groups using the `--group` flag:
 
 ```bash
 # list tools in a specific group
-mcpjungle list tools --group claude-tools
+mcpgateway list tools --group claude-tools
 
 # invoke a tool from a specific group context
-mcpjungle invoke filesystem__read_file --group claude-tools --input '{"path": "README.md"}'
+mcpgateway invoke filesystem__read_file --group claude-tools --input '{"path": "README.md"}'
 ```
 
 These commands provide group-scoped operations, making it easier to work with tools within specific contexts and validate that tools are available in your groups.
@@ -778,14 +778,14 @@ These commands provide group-scoped operations, making it easier to work with to
 2. In `enterprise` mode, currently only an admin can create a Tool Group. We're working on allowing standard Users to create their own groups as well.
 
 ## Authentication
-MCPJungle currently supports authentication if your Streamable HTTP MCP Server accepts static tokens for auth.
+MCPGateway currently supports authentication if your Streamable HTTP MCP Server accepts static tokens for auth.
 
 This is useful when using SaaS-provided MCP Servers like HuggingFace, Stripe, etc. which require your API token for authentication.
 
 You can supply your token while registering the MCP server:
 ```bash
-# If you specify the `--bearer-token` flag, MCPJungle will add the `Authorization: Bearer <token>` header to all requests made to this MCP server.
-mcpjungle register --name huggingface --description "HuggingFace MCP Server" --url https://huggingface.co/mcp --bearer-token <your-hf-api-token>
+# If you specify the `--bearer-token` flag, MCPGateway will add the `Authorization: Bearer <token>` header to all requests made to this MCP server.
+mcpgateway register --name huggingface --description "HuggingFace MCP Server" --url https://huggingface.co/mcp --bearer-token <your-hf-api-token>
 ```
 
 Or from your configuration file
@@ -816,45 +816,45 @@ Support for Oauth flow is coming soon!
 
 ## Enterprise Features 🔒
 
-If you're running MCPJungle in your organisation, we recommend running the Server in the `enterprise` mode:
+If you're running MCPGateway in your organisation, we recommend running the Server in the `enterprise` mode:
 ```bash
 # enable enterprise features by running in enterprise mode
-mcpjungle start --enterprise
+mcpgateway start --enterprise
 
 # you can also specify the server mode as environment variable (valid values are `development` and `enterprise`)
 export SERVER_MODE=enterprise
-mcpjungle start
+mcpgateway start
 
 # Or use the enterprise-mode docker compose file as described above
 docker compose -f docker-compose.prod.yaml up -d
 ```
 
-By default, mcpjungle server runs in `development` mode which is ideal for individuals running it locally.
+By default, mcpgateway server runs in `development` mode which is ideal for individuals running it locally.
 
 In Enterprise mode, the server enforces stricter security policies and will provide additional features like Authentication, ACLs, observability and more.
 
 After starting the server in enterprise mode, you must initialize it by running the following command on your client machine:
 ```bash
-mcpjungle init-server
+mcpgateway init-server
 ```
 
-This will create an admin user in the server and store its API access token in your home directory (`~/.mcpjungle.conf`).
+This will create an admin user in the server and store its API access token in your home directory (`~/.mcpgateway.conf`).
 
-You can then use the mcpjungle cli to make authenticated requests to the server.
+You can then use the mcpgateway cli to make authenticated requests to the server.
 
 ### Access Control
 
-In `development` mode, all MCP clients have full access to all the MCP servers registered in MCPJungle Proxy.
+In `development` mode, all MCP clients have full access to all the MCP servers registered in MCPGateway Proxy.
 
 `enterprise` mode lets you control which MCP clients can access which MCP servers.
 
-Suppose you have registered 2 MCP servers `calculator` and `github` in MCPJungle in enterprise mode.
+Suppose you have registered 2 MCP servers `calculator` and `github` in MCPGateway in enterprise mode.
 
-By default, no MCP client can access these servers. **You must create an MCP Client in mcpjungle and explicitly allow it to access the MCP servers.**
+By default, no MCP client can access these servers. **You must create an MCP Client in mcpgateway and explicitly allow it to access the MCP servers.**
 
 ```bash
 # Create a new MCP client for your Cursor IDE to use. It can access the calculator and github MCP servers
-mcpjungle create mcp-client cursor-local --allow "calculator, github"
+mcpgateway create mcp-client cursor-local --allow "calculator, github"
 
 MCP client 'cursor-local' created successfully!
 Servers accessible: calculator,github
@@ -863,19 +863,19 @@ Access token: 1YHf2LwE1LXtp5lW_vM-gmdYHlPHdqwnILitBhXE4Aw
 Send this token in the `Authorization: Bearer {token}` HTTP header.
 ```
 
-Mcpjungle creates an access token for your client.
-Configure your client or agent to send this token in the `Authorization` header when making requests to the mcpjungle proxy.
+Mcpgateway creates an access token for your client.
+Configure your client or agent to send this token in the `Authorization` header when making requests to the mcpgateway proxy.
 
 > [!TIP]
 > You can also supply a custom access token for your mcp clients and user accounts using the `--access-token` flag.
 > This is useful when you want to manage tokens yourself, perhaps through a central identity server.
 
-For example, you can add the following configuration in Cursor to connect to MCPJungle:
+For example, you can add the following configuration in Cursor to connect to MCPGateway:
 
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "mcpgateway": {
       "url": "http://localhost:8080/mcp",
       "headers": {
         "Authorization": "Bearer 1YHf2LwE1LXtp5lW_vM-gmdYHlPHdqwnILitBhXE4Aw"
@@ -904,7 +904,7 @@ You can also create an MCP client by providing a JSON configuration file:
 }
 ```
 
-When creating a client from a config file, you **must** provide a custom access token because mcpjungle cannot print the generated token to the console.
+When creating a client from a config file, you **must** provide a custom access token because mcpgateway cannot print the generated token to the console.
 
 #### Supplying custom access tokens in config files
 
@@ -927,18 +927,18 @@ You can also use `${VAR_NAME}` placeholders elsewhere in the same JSON config fi
 ```
 
 #### Creating user accounts
-In addition to MCP clients, you can also create User accounts in mcpjungle for human users.
+In addition to MCP clients, you can also create User accounts in mcpgateway for human users.
 
 A user has a very limited set of privileges compared to an admin in the enterprise mode.
-For example, they can view and use MCP servers, but they don't have write permissions in mcpjungle.
+For example, they can view and use MCP servers, but they don't have write permissions in mcpgateway.
 
 ```bash
 # Auto-generates a secret for user
-mcpjungle create user bob
+mcpgateway create user bob
 # Specify a custom access token for user
-mcpjungle create user alice --access-token alice_token_123
+mcpgateway create user alice --access-token alice_token_123
 # Create user from config file
-mcpjungle create user --conf /path/to/user-config.json
+mcpgateway create user --conf /path/to/user-config.json
 ```
 
 The config file format for creating a user is similar to that of an MCP client:
@@ -955,10 +955,10 @@ The config file format for creating a user is similar to that of an MCP client:
 
 Again, when using the config file, you **must** provide a custom access token.
 
-Just like other JSON config files in MCPJungle, user config files also support `${VAR_NAME}` placeholders in string fields.
+Just like other JSON config files in MCPGateway, user config files also support `${VAR_NAME}` placeholders in string fields.
 
 ### OpenTelemetry
-MCPJungle supports Prometheus-compatible OpenTelemetry Metrics for observability.
+MCPGateway supports Prometheus-compatible OpenTelemetry Metrics for observability.
 
 - In `enterprise` mode, OpenTelemetry is enabled by default.
 - In `development` mode, telemetry is disabled by default. You can enable it by setting the `OTEL_ENABLED` environment variable to `true` before starting the server:
@@ -971,26 +971,16 @@ export OTEL_ENABLED=true
 export OTEL_RESOURCE_ATTRIBUTES=deployment.environment.name=enterprise
 
 # start the server
-mcpjungle start
+mcpgateway start
 ```
 
-Once the mcpjungle server is started, metrics are available at the `/metrics` endpoint.
+Once the mcpgateway server is started, metrics are available at the `/metrics` endpoint.
 
 # Current limitations 🚧
 We're not perfect yet, but we're working hard to get there!
 
-### 1. MCPJungle does not support OAuth flow for authentication yet
+### 1. MCPGateway does not support OAuth flow for authentication yet
 This is a work in progress.
 
 We're collecting more feedback on how people use OAuth with MCP servers, so feel free to start a Discussion or open an issue to share your use case.
 
-# Contributing 💻
-
-We welcome contributions from the community! 
-
-- **For contribution guidelines and standards**, see [CONTRIBUTION.md](./CONTRIBUTION.md)
-- **For development setup and technical details**, see [DEVELOPMENT.md](./DEVELOPMENT.md)
-
-Join our [Discord community](https://discord.gg/CapV4Z3krk) to connect with other contributors and maintainers.
-
-</details>

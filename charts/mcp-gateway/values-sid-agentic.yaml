@@ -1,0 +1,8 @@
+env:
+  DATABASE_URL: postgres://sami:sami@postgres-dev-sl.sidglobal.cloud:5432/sami-mcp-gateway
+  SERVER_MODE: development
+  OTEL_ENABLED: "true"
+  MCP_SERVER_INIT_REQ_TIMEOUT_SEC: "10"
+  HTTP_PATH_PREFIX: /api/v1/sami-mcp-gateway
+  DEFAULT_TENANT_ID: sid-agentic
+  HTTP_PORT: "8080"

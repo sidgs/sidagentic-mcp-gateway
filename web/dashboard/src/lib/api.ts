@@ -18,9 +18,9 @@ function normalizeHttpPathPrefix(prefix: string): string {
   return trimmed.replace(/\/$/, "");
 }
 
-// When the UI is hosted at "/" (vite dev), this must mirror the API's HTTP_PATH_PREFIX so
-// requests hit /api/v1/... instead of /. When the bundle is hosted under HTTP_PATH_PREFIX
-// via VITE_DASHBOARD_BASE, leave unset so paths are /<prefix-relative>/dashboard/... only.
+// When set, JSON API URLs are root-relative: /<VITE_HTTP_PATH_PREFIX>/dashboard/... (not under
+// Vite BASE_URL). When unset, URLs are relative to BASE_URL so a dashboard mounted only under
+// VITE_DASHBOARD_BASE still reaches /<base>/dashboard/... on the same host.
 const gatewayHttpPrefix = normalizeHttpPathPrefix(
   typeof import.meta.env.VITE_HTTP_PATH_PREFIX === "string" ? import.meta.env.VITE_HTTP_PATH_PREFIX : ""
 );
@@ -36,6 +36,9 @@ function gatewayOriginPath(absPathUnderGatewayMount: string): string {
 
 function dashboardFetchURL(absPathUnderGatewayMount: string): string {
   const originPath = gatewayOriginPath(absPathUnderGatewayMount);
+  if (gatewayHttpPrefix !== "") {
+    return originPath;
+  }
   const base = import.meta.env.BASE_URL;
   const normalized = originPath.startsWith("/") ? originPath.slice(1) : originPath;
   return base + normalized;

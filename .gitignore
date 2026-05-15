@@ -32,8 +32,6 @@ go.work.sum
 dist/
 
 # Local dev
-mcpjungle
 mcp.db
-mcpjungle.db
 
 node_modules/
