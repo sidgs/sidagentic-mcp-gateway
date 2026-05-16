@@ -12,7 +12,8 @@ WORKDIR /src/web/dashboard
 COPY web/dashboard/package.json web/dashboard/package-lock.json ./
 RUN npm ci
 COPY web/dashboard/ ./
-COPY assets /src/assets
+# Vite resolves @repo-assets to /src/assets (repo-root ../../assets). The dir may be empty if no bundled images.
+RUN mkdir -p /src/assets
 
 ARG VITE_DASHBOARD_BASE=/
 ENV VITE_DASHBOARD_BASE=$VITE_DASHBOARD_BASE

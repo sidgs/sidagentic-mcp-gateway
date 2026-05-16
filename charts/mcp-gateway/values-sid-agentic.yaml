@@ -6,3 +6,21 @@ env:
   HTTP_PATH_PREFIX: /api/v1/sami-mcp-gateway
   DEFAULT_TENANT_ID: sid-agentic
   HTTP_PORT: "8080"
+  # Cognito OIDC dashboard session store (recommended with multiple replicas)
+  # REDIS_URL: redis://redis-master.svc.cluster.local:6379/0
+  OIDC_SESSION_TTL_SECONDS: "259200"
+  # Optional: OAuth2 scopes for dashboard login (comma/space-separated); empty = openid email profile. "openid" is added if missing.
+  # OIDC_SCOPES: "openid email profile aws.cognito.signin.user.admin phone"
+  # After OIDC success: absolute https URL or root-relative path (must start with /, not //). Omit for gateway root (/ or HTTP_PATH_PREFIX/).
+  # POST_LOGIN_REDIRECT_URL: "https://app.example/path"
+  COGNITO_ISSUER_URL: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_D0dfwkRq0"
+  COGNITO_REGION: "us-east-1"
+  REDIS_URL: "redis://redis.commons:6379/0"
+  OIDC_SESSION_TTL_SECONDS: "259200"
+  OIDC_SCOPES: "email openid phone aws.cognito.signin.user.admin"
+  POST_LOGIN_REDIRECT_URL: "/apps/mcp-gateway-dashboard/#/home"
+
+secrets:
+  COGNITO_CLIENT_SECRET: "38qm6oububnuafmsioncaagh2p932kn1bk134rocuc3a2ngctbj"
+  COGNITO_CLIENT_ID: "1k5ltdnfpgs208e2j3eltsmqbn"
+  FOO: "bar"

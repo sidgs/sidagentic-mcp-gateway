@@ -1,8 +1,7 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
-import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
@@ -18,8 +17,11 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { api } from "@/lib/api";
+import { DashboardAuthRequiredError, redirectToGatewayLogin } from "@/lib/auth";
+import { appSectionToHash, getSectionFromHashOrDefault, parseAppSectionFromHash } from "@/lib/hashRoute";
 import type {
   AppSection,
+  DashboardAuthStatusResponse,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
   DashboardOAuthAuthorizationRequired,
@@ -38,6 +40,7 @@ import type {
 } from "@/lib/types";
 import { CopyButton } from "@/components/CopyButton";
 import { EmptyStateCard } from "@/components/EmptyStateCard";
+import { HomePage } from "@/components/HomePage";
 import { NavSidebar } from "@/components/NavSidebar";
 import { SectionCard } from "@/components/SectionCard";
 import { StatusBadge } from "@/components/StatusBadge";
@@ -58,7 +61,7 @@ function TrashIcon() {
   );
 }
 
-type LoadState = "idle" | "loading" | "ready" | "error";
+type LoadState = "idle" | "checking_session" | "loading" | "ready" | "error";
 type FeedbackTone = "success" | "error";
 
 interface DashboardData {
@@ -116,7 +119,19 @@ interface SchemaFieldSummary {
   note?: string;
 }
 
+function maybeRedirectDashboardAuth(error: unknown): boolean {
+  if (error instanceof DashboardAuthRequiredError) {
+    redirectToGatewayLogin(error.loginPath);
+    return true;
+  }
+  return false;
+}
+
 const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
+  home: {
+    title: "Home",
+    subtitle: "",
+  },
   servers: {
     title: "Servers",
     subtitle: "",
@@ -472,8 +487,25 @@ function createInitialToolGroupForm(): ToolGroupFormState {
 }
 
 export default function App() {
-  const [section, setSection] = useState<AppSection>("servers");
-  const [loadState, setLoadState] = useState<LoadState>("loading");
+  const [section, setSection] = useState<AppSection>(() => getSectionFromHashOrDefault("home"));
+  const [authSession, setAuthSession] = useState<DashboardAuthStatusResponse | null>(null);
+
+  const selectSection = useCallback((next: AppSection) => {
+    if (authSession?.oidc_enabled && !authSession.authenticated && next !== "home") {
+      const lp = authSession.login_path?.trim();
+      if (lp) {
+        redirectToGatewayLogin(lp);
+      }
+      return;
+    }
+    setSection(next);
+    const h = appSectionToHash(next);
+    if (window.location.hash !== h) {
+      window.location.hash = h;
+    }
+  }, [authSession]);
+
+  const [loadState, setLoadState] = useState<LoadState>("checking_session");
   const [errorMessage, setErrorMessage] = useState("");
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
   const [data, setData] = useState<DashboardData>({});
@@ -496,33 +528,131 @@ export default function App() {
   const [toolGroupError, setToolGroupError] = useState("");
   const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({});
 
+  /** Ensure canonical `#/section` when hash is missing or invalid (bookmarkable URLs). */
+  useEffect(() => {
+    if (parseAppSectionFromHash() !== null) {
+      return;
+    }
+    const { pathname, search } = window.location;
+    const next = `${pathname}${search}${appSectionToHash("home")}`;
+    window.history.replaceState(null, "", next);
+    setSection("home");
+  }, []);
+
+  /** Back/forward and manual hash edits → active section */
+  useEffect(() => {
+    function onHashChange() {
+      const next = parseAppSectionFromHash();
+      if (next === null) {
+        return;
+      }
+      if (authSession?.oidc_enabled && !authSession.authenticated && next !== "home") {
+        const { pathname, search } = window.location;
+        window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("home")}`);
+        setSection("home");
+        return;
+      }
+      setSection(next);
+    }
+    window.addEventListener("hashchange", onHashChange);
+    return () => window.removeEventListener("hashchange", onHashChange);
+  }, [authSession]);
+
+  async function fetchDashboardPanelsAfterOverview(overview: DashboardOverviewResponse) {
+    const [servers, tools, toolGroups, prompts, resources, diagnostics] = await Promise.all([
+      api.servers(),
+      api.tools(),
+      api.toolGroups(),
+      api.prompts(),
+      api.resources(),
+      api.diagnostics(),
+    ]);
+    return { overview, servers, tools, toolGroups, prompts, resources, diagnostics };
+  }
+
+  async function fetchFullDashboard() {
+    const [overview, servers, tools, toolGroups, prompts, resources, diagnostics] = await Promise.all([
+      api.overview(),
+      api.servers(),
+      api.tools(),
+      api.toolGroups(),
+      api.prompts(),
+      api.resources(),
+      api.diagnostics(),
+    ]);
+    return { overview, servers, tools, toolGroups, prompts, resources, diagnostics };
+  }
+
+  function applyDashboardPayload(payload: Required<DashboardData>) {
+    const { overview, servers, tools, toolGroups, prompts, resources, diagnostics } = payload;
+    setData({
+      overview,
+      servers,
+      tools,
+      toolGroups,
+      prompts,
+      resources,
+      diagnostics,
+    });
+    setExpandedTool((current) =>
+      current && tools.tools.some((tool) => tool.canonical_name === current) ? current : null,
+    );
+    setExpandedToolGroup((current) =>
+      current && toolGroups.tool_groups.some((group) => group.name === current) ? current : null,
+    );
+    setExpandedPrompt((current) =>
+      current && prompts.prompts.some((prompt) => prompt.canonical_name === current) ? current : null,
+    );
+  }
+
+  /** Probe auth (public when OIDC is on); load dashboard data only when allowed. */
+  async function bootstrapDashboard() {
+    setLoadState("checking_session");
+    setErrorMessage("");
+    try {
+      const authRes = await api.authStatus();
+      setAuthSession(authRes);
+
+      if (!authRes.oidc_enabled || authRes.authenticated) {
+        setLoadState("loading");
+        const overviewRes = await api.overview();
+        const payload = await fetchDashboardPanelsAfterOverview(overviewRes);
+        applyDashboardPayload(payload);
+        setLoadState("ready");
+        return;
+      }
+
+      setData({});
+      const hashSection = parseAppSectionFromHash();
+      if (hashSection !== null && hashSection !== "home") {
+        const { pathname, search } = window.location;
+        window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("home")}`);
+        setSection("home");
+      }
+      setLoadState("ready");
+    } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setErrorMessage(message);
+      setLoadState("error");
+    }
+  }
+
   async function loadDashboardData(silent = false) {
     if (!silent) {
       setLoadState("loading");
     }
     setErrorMessage("");
     try {
-      const [overview, servers, tools, toolGroups, prompts, resources, diagnostics] = await Promise.all([
-        api.overview(),
-        api.servers(),
-        api.tools(),
-        api.toolGroups(),
-        api.prompts(),
-        api.resources(),
-        api.diagnostics(),
-      ]);
-      setData({ overview, servers, tools, toolGroups, prompts, resources, diagnostics });
-      setExpandedTool((current) =>
-        current && tools.tools.some((tool) => tool.canonical_name === current) ? current : null,
-      );
-      setExpandedToolGroup((current) =>
-        current && toolGroups.tool_groups.some((group) => group.name === current) ? current : null,
-      );
-      setExpandedPrompt((current) =>
-        current && prompts.prompts.some((prompt) => prompt.canonical_name === current) ? current : null,
-      );
+      const payload = await fetchFullDashboard();
+      applyDashboardPayload(payload);
       setLoadState("ready");
     } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "Unknown error";
       setErrorMessage(message);
       setLoadState("error");
@@ -530,7 +660,7 @@ export default function App() {
   }
 
   useEffect(() => {
-    void loadDashboardData();
+    void bootstrapDashboard();
   }, []);
 
   const filteredServers = useMemo(() => {
@@ -605,6 +735,12 @@ export default function App() {
 
   const overview = data.overview;
   const diagnostics = data.diagnostics;
+  const needsDashboardAuth =
+    authSession !== null && authSession.oidc_enabled && !authSession.authenticated;
+  const dashboardSignOutHref =
+    authSession?.oidc_enabled && authSession.authenticated
+      ? (overview?.oidc_logout_path ?? authSession.logout_path)
+      : undefined;
   const currentSectionMeta = sectionMeta[section];
 
   function setBusy(key: string, value: boolean) {
@@ -631,6 +767,9 @@ export default function App() {
       await loadDashboardData(true);
       setFeedback({ tone: "success", message: successMessage });
     } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "Request failed";
       setFeedback({ tone: "error", message });
       throw error;
@@ -742,6 +881,9 @@ export default function App() {
       setFeedback({ tone: "success", message: `Server ${registerForm.name.trim()} registered.` });
       closeRegisterModal();
     } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "Request failed";
       setRegisterError(message);
       setFeedback({ tone: "error", message });
@@ -807,6 +949,9 @@ export default function App() {
         )
       } catch (error) {
         if (cancelled) {
+          return
+        }
+        if (maybeRedirectDashboardAuth(error)) {
           return
         }
         const message = error instanceof Error ? error.message : "Failed to check OAuth authorization state."
@@ -913,8 +1058,11 @@ export default function App() {
       await loadDashboardData(true);
       setFeedback({ tone: "success", message: `Tool group ${name} created.` });
       closeToolGroupModal();
-      setSection("tool_groups");
+      selectSection("tool_groups");
     } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
       const message = error instanceof Error ? error.message : "Request failed";
       setToolGroupError(message);
       setFeedback({ tone: "error", message });
@@ -940,11 +1088,37 @@ export default function App() {
     }
   }
 
+  const dashboardReady = loadState === "ready";
+  const showNavSidebar = dashboardReady && !needsDashboardAuth;
+
   return (
     <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
-      <NavSidebar active={section} onSelect={setSection} />
-      <Box component="main" sx={{ flex: 1, minWidth: 0, overflowX: "auto", p: "18px" }}>
+      {showNavSidebar ? (
+        <NavSidebar active={section} onSelect={selectSection} signOutHref={dashboardSignOutHref} />
+      ) : null}
+      <Box
+        component="main"
+        sx={{
+          flex: 1,
+          minWidth: 0,
+          overflowX: "auto",
+          ...(dashboardReady
+            ? { p: "18px" }
+            : {
+                display: "flex",
+                flexDirection: "column",
+                alignItems: "center",
+                justifyContent: "center",
+                p: 2,
+                minHeight: "100vh",
+              }),
+        }}
+      >
+        {dashboardReady ? (
         <Stack component="header" direction={{ xs: "column", lg: "row" }} spacing={2} sx={{ mb: 2 }}>
+          {section === "home" ? (
+            <Box sx={{ flex: "1 1 auto", minWidth: 0 }} aria-hidden />
+          ) : (
           <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
             <Typography variant="h4" component="h1" sx={{ mt: "2px", fontWeight: 700, lineHeight: 1.1 }}>
               {currentSectionMeta.title}
@@ -955,6 +1129,7 @@ export default function App() {
               </Typography>
             ) : null}
           </Box>
+          )}
           <Stack
             direction="row"
             spacing={1}
@@ -965,14 +1140,6 @@ export default function App() {
               maxWidth: { lg: 720 },
             }}
           >
-            {overview?.version ? (
-              <Chip
-                label={`Server version ${shortVersion(overview.version)}`}
-                variant="outlined"
-                size="small"
-                sx={{ fontSize: "0.88rem", minHeight: 36, borderRadius: "14px" }}
-              />
-            ) : null}
             {overview?.endpoints[0] ? (
               <Stack
                 direction="row"
@@ -1016,8 +1183,9 @@ export default function App() {
             ) : null}
           </Stack>
         </Stack>
+        ) : null}
 
-        {feedback ? (
+        {dashboardReady && feedback ? (
           <Alert
             severity={feedback.tone === "success" ? "success" : "error"}
             sx={{ mb: 2 }}
@@ -1028,8 +1196,22 @@ export default function App() {
           </Alert>
         ) : null}
 
+        {loadState === "checking_session" ? (
+          <Paper variant="outlined" sx={{ p: 4, borderRadius: 2, maxWidth: 480, width: "100%" }}>
+            <Stack spacing={2} sx={{ alignItems: "center" }}>
+              <CircularProgress />
+              <Typography variant="h5" component="h2" sx={{ textAlign: "center" }}>
+                Starting dashboard
+              </Typography>
+              <Typography color="text.secondary" sx={{ textAlign: "center" }}>
+                Checking gateway access and sign-in requirements.
+              </Typography>
+            </Stack>
+          </Paper>
+        ) : null}
+
         {loadState === "loading" ? (
-          <Paper variant="outlined" sx={{ p: 4, borderRadius: 2 }}>
+          <Paper variant="outlined" sx={{ p: 4, borderRadius: 2, maxWidth: 480, width: "100%" }}>
             <Stack spacing={2} sx={{ alignItems: "center" }}>
               <CircularProgress />
               <Typography variant="h5" component="h2">
@@ -1043,7 +1225,7 @@ export default function App() {
         ) : null}
 
         {loadState === "error" ? (
-          <Paper variant="outlined" sx={{ p: 4, borderRadius: 2, borderColor: "error.light" }}>
+          <Paper variant="outlined" sx={{ p: 4, borderRadius: 2, borderColor: "error.light", maxWidth: 560, width: "100%" }}>
             <Typography variant="h5" component="h2" gutterBottom>
               Dashboard API unavailable
             </Typography>
@@ -1069,6 +1251,28 @@ export default function App() {
 
         {loadState === "ready" ? (
           <div className="flex flex-col gap-[14px]">
+            {section === "home" ? (
+              <HomePage
+                overview={overview}
+                auth={authSession ?? undefined}
+                onNavigate={selectSection}
+              />
+            ) : needsDashboardAuth ? (
+              <Paper variant="outlined" sx={{ p: 4, maxWidth: 560, borderRadius: 2, mx: "auto" }}>
+                <Typography variant="h5" component="h2" gutterBottom>
+                  Sign in required
+                </Typography>
+                <Typography color="text.secondary" sx={{ mb: 2 }}>
+                  Use the gateway sign-in flow to manage servers, tools, prompts, resources, and diagnostics.
+                </Typography>
+                {authSession?.login_path ? (
+                  <Button variant="contained" component="a" href={authSession.login_path}>
+                    Sign in
+                  </Button>
+                ) : null}
+              </Paper>
+            ) : (
+              <>
             {section === "servers" && data.servers ? (
               <>
                 {overview ? (
@@ -1857,6 +2061,23 @@ export default function App() {
             {section === "diagnostics" && diagnostics ? (
               <>
                 <SectionCard title="System Info" subtitle="Runtime details">
+                  <Box
+                    sx={{
+                      borderRadius: 2,
+                      bgcolor: "grey.100",
+                      border: 1,
+                      borderColor: "divider",
+                      px: 2.5,
+                      py: 2,
+                      mb: 2,
+                    }}
+                  >
+                    <Typography variant="body2" color="text.secondary" sx={{ lineHeight: 1.6 }}>
+                      This gateway is built for <strong>local productivity</strong> (fast iteration, minimal setup) and{" "}
+                      <strong>shared deployments</strong> (prefix routing, optional SSO, Redis session store, and metrics).
+                      Use the sidebar to configure servers, inspect catalogued tools, and tune what each client can see.
+                    </Typography>
+                  </Box>
                   <div className="diagnostics-grid compact-diagnostics-grid">
                     <div className="diag-card compact-metric">
                       <span>Version</span>
@@ -1897,6 +2118,8 @@ export default function App() {
                 </SectionCard>
               </>
             ) : null}
+              </>
+            )}
           </div>
         ) : null}
 

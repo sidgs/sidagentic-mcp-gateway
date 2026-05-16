@@ -39,6 +39,8 @@ type DashboardOverviewResponse struct {
 	ResourceCount   int                  `json:"resource_count"`
 	EmptyState      *DashboardEmptyState `json:"empty_state,omitempty"`
 	Troubleshooting []string             `json:"troubleshooting,omitempty"`
+	OIDCLoginPath   string               `json:"oidc_login_path,omitempty"`
+	OIDCLogoutPath  string               `json:"oidc_logout_path,omitempty"`
 }
 
 type DashboardServerConfigSummary struct {
@@ -124,6 +126,16 @@ type DashboardResource struct {
 type DashboardResourcesResponse struct {
 	Resources  []DashboardResource  `json:"resources"`
 	EmptyState *DashboardEmptyState `json:"empty_state,omitempty"`
+}
+
+// DashboardAuthStatusResponse is returned by GET /dashboard/auth-status (callable without OIDC cookie).
+type DashboardAuthStatusResponse struct {
+	Authenticated bool   `json:"authenticated"`
+	OIDCEnabled   bool   `json:"oidc_enabled"`
+	LoginPath     string `json:"login_path,omitempty"`
+	LogoutPath    string `json:"logout_path,omitempty"`
+	Email         string `json:"email,omitempty"`
+	Sub           string `json:"sub,omitempty"`
 }
 
 type DashboardDiagnosticsResponse struct {

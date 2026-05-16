@@ -4,11 +4,13 @@ package api
 import (
 	"context"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"sync"
 	"time"
 
+	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/dashboardui"
@@ -24,6 +26,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
+	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
 )
 
@@ -57,6 +60,17 @@ type ServerOptions struct {
 	// Empty means routes are served from the host root.
 	HTTPPathPrefix string
 
+	// OIDC configures optional Cognito (or OIDC-compliant) login for the dashboard (/login, /auth/callback).
+	OIDC *OIDCSettings
+	// OIDCRedis is optional; when set alongside OIDC login, browser sessions are stored in Redis for multi-replica deployments.
+	OIDCRedis *redis.Client
+	// OIDCSessionTTL is the maximum dashboard session lifetime (Redis key TTL upper bound, cookie cap). Zero uses 3 days.
+	OIDCSessionTTL time.Duration
+
+	// PostLoginRedirectURL is optional absolute (https://…) or root-relative (/…) URL to send browsers after OIDC succeeds or after dashboard sign-out (/logout).
+	// Empty means redirect to "/" or "{HTTP_PATH_PREFIX}/". Validated at server construction.
+	PostLoginRedirectURL string
+
 	// DefaultTenantID is used when the X-Tenant-ID header is absent (typically from DEFAULT_TENANT_ID).
 	DefaultTenantID string
 }
@@ -84,6 +98,13 @@ type Server struct {
 	// We need to maintain one instance for each group for sse to work correctly.
 	groupSseServers sync.Map
 
+	// Lazy-cached OIDC issuer (Cognito or other OIDC-compliant IdP).
+	oidcProviderMu     sync.Mutex
+	oidcCachedProvider *oidc.Provider
+	oidcSettings       *OIDCSettings
+	oidcSessionStore   oidcSessionStore
+	oidcSessionMaxTTL  time.Duration
+
 	// dashboardOAuthMu guards dashboardOAuthResults, which is a short-lived
 	// in-memory cache used by the browser-based dashboard OAuth flow.
 	dashboardOAuthMu sync.Mutex
@@ -94,6 +115,9 @@ type Server struct {
 
 	// httpPathPrefix is normalized (see NormalizeHTTPPathPrefix).
 	httpPathPrefix string
+
+	// postLoginRedirectURL, when set, overrides the default browser redirect target after OIDC callback success and after /logout.
+	postLoginRedirectURL string
 
 	// defaultTenantID is used when X-Tenant-ID is missing and for non-HTTP operations.
 	defaultTenantID string
@@ -120,6 +144,31 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 	if err := tenant.Validate(def); err != nil {
 		return nil, fmt.Errorf("invalid default tenant id: %w", err)
 	}
+
+	maxTTL := opts.OIDCSessionTTL
+	if maxTTL < 0 {
+		return nil, fmt.Errorf("OIDCSessionTTL must not be negative")
+	}
+	if maxTTL == 0 {
+		maxTTL = defaultOIDCSessionMaxTTL
+	}
+
+	var sessionStore oidcSessionStore
+	if opts.OIDCRedis != nil {
+		sessionStore = newRedisOIDCSessionStore(opts.OIDCRedis, "")
+	} else {
+		sessionStore = newMemoryOIDCSessionStore()
+	}
+
+	postLogin := strings.TrimSpace(opts.PostLoginRedirectURL)
+	if postLogin != "" {
+		var errNormalize error
+		postLogin, errNormalize = normalizePostLoginRedirectURL(postLogin)
+		if errNormalize != nil {
+			return nil, fmt.Errorf("PostLoginRedirectURL: %w", errNormalize)
+		}
+	}
+
 	s := &Server{
 		mcpProxyServer:        opts.MCPProxyServer,
 		sseMcpProxyServer:     opts.SseMcpProxyServer,
@@ -133,7 +182,11 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		metrics:               opts.Metrics,
 		dashboardOAuthResults: make(map[string]dashboardOAuthSessionResult),
 		httpPathPrefix:        NormalizeHTTPPathPrefix(opts.HTTPPathPrefix),
+		postLoginRedirectURL:  postLogin,
 		defaultTenantID:       def,
+		oidcSettings:          opts.OIDC,
+		oidcSessionStore:      sessionStore,
+		oidcSessionMaxTTL:     maxTTL,
 	}
 
 	// Set up the router after the server is fully initialized
@@ -142,6 +195,10 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		return nil, err
 	}
 	s.router = r
+
+	if postLogin != "" && opts.OIDC != nil {
+		log.Printf("[oidc] post-login redirect: %s\n", postLogin)
+	}
 
 	return s, nil
 }
@@ -255,17 +312,23 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 
 	g.POST("/init", s.registerInitServerHandler())
 
+	g.GET("/login", s.cognitoOAuthLoginHandler())
+	g.GET("/auth/callback", s.cognitoOAuthCallbackHandler())
+	g.GET("/logout", s.cognitoLogoutHandler())
+
 	requireEnterpriseMode := s.requireServerMode(model.ModeEnterprise)
-	requireDashboardMode := s.requireDashboardMode()
+	requireDashboardModeOrOIDC := s.requireDashboardModeOrOIDC()
+	requireOIDCSessionIfEnabled := s.requireOIDCSessionIfEnabled()
 
 	if s.dashboardService != nil {
 		dashboardFileServer, err := dashboardui.FileServer()
 		if err != nil {
 			return nil, err
 		}
-		g.GET("/", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
-		g.GET("/index.html", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
-		g.GET("/assets/*filepath", s.requireInitialized(), requireDashboardMode, gin.WrapH(dashboardFileServer))
+		// SPA shell loads without OIDC session so the Home page can be public; gated JSON remains behind requireOIDCSessionIfEnabled.
+		g.GET("/", s.requireInitialized(), requireDashboardModeOrOIDC, gin.WrapH(dashboardFileServer))
+		g.GET("/index.html", s.requireInitialized(), requireDashboardModeOrOIDC, gin.WrapH(dashboardFileServer))
+		g.GET("/assets/*filepath", s.requireInitialized(), requireDashboardModeOrOIDC, gin.WrapH(dashboardFileServer))
 	}
 
 	// Set up the MCP proxy server on /mcp
@@ -413,10 +476,19 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 	}
 
 	if s.dashboardService != nil {
+		dashboardPublic := g.Group(
+			"/dashboard",
+			s.requireInitialized(),
+			requireDashboardModeOrOIDC,
+		)
+		{
+			dashboardPublic.GET("/auth-status", s.dashboardAuthStatusHandler())
+		}
 		dashboardAPI := g.Group(
 			"/dashboard",
 			s.requireInitialized(),
-			requireDashboardMode,
+			requireDashboardModeOrOIDC,
+			requireOIDCSessionIfEnabled,
 		)
 		{
 			dashboardAPI.GET("/overview", s.dashboardOverviewHandler())

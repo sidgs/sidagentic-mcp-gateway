@@ -1,4 +1,5 @@
 import type {
+  DashboardAuthStatusResponse,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
   DashboardOAuthSessionResponse,
@@ -11,6 +12,7 @@ import type {
   DashboardToolGroupsResponse,
   DashboardToolsResponse,
 } from "./types";
+import { DashboardAuthRequiredError } from "./auth";
 
 function normalizeHttpPathPrefix(prefix: string): string {
   const trimmed = prefix.trim();
@@ -52,25 +54,44 @@ async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
       ...(init?.headers ?? {}),
     },
   });
+
+  const raw = await response.text();
+  const ct = response.headers.get("content-type") ?? "";
+  let parsed: unknown;
+  if (raw.length > 0 && ct.includes("application/json")) {
+    try {
+      parsed = JSON.parse(raw) as unknown;
+    } catch {
+      parsed = undefined;
+    }
+  }
+
+  const payload = (parsed !== undefined && typeof parsed === "object" && parsed !== null
+    ? parsed
+    : {}) as { error?: string; login_path?: string };
+
+  if (response.status === 401 && typeof payload.login_path === "string") {
+    const lp = payload.login_path.trim();
+    if (lp.length > 0) {
+      throw new DashboardAuthRequiredError(lp);
+    }
+  }
+
   if (!response.ok) {
     let message = `Request failed: ${response.status}`;
-    try {
-      const payload = (await response.json()) as { error?: string };
-      if (payload.error) {
-        message = payload.error;
-      }
-    } catch {
-      // keep the fallback message
+    if (typeof payload.error === "string" && payload.error.trim() !== "") {
+      message = payload.error.trim();
     }
     throw new Error(message);
   }
   if (response.status === 204) {
     return undefined as T;
   }
-  return (await response.json()) as T;
+  return parsed as T;
 }
 
 export const api = {
+  authStatus: () => requestJSON<DashboardAuthStatusResponse>("/dashboard/auth-status"),
   overview: () => requestJSON<DashboardOverviewResponse>("/dashboard/overview"),
   servers: () => requestJSON<DashboardServersResponse>("/dashboard/servers"),
   tools: () => requestJSON<DashboardToolsResponse>("/dashboard/tools"),

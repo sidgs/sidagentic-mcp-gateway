@@ -6,9 +6,12 @@ import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
 import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
+import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
+import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import Box from "@mui/material/Box";
+import Button from "@mui/material/Button";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
@@ -25,6 +28,8 @@ const DRAWER_COLLAPSED_WIDTH = 56;
 
 function SectionIcon({ section, ...props }: { section: AppSection } & SvgIconProps): ReactElement | null {
   switch (section) {
+    case "home":
+      return <HomeOutlinedIcon {...props} />;
     case "servers":
       return <DnsOutlinedIcon {...props} />;
     case "tools":
@@ -43,6 +48,7 @@ function SectionIcon({ section, ...props }: { section: AppSection } & SvgIconPro
 }
 
 const items: Array<{ key: AppSection; label: string }> = [
+  { key: "home", label: "Home" },
   { key: "servers", label: "Servers" },
   { key: "tools", label: "Tools" },
   { key: "tool_groups", label: "Tool Groups" },
@@ -54,9 +60,12 @@ const items: Array<{ key: AppSection; label: string }> = [
 export function NavSidebar({
   active,
   onSelect,
+  signOutHref,
 }: {
   active: AppSection;
   onSelect: (section: AppSection) => void;
+  /** When set (OIDC session), shows Sign out at the bottom of the nav. */
+  signOutHref?: string;
 }) {
   const [expanded, setExpanded] = useState(() => {
     try {
@@ -101,9 +110,10 @@ export function NavSidebar({
         display: "flex",
         flexDirection: "column",
         overflowX: "hidden",
+        minHeight: "100vh",
       }}
     >
-      <Stack spacing={2.25}>
+      <Stack spacing={2.25} sx={{ flex: 1, display: "flex", flexDirection: "column", minHeight: 0 }}>
         <Stack
           direction="row"
           spacing={1}
@@ -139,7 +149,7 @@ export function NavSidebar({
           )}
         </Stack>
 
-        <List disablePadding sx={{ px: 0 }} aria-label="Dashboard sections">
+        <List disablePadding sx={{ px: 0, flex: 1, minHeight: 0, overflowY: "auto" }} aria-label="Dashboard sections">
           {items.map((item) => {
             const isActive = active === item.key;
             const button = (
@@ -192,6 +202,45 @@ export function NavSidebar({
             );
           })}
         </List>
+
+        {signOutHref ? (
+          <Box
+            sx={{
+              mt: "auto",
+              pt: 1.5,
+              borderTop: 1,
+              borderColor: "divider",
+              flexShrink: 0,
+            }}
+          >
+            {expanded ? (
+              <Button
+                component="a"
+                href={signOutHref}
+                variant="outlined"
+                size="small"
+                fullWidth
+                startIcon={<LogoutOutlinedIcon />}
+                sx={{
+                  fontSize: "0.88rem",
+                  minHeight: 36,
+                  borderRadius: "12px",
+                  textTransform: "none",
+                }}
+              >
+                Sign out
+              </Button>
+            ) : (
+              <Box sx={{ display: "flex", justifyContent: "center" }}>
+                <Tooltip title="Sign out" placement="right">
+                  <IconButton component="a" href={signOutHref} aria-label="Sign out" size="small" color="primary">
+                    <LogoutOutlinedIcon fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+              </Box>
+            )}
+          </Box>
+        ) : null}
       </Stack>
     </Box>
   );

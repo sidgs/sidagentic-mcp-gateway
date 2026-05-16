@@ -5,7 +5,40 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
+
+func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		loginPath := OIDCUIRootRelativePath(s.httpPathPrefix, "login")
+		logoutPath := OIDCUIRootRelativePath(s.httpPathPrefix, "logout")
+
+		if !s.oidcConfigured() {
+			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+				Authenticated: true,
+				OIDCEnabled:   false,
+			})
+			return
+		}
+
+		if sess, ok := s.validOIDCSessionFromRequest(c); ok {
+			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+				Authenticated: true,
+				OIDCEnabled:   true,
+				LogoutPath:    logoutPath,
+				Email:         sess.Email,
+				Sub:           sess.Sub,
+			})
+			return
+		}
+
+		c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+			Authenticated: false,
+			OIDCEnabled:   true,
+			LoginPath:     loginPath,
+		})
+	}
+}
 
 func (s *Server) dashboardOverviewHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -14,6 +47,10 @@ func (s *Server) dashboardOverviewHandler() gin.HandlerFunc {
 		if err != nil {
 			handleServiceError(c, err)
 			return
+		}
+		if s.oidcConfigured() {
+			resp.OIDCLoginPath = OIDCUIRootRelativePath(s.httpPathPrefix, "login")
+			resp.OIDCLogoutPath = OIDCUIRootRelativePath(s.httpPathPrefix, "logout")
 		}
 		c.JSON(http.StatusOK, resp)
 	}

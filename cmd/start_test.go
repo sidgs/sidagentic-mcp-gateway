@@ -3,7 +3,9 @@ package cmd
 import (
 	"os"
 	"path/filepath"
+	"reflect"
 	"testing"
+	"time"
 
 	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
@@ -107,6 +109,216 @@ func writeTempFile(t *testing.T, content string) string {
 		t.Fatalf("failed to write temp file: %v", err)
 	}
 	return f
+}
+
+func TestLoadOIDCSettingsFromEnv(t *testing.T) {
+	t.Run("nil when all unset", func(t *testing.T) {
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:    "",
+			CognitoClientIDEnvVar:     "",
+			CognitoClientSecretEnvVar: "",
+			CognitoRegionEnvVar:       "",
+		}, func() {
+			got, err := loadOIDCSettingsFromEnv()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got != nil {
+				t.Fatal("expected nil OIDC settings")
+			}
+		})
+	})
+	t.Run("error when partial configuration", func(t *testing.T) {
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:    "https://issuer.example/",
+			CognitoClientIDEnvVar:     "",
+			CognitoClientSecretEnvVar: "",
+		}, func() {
+			_, err := loadOIDCSettingsFromEnv()
+			if err == nil {
+				t.Fatal("expected error for partial Cognito OIDC env")
+			}
+		})
+	})
+	t.Run("loads full configuration and trims issuer", func(t *testing.T) {
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:    "https://issuer.example/",
+			CognitoClientIDEnvVar:     "client-id",
+			CognitoClientSecretEnvVar: "secret",
+			CognitoRegionEnvVar:       "us-east-1",
+		}, func() {
+			got, err := loadOIDCSettingsFromEnv()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.IssuerURL != "https://issuer.example" {
+				t.Fatalf("issuer: got %q", got.IssuerURL)
+			}
+			if got.ClientID != "client-id" || got.ClientSecret != "secret" {
+				t.Fatalf("unexpected client id/secret")
+			}
+			if got.Region != "us-east-1" {
+				t.Fatalf("region: got %q", got.Region)
+			}
+		})
+	})
+	t.Run("COGNITO_CLIENT_SECRET_FILE when env empty", func(t *testing.T) {
+		secretPath := writeTempFile(t, "file-secret-val")
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:              "https://issuer.example/",
+			CognitoClientIDEnvVar:               "id",
+			CognitoClientSecretEnvVar:           "",
+			CognitoClientSecretEnvVar + "_FILE": secretPath,
+		}, func() {
+			got, err := loadOIDCSettingsFromEnv()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.ClientSecret != "file-secret-val" {
+				t.Fatalf("secret from file: got %q", got.ClientSecret)
+			}
+		})
+	})
+	t.Run("OIDC_SCOPES comma-separated; openid prepended", func(t *testing.T) {
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:    "https://issuer.example/",
+			CognitoClientIDEnvVar:     "client-id",
+			CognitoClientSecretEnvVar: "secret",
+			OIDCScopesEnvVar:          "email, profile",
+		}, func() {
+			got, err := loadOIDCSettingsFromEnv()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			want := []string{"openid", "email", "profile"}
+			if !reflect.DeepEqual(got.Scopes, want) {
+				t.Fatalf("scopes: got %#v want %#v", got.Scopes, want)
+			}
+		})
+	})
+	t.Run("OIDC_SCOPES keeps single openid", func(t *testing.T) {
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:    "https://issuer.example/",
+			CognitoClientIDEnvVar:     "id",
+			CognitoClientSecretEnvVar: "secret",
+			OIDCScopesEnvVar:          "openid email phone",
+		}, func() {
+			got, err := loadOIDCSettingsFromEnv()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			want := []string{"openid", "email", "phone"}
+			if !reflect.DeepEqual(got.Scopes, want) {
+				t.Fatalf("scopes: got %#v want %#v", got.Scopes, want)
+			}
+		})
+	})
+	t.Run("OIDC_SCOPES empty tokens error", func(t *testing.T) {
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:    "https://issuer.example/",
+			CognitoClientIDEnvVar:     "id",
+			CognitoClientSecretEnvVar: "secret",
+			OIDCScopesEnvVar:          " , \t ,",
+		}, func() {
+			_, err := loadOIDCSettingsFromEnv()
+			if err == nil {
+				t.Fatal("expected error")
+			}
+		})
+	})
+	t.Run("Scopes nil when OIDC_SCOPES unset", func(t *testing.T) {
+		withEnv(map[string]string{
+			CognitoIssuerURLEnvVar:    "https://issuer.example/",
+			CognitoClientIDEnvVar:     "id",
+			CognitoClientSecretEnvVar: "secret",
+			OIDCScopesEnvVar:          "",
+		}, func() {
+			got, err := loadOIDCSettingsFromEnv()
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+			if got.Scopes != nil {
+				t.Fatalf("expected nil Scopes, got %#v", got.Scopes)
+			}
+		})
+	})
+}
+
+func TestGetOIDCSessionTTL(t *testing.T) {
+	t.Run("defaults to 3 days", func(t *testing.T) {
+		withEnv(map[string]string{
+			OIDCSessionTTLEnvVar: "",
+		}, func() {
+			d, err := getOIDCSessionTTL()
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if d != defaultOIDCSessionTTLSeconds*time.Second {
+				t.Fatalf("got %v", d)
+			}
+		})
+	})
+	t.Run("parses positive seconds", func(t *testing.T) {
+		withEnv(map[string]string{
+			OIDCSessionTTLEnvVar: "3600",
+		}, func() {
+			d, err := getOIDCSessionTTL()
+			if err != nil {
+				t.Fatalf("unexpected err: %v", err)
+			}
+			if d != time.Hour {
+				t.Fatalf("got %v", d)
+			}
+		})
+	})
+	t.Run("rejects non-positive", func(t *testing.T) {
+		for _, v := range []string{"0", "-5", "nope"} {
+			withEnv(map[string]string{
+				OIDCSessionTTLEnvVar: v,
+			}, func() {
+				_, err := getOIDCSessionTTL()
+				if err == nil {
+					t.Fatalf("expected error for %q", v)
+				}
+			})
+		}
+	})
+}
+
+func TestNewRedisClientFromEnv(t *testing.T) {
+	t.Run("nil when redis unset", func(t *testing.T) {
+		withEnv(map[string]string{
+			RedisURLEnvVar:  "",
+			RedisAddrEnvVar: "",
+		}, func() {
+			c, err := newRedisClientFromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			if c != nil {
+				t.Fatal("expected nil client")
+			}
+		})
+	})
+	t.Run("builds client from REDIS_URL", func(t *testing.T) {
+		withEnv(map[string]string{
+			RedisURLEnvVar:  "redis://:unused@localhost:6380/3",
+			RedisAddrEnvVar: "",
+		}, func() {
+			c, err := newRedisClientFromEnv()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer func() { _ = c.Close() }()
+			if c == nil {
+				t.Fatal("expected redis client")
+			}
+			opts := c.Options()
+			if opts.Addr != "localhost:6380" || opts.DB != 3 {
+				t.Fatalf("unexpected client options Addr=%s DB=%d", opts.Addr, opts.DB)
+			}
+		})
+	})
 }
 
 func TestGetPostgresDSN(t *testing.T) {

@@ -8,7 +8,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/migrations"
-	"github.com/mcpjungle/mcpjungle/internal/model"
 	configSvc "github.com/mcpjungle/mcpjungle/internal/service/config"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
@@ -21,7 +20,7 @@ import (
 	"gorm.io/gorm"
 )
 
-func newTestAPIServer(t *testing.T, httpPathPrefix string) *Server {
+func newTestAPIServer(t *testing.T, httpPathPrefix string, oidcCfg *OIDCSettings) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
@@ -61,6 +60,7 @@ func newTestAPIServer(t *testing.T, httpPathPrefix string) *Server {
 		ToolGroupService:  mustNewToolGroupService(t, db, mcpService),
 		Metrics:           telemetry.NewNoopCustomMetrics(),
 		HTTPPathPrefix:    httpPathPrefix,
+		OIDC:              oidcCfg,
 	})
 	testhelpers.AssertNoError(t, err)
 	testhelpers.AssertNoError(t, apiServer.InitDev())
@@ -72,6 +72,15 @@ func mustNewToolGroupService(t *testing.T, db *gorm.DB, mcpService *mcpSvc.MCPSe
 	svc, err := toolgroup.NewToolGroupService(db, mcpService)
 	testhelpers.AssertNoError(t, err)
 	return svc
+}
+
+func TestLoginRouteAbsentWhenOIDCDisabled(t *testing.T) {
+	s := newTestAPIServer(t, "/pfx", nil)
+	w := httptest.NewRecorder()
+	req, err := http.NewRequest(http.MethodGet, "/pfx/login", nil)
+	testhelpers.AssertNoError(t, err)
+	s.Router().ServeHTTP(w, req)
+	testhelpers.AssertEqual(t, http.StatusNotFound, w.Code)
 }
 
 func TestHealthEndpointRespectsPathPrefix(t *testing.T) {
@@ -87,7 +96,7 @@ func TestHealthEndpointRespectsPathPrefix(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			s := newTestAPIServer(t, tt.prefix)
+			s := newTestAPIServer(t, tt.prefix, nil)
 			w := httptest.NewRecorder()
 			req, err := http.NewRequest(http.MethodGet, tt.reqPath, nil)
 			testhelpers.AssertNoError(t, err)

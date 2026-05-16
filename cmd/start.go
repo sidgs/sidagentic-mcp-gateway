@@ -10,10 +10,12 @@ import (
 	"net/url"
 	"os"
 	"os/signal"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 
 	"github.com/joho/godotenv"
 	"github.com/mark3labs/mcp-go/server"
@@ -30,6 +32,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
 )
 
@@ -46,6 +49,23 @@ const (
 
 	// DefaultTenantIDEnvVar selects the tenant when the X-Tenant-ID header is omitted.
 	DefaultTenantIDEnvVar = "DEFAULT_TENANT_ID"
+
+	// Cognito / OIDC (optional dashboard login)
+	CognitoIssuerURLEnvVar    = "COGNITO_ISSUER_URL"
+	CognitoClientIDEnvVar     = "COGNITO_CLIENT_ID"
+	CognitoClientSecretEnvVar = "COGNITO_CLIENT_SECRET"
+	CognitoRegionEnvVar       = "COGNITO_REGION"
+
+	// Redis (optional OIDC dashboard session backing when Cognito/OIDC login is enabled)
+	RedisURLEnvVar       = "REDIS_URL"
+	RedisAddrEnvVar      = "REDIS_ADDR"
+	RedisPasswordEnvVar  = "REDIS_PASSWORD"
+	RedisDBEnvVar        = "REDIS_DB"
+	OIDCSessionTTLEnvVar = "OIDC_SESSION_TTL_SECONDS"
+	// OIDCScopesEnvVar sets OAuth2 scopes for the dashboard OIDC login flow (comma- or whitespace-separated). Empty uses server default (openid email profile). "openid" is added if omitted.
+	OIDCScopesEnvVar = "OIDC_SCOPES"
+	// PostLoginRedirectURLEnvVar is an optional absolute (https://…) or root-relative (/…) Location after OIDC callback success and after /logout.
+	PostLoginRedirectURLEnvVar = "POST_LOGIN_REDIRECT_URL"
 )
 
 const (
@@ -70,6 +90,9 @@ const (
 	// SessionIdleTimeoutSecondsDefault is the default idle timeout in seconds for stateful sessions.
 	SessionIdleTimeoutSecondsDefault = -1
 )
+
+// defaultOIDCSessionTTLSeconds is the cap for Cognito-backed dashboard cookie/session TTL when OIDC_SESSION_TTL_SECONDS is unset (3 days).
+const defaultOIDCSessionTTLSeconds = 259200
 
 var (
 	startServerCmdBindPort          string
@@ -269,6 +292,125 @@ func getEnvOrFile(envVar string) (string, error) {
 	return "", nil
 }
 
+// parseOIDCScopesEnv reads OIDC_SCOPES (comma- or whitespace-separated).
+// Empty/unset returns (nil, nil) to use server defaults (openid email profile).
+// The "openid" scope is prepended when missing; it is required for the ID-token flow.
+func parseOIDCScopesEnv() ([]string, error) {
+	raw := strings.TrimSpace(os.Getenv(OIDCScopesEnvVar))
+	if raw == "" {
+		return nil, nil
+	}
+	parts := strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || unicode.IsSpace(r)
+	})
+	out := make([]string, 0, len(parts))
+	for _, p := range parts {
+		p = strings.TrimSpace(p)
+		if p != "" {
+			out = append(out, p)
+		}
+	}
+	if len(out) == 0 {
+		return nil, fmt.Errorf("%s is set but contains no scope tokens", OIDCScopesEnvVar)
+	}
+	const oidcScopeOpenID = "openid"
+	if !slices.Contains(out, oidcScopeOpenID) {
+		out = append([]string{oidcScopeOpenID}, out...)
+	}
+	return out, nil
+}
+
+// loadOIDCSettingsFromEnv returns optional Cognito OIDC settings.
+// If none of the required variables are set, it returns (nil, nil).
+// If only a subset is set, it returns an error.
+func loadOIDCSettingsFromEnv() (*api.OIDCSettings, error) {
+	issuer := strings.TrimSpace(os.Getenv(CognitoIssuerURLEnvVar))
+	clientID := strings.TrimSpace(os.Getenv(CognitoClientIDEnvVar))
+	secret, err := getEnvOrFile(CognitoClientSecretEnvVar)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", CognitoClientSecretEnvVar, err)
+	}
+	secret = strings.TrimSpace(secret)
+	region := strings.TrimSpace(os.Getenv(CognitoRegionEnvVar))
+
+	if issuer == "" && clientID == "" && secret == "" {
+		return nil, nil
+	}
+	if issuer == "" || clientID == "" || secret == "" {
+		return nil, fmt.Errorf(
+			"partial Cognito OIDC configuration: set %s, %s, and %s together (optional: %s)",
+			CognitoIssuerURLEnvVar,
+			CognitoClientIDEnvVar,
+			CognitoClientSecretEnvVar,
+			CognitoRegionEnvVar,
+		)
+	}
+	issuer = strings.TrimSuffix(issuer, "/")
+	scopes, err := parseOIDCScopesEnv()
+	if err != nil {
+		return nil, err
+	}
+	return &api.OIDCSettings{
+		IssuerURL:    issuer,
+		ClientID:     clientID,
+		ClientSecret: secret,
+		Region:       region,
+		Scopes:       scopes,
+	}, nil
+}
+
+// getOIDCSessionTTL returns maximum OIDC dashboard session lifetime (seconds in env → duration).
+func getOIDCSessionTTL() (time.Duration, error) {
+	s := strings.TrimSpace(os.Getenv(OIDCSessionTTLEnvVar))
+	if s == "" {
+		return time.Duration(defaultOIDCSessionTTLSeconds) * time.Second, nil
+	}
+	sec, err := strconv.Atoi(s)
+	if err != nil || sec < 1 {
+		return 0, fmt.Errorf(
+			"invalid %s: %q — use a positive integer (session TTL in seconds)",
+			OIDCSessionTTLEnvVar, s,
+		)
+	}
+	return time.Duration(sec) * time.Second, nil
+}
+
+// newRedisClientFromEnv optionally builds a Redis client from REDIS_URL or REDIS_ADDR[/password/db].
+func newRedisClientFromEnv() (*redis.Client, error) {
+	rawURL := strings.TrimSpace(os.Getenv(RedisURLEnvVar))
+	if rawURL != "" {
+		opts, err := redis.ParseURL(rawURL)
+		if err != nil {
+			return nil, fmt.Errorf("parse %s: %w", RedisURLEnvVar, err)
+		}
+		return redis.NewClient(opts), nil
+	}
+
+	addr := strings.TrimSpace(os.Getenv(RedisAddrEnvVar))
+	if addr == "" {
+		return nil, nil
+	}
+
+	pw, err := getEnvOrFile(RedisPasswordEnvVar)
+	if err != nil {
+		return nil, fmt.Errorf("read %s: %w", RedisPasswordEnvVar, err)
+	}
+
+	db := 0
+	if rawDB := strings.TrimSpace(os.Getenv(RedisDBEnvVar)); rawDB != "" {
+		db, err = strconv.Atoi(rawDB)
+		if err != nil || db < 0 {
+			return nil, fmt.Errorf("invalid %s: %q", RedisDBEnvVar, rawDB)
+		}
+	}
+
+	return redis.NewClient(&redis.Options{
+		Addr:     addr,
+		Password: strings.TrimSpace(pw),
+		DB:       db,
+	}), nil
+}
+
 // getPostgresDSN constructs a Postgres DSN from individual Postgres-specific environment variables & files.
 // It is used to provide an alternative way to specify Postgres connection details
 // in case the user doesn't want to use a full DATABASE_URL.
@@ -352,6 +494,15 @@ func getSessionIdleTimeout() (int, error) {
 
 func runStartServer(cmd *cobra.Command, args []string) error {
 	_ = godotenv.Load()
+
+	var oidcRedis *redis.Client
+	defer func() {
+		if oidcRedis != nil {
+			if err := oidcRedis.Close(); err != nil {
+				log.Printf("[server] redis close: %v\n", err)
+			}
+		}
+	}()
 
 	desiredServerMode, err := getDesiredServerMode(cmd)
 	if err != nil {
@@ -474,20 +625,55 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	oidcSettings, err := loadOIDCSettingsFromEnv()
+	if err != nil {
+		return err
+	}
+	var oidcSessionTTL time.Duration
+	if oidcSettings != nil {
+		log.Printf("[server] Cognito OIDC login enabled (issuer=%s region=%q)", oidcSettings.IssuerURL, oidcSettings.Region)
+		if len(oidcSettings.Scopes) > 0 {
+			log.Printf("[server] OIDC OAuth scopes: %v", oidcSettings.Scopes)
+		}
+		oidcSessionTTL, err = getOIDCSessionTTL()
+		if err != nil {
+			return err
+		}
+		oidcRedis, err = newRedisClientFromEnv()
+		if err != nil {
+			return err
+		}
+		if oidcRedis != nil {
+			pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+			pingErr := oidcRedis.Ping(pingCtx).Err()
+			cancel()
+			if pingErr != nil {
+				return fmt.Errorf("redis ping (OIDC sessions): %w", pingErr)
+			}
+			log.Printf("[server] OIDC dashboard sessions: Redis (max TTL %s)", oidcSessionTTL)
+		} else {
+			log.Printf("[server] OIDC dashboard sessions: in-process (set %s or %s for multi-replica)", RedisURLEnvVar, RedisAddrEnvVar)
+		}
+	}
+
 	// create the API server
 	opts := &api.ServerOptions{
-		MCPProxyServer:    mcpProxyServer,
-		SseMcpProxyServer: sseMcpProxyServer,
-		MCPService:        mcpService,
-		MCPClientService:  mcpClientService,
-		ConfigService:     configService,
-		UserService:       userService,
-		ToolGroupService:  toolGroupService,
-		DashboardService:  dashboardService,
-		OtelProviders:     otelProviders,
-		Metrics:           mcpMetrics,
-		HTTPPathPrefix:    strings.TrimSpace(os.Getenv(HTTPPathPrefixEnvVar)),
-		DefaultTenantID:   defaultTenantID,
+		MCPProxyServer:       mcpProxyServer,
+		SseMcpProxyServer:    sseMcpProxyServer,
+		MCPService:           mcpService,
+		MCPClientService:     mcpClientService,
+		ConfigService:        configService,
+		UserService:          userService,
+		ToolGroupService:     toolGroupService,
+		DashboardService:     dashboardService,
+		OtelProviders:        otelProviders,
+		Metrics:              mcpMetrics,
+		HTTPPathPrefix:       strings.TrimSpace(os.Getenv(HTTPPathPrefixEnvVar)),
+		OIDC:                 oidcSettings,
+		OIDCRedis:            oidcRedis,
+		OIDCSessionTTL:       oidcSessionTTL,
+		PostLoginRedirectURL: strings.TrimSpace(os.Getenv(PostLoginRedirectURLEnvVar)),
+		DefaultTenantID:      defaultTenantID,
 	}
 	s, err := api.NewServer(opts)
 	if err != nil {

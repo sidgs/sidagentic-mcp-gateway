@@ -8,3 +8,16 @@ data:
   {{ range $key, $value := .Values.env }}
   {{ $key }}: {{ $value | quote }}
   {{ end }}
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: {{ include "mcp-gateway.fullname" . }}-secret
+  labels:
+    {{- include "mcp-gateway.labels" . | nindent 4 }}
+type: Opaque
+data:
+  {{ range $key, $value := .Values.secrets }}
+  {{ $key }}: {{ $value | b64enc | quote }}
+  {{ end }}

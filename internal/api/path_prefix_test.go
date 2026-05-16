@@ -20,3 +20,21 @@ func TestNormalizeHTTPPathPrefix(t *testing.T) {
 		}
 	}
 }
+
+func TestOIDCUIRootRelativePath(t *testing.T) {
+	t.Parallel()
+	tests := []struct {
+		prefix, suffix, want string
+	}{
+		{"", "login", "/login"},
+		{"", "logout", "/logout"},
+		{"/ai/v1/sami-mcp-gateway", "login", "/ai/v1/sami-mcp-gateway/login"},
+		{"ai/v1/gw/", "logout", "/ai/v1/gw/logout"},
+	}
+	for _, tt := range tests {
+		got := OIDCUIRootRelativePath(tt.prefix, tt.suffix)
+		if got != tt.want {
+			t.Errorf("OIDCUIRootRelativePath(%q, %q) = %q; want %q", tt.prefix, tt.suffix, got, tt.want)
+		}
+	}
+}

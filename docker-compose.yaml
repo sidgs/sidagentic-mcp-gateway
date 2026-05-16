@@ -20,6 +20,13 @@ services:
       retries: 5
     restart: unless-stopped
 
+  redis:
+    image: redis:7-alpine
+    container_name: sami-mcp-gateway-redis
+    ports:
+      - "${REDIS_HOST_PORT:-6379}:6379"
+    restart: unless-stopped
+
   api:
     image: sidgs.jfrog.io/sami/sami-mcp-gateway:${SAMI_MCP_GATEWAY_IMAGE_TAG:-latest-stdio}
     container_name: sami-mcp-gateway-server
@@ -34,6 +41,17 @@ services:
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       MCP_SERVER_INIT_REQ_TIMEOUT_SEC: ${MCP_SERVER_INIT_REQ_TIMEOUT_SEC:-10}
       HTTP_PATH_PREFIX: ${HTTP_PATH_PREFIX:-/api/v1/sami-mcp-gateway}
+      COGNITO_ISSUER_URL: ${COGNITO_ISSUER_URL:-https://cognito-idp.us-east-1.amazonaws.com/us-east-1_D0dfwkRq0}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-1k5ltdnfpgs208e2j3eltsmqbn}
+      COGNITO_CLIENT_SECRET: ${COGNITO_CLIENT_SECRET:-38qm6oububnuafmsioncaagh2p932kn1bk134rocuc3a2ngctbj}
+      COGNITO_REGION: ${COGNITO_REGION:-us-east-1}
+      # OIDC dashboard sessions (shared across replicas when pointing at Redis)
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      OIDC_SESSION_TTL_SECONDS: ${OIDC_SESSION_TTL_SECONDS:-259200}
+      OIDC_SCOPES: ${OIDC_SCOPES:-email openid phone aws.cognito.signin.user.admin}
+      # Optional: https://host/path or root-relative path (e.g. /dashboard). Empty = gateway root (/ or HTTP_PATH_PREFIX/).
+      POST_LOGIN_REDIRECT_URL: ${POST_LOGIN_REDIRECT_URL:-/#home}
+
     ports:
       - "${HOST_PORT:-8080}:8080"
     volumes:
@@ -45,6 +63,8 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      redis:
+        condition: service_started
     restart: always
 
 volumes:

@@ -1,4 +1,5 @@
 export type AppSection =
+  | "home"
   | "servers"
   | "tools"
   | "tool_groups"
@@ -28,6 +29,20 @@ export interface DashboardOverviewResponse {
   resource_count: number;
   empty_state?: DashboardEmptyState;
   troubleshooting?: string[];
+  /** Present when Cognito/OIDC dashboard login is enabled on the gateway. */
+  oidc_login_path?: string;
+  /** Sign out clears the OIDC session and returns to the dashboard entry URL. */
+  oidc_logout_path?: string;
+}
+
+/** Response from GET /dashboard/auth-status (no login required when OIDC is on). */
+export interface DashboardAuthStatusResponse {
+  authenticated: boolean;
+  oidc_enabled: boolean;
+  login_path?: string;
+  logout_path?: string;
+  email?: string;
+  sub?: string;
 }
 
 export interface DashboardServerConfigSummary {
