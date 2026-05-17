@@ -80,6 +80,12 @@ var listGroupsCmd = &cobra.Command{
 	RunE:  runListGroups,
 }
 
+var listPromptGroupsCmd = &cobra.Command{
+	Use:   "prompt-groups",
+	Short: "List prompt groups",
+	RunE:  runListPromptGroups,
+}
+
 func init() {
 	listToolsCmd.Flags().StringVar(
 		&listToolsCmdServerName,
@@ -115,6 +121,7 @@ func init() {
 	listCmd.AddCommand(listMcpClientsCmd)
 	listCmd.AddCommand(listUsersCmd)
 	listCmd.AddCommand(listGroupsCmd)
+	listCmd.AddCommand(listPromptGroupsCmd)
 
 	rootCmd.AddCommand(listCmd)
 }
@@ -316,6 +323,30 @@ func runListGroups(cmd *cobra.Command, args []string) error {
 
 	if len(groups) == 0 {
 		cmd.Println("There are no tool groups in the registry")
+		return nil
+	}
+	for i, g := range groups {
+		cmd.Printf("%d. %s\n", i+1, g.Name)
+		if g.Description != "" {
+			cmd.Println(g.Description)
+		}
+
+		if i < len(groups)-1 {
+			cmd.Println()
+		}
+	}
+
+	return nil
+}
+
+func runListPromptGroups(cmd *cobra.Command, args []string) error {
+	groups, err := apiClient.ListPromptGroups()
+	if err != nil {
+		return fmt.Errorf("failed to list prompt groups: %w", err)
+	}
+
+	if len(groups) == 0 {
+		cmd.Println("There are no prompt groups in the registry")
 		return nil
 	}
 	for i, g := range groups {

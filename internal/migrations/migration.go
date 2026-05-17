@@ -30,6 +30,9 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(&model.ToolGroup{}); err != nil {
 		return fmt.Errorf("auto‑migration failed for ToolGroup model: %v", err)
 	}
+	if err := db.AutoMigrate(&model.PromptGroup{}); err != nil {
+		return fmt.Errorf("auto-migration failed for PromptGroup model: %v", err)
+	}
 	if err := db.AutoMigrate(&model.Prompt{}); err != nil {
 		return fmt.Errorf("auto‑migration failed for Prompt model: %v", err)
 	}
@@ -66,6 +69,7 @@ func backfillTenantColumns(db *gorm.DB) error {
 		ns.TableName("User"),
 		ns.TableName("McpClient"),
 		ns.TableName("ToolGroup"),
+		ns.TableName("PromptGroup"),
 		ns.TableName("UpstreamOAuthPendingSession"),
 		ns.TableName("UpstreamOAuthToken"),
 	} {

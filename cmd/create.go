@@ -77,6 +77,16 @@ var createToolGroupCmd = &cobra.Command{
 	RunE: runCreateToolGroup,
 }
 
+var createPromptGroupCmd = &cobra.Command{
+	Use:   "prompt-group --conf <file>",
+	Short: "Create a group of MCP prompts",
+	Long: "Create a prompt group that exposes a subset of MCP prompts at a dedicated URL.\n\n" +
+		"Configure members with 'included_prompts', 'included_servers', and optional 'excluded_prompts'.\n\n" +
+		"Clients connect at:\n" +
+		"    /v0/prompt-groups/{group_name}/mcp\n",
+	RunE: runCreatePromptGroup,
+}
+
 var (
 	createMcpClientCmdAllowedServers string
 	createMcpClientCmdDescription    string
@@ -87,6 +97,8 @@ var (
 	createUserCmdConfigFilePath string
 
 	createToolGroupConfigFilePath string
+
+	createPromptGroupConfigFilePath string
 )
 
 func init() {
@@ -144,9 +156,19 @@ func init() {
 	)
 	_ = createToolGroupCmd.MarkFlagRequired("conf")
 
+	createPromptGroupCmd.Flags().StringVarP(
+		&createPromptGroupConfigFilePath,
+		"conf",
+		"c",
+		"",
+		"Path to a JSON configuration file for the prompt group",
+	)
+	_ = createPromptGroupCmd.MarkFlagRequired("conf")
+
 	createCmd.AddCommand(createMcpClientCmd)
 	createCmd.AddCommand(createUserCmd)
 	createCmd.AddCommand(createToolGroupCmd)
+	createCmd.AddCommand(createPromptGroupCmd)
 
 	rootCmd.AddCommand(createCmd)
 }
@@ -296,6 +318,41 @@ func runCreateToolGroup(cmd *cobra.Command, args []string) error {
 	cmd.Println("    " + resp.SSEMessageEndpoint + "\n")
 
 	return nil
+}
+
+func runCreatePromptGroup(cmd *cobra.Command, args []string) error {
+	group, err := readPromptGroupConfig(createPromptGroupConfigFilePath)
+	if err != nil {
+		return fmt.Errorf("failed to read config file %s: %w", createPromptGroupConfigFilePath, err)
+	}
+
+	resp, err := apiClient.CreatePromptGroup(group)
+	if err != nil {
+		return fmt.Errorf("failed to create prompt group: %w", err)
+	}
+
+	cmd.Printf("Prompt group %s created successfully\n", group.Name)
+	cmd.Print("Streamable HTTP endpoint:\n\n")
+	cmd.Println("    " + resp.StreamableHTTPEndpoint + "\n")
+	cmd.Print("SSE endpoints:\n\n")
+	cmd.Println("    " + resp.SSEEndpoint)
+	cmd.Println("    " + resp.SSEMessageEndpoint + "\n")
+	return nil
+}
+
+func readPromptGroupConfig(filePath string) (*types.PromptGroup, error) {
+	var input types.PromptGroup
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		return &input, fmt.Errorf("failed to read config file %s: %w", filePath, err)
+	}
+	if err := json.Unmarshal(data, &input); err != nil {
+		return &input, fmt.Errorf("failed to parse config file: %w", err)
+	}
+	if err := configresolver.ResolveEnvVars(&input); err != nil {
+		return &input, fmt.Errorf("failed to resolve config file environment variables: %w", err)
+	}
+	return &input, nil
 }
 
 func readToolGroupConfig(filePath string) (*types.ToolGroup, error) {

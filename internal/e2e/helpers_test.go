@@ -33,6 +33,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
+	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	userSvc "github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
@@ -148,17 +149,20 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 	usrSvc := userSvc.NewUserService(db)
 	tgSvc, err := toolgroup.NewToolGroupService(db, mcpService)
 	require.NoError(t, err)
+	pgSvc, err := promptgroup.NewPromptGroupService(db, mcpService)
+	require.NoError(t, err)
 
 	apiServer, err := api.NewServer(&api.ServerOptions{
-		MCPProxyServer:    mcpProxy,
-		SseMcpProxyServer: sseMcpProxy,
-		MCPService:        mcpService,
-		MCPClientService:  mcpclient.NewMCPClientService(db),
-		ConfigService:     cfgSvc,
-		DashboardService:  dashboard.NewService(db, false),
-		UserService:       usrSvc,
-		ToolGroupService:  tgSvc,
-		Metrics:           telemetry.NewNoopCustomMetrics(),
+		MCPProxyServer:     mcpProxy,
+		SseMcpProxyServer:  sseMcpProxy,
+		MCPService:         mcpService,
+		MCPClientService:   mcpclient.NewMCPClientService(db),
+		ConfigService:      cfgSvc,
+		DashboardService:   dashboard.NewService(db, false),
+		UserService:        usrSvc,
+		ToolGroupService:   tgSvc,
+		PromptGroupService: pgSvc,
+		Metrics:            telemetry.NewNoopCustomMetrics(),
 	})
 	require.NoError(t, err)
 

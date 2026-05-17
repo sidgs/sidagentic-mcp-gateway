@@ -27,7 +27,7 @@ func TestCreateCommandStructure(t *testing.T) {
 
 	// Test subcommands count
 	subcommands := createCmd.Commands()
-	testhelpers.AssertEqual(t, 3, len(subcommands))
+	testhelpers.AssertEqual(t, 4, len(subcommands))
 }
 
 func TestCreateMcpClientSubcommand(t *testing.T) {
@@ -94,6 +94,19 @@ func TestCreateToolGroupSubcommand(t *testing.T) {
 	testhelpers.AssertTrue(t, len(confFlag.Usage) > 0, "Conf flag should have usage description")
 }
 
+func TestCreatePromptGroupSubcommand(t *testing.T) {
+	testhelpers.AssertEqual(t, "prompt-group --conf <file>", createPromptGroupCmd.Use)
+	testhelpers.AssertEqual(t, "Create a group of MCP prompts", createPromptGroupCmd.Short)
+	testhelpers.AssertNotNil(t, createPromptGroupCmd.Long)
+	testhelpers.AssertTrue(t, len(createPromptGroupCmd.Long) > 0, "Long description should not be empty")
+
+	testhelpers.AssertNotNil(t, createPromptGroupCmd.RunE)
+
+	confFlag := createPromptGroupCmd.Flags().Lookup("conf")
+	testhelpers.AssertNotNil(t, confFlag)
+	testhelpers.AssertTrue(t, len(confFlag.Usage) > 0, "Conf flag should have usage description")
+}
+
 func TestCreateCommandVariables(t *testing.T) {
 	// Test that command variables are properly initialized to empty values
 	testhelpers.AssertEqual(t, "", createMcpClientCmdAllowedServers)
@@ -101,6 +114,7 @@ func TestCreateCommandVariables(t *testing.T) {
 	testhelpers.AssertEqual(t, "", createMcpClientCmdConfigFilePath)
 	testhelpers.AssertEqual(t, "", createUserCmdConfigFilePath)
 	testhelpers.AssertEqual(t, "", createToolGroupConfigFilePath)
+	testhelpers.AssertEqual(t, "", createPromptGroupConfigFilePath)
 }
 
 // Test allow list parsing logic
@@ -150,7 +164,7 @@ func TestCreateCommandIntegration(t *testing.T) {
 
 	// Test all create subcommands are properly configured
 	subcommands := createCmd.Commands()
-	expectedSubcommands := []string{"mcp-client", "user", "group"}
+	expectedSubcommands := []string{"mcp-client", "user", "group", "prompt-group"}
 
 	testhelpers.AssertEqual(t, len(expectedSubcommands), len(subcommands))
 

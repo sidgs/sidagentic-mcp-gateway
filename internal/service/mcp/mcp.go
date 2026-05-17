@@ -46,6 +46,11 @@ type MCPService struct {
 	// (registered or (re)enabled) in mcpjungle.
 	toolAdditionCallback ToolAdditionCallback
 
+	// promptDeletionCallback is invoked when prompts are removed from the global MCP proxy (deregister/disable).
+	promptDeletionCallback PromptDeletionCallback
+	// promptAdditionCallback is invoked when a prompt is added to the global proxy (register/re-enable).
+	promptAdditionCallback PromptAdditionCallback
+
 	metrics telemetry.CustomMetrics
 
 	mcpServerInitReqTimeoutSec int
@@ -89,6 +94,9 @@ func NewMCPService(c *ServiceConfig) (*MCPService, error) {
 		// initialize the callbacks to NOOP functions
 		toolDeletionCallback: func(toolNames ...string) {},
 		toolAdditionCallback: func(toolName string) error { return nil },
+
+		promptDeletionCallback: func(qualifiedPromptNames ...string) {},
+		promptAdditionCallback: func(qualifiedPromptName string) error { return nil },
 
 		metrics: c.Metrics,
 

@@ -24,7 +24,7 @@ func (s *Server) createToolGroupHandler() gin.HandlerFunc {
 			return
 		}
 		resp := &types.CreateToolGroupResponse{
-			ToolGroupEndpoints: getToolGroupEndpoints(c, input.Name),
+			ToolGroupEndpoints: s.getToolGroupEndpoints(c, input.Name),
 		}
 		c.JSON(http.StatusCreated, resp)
 	}
@@ -101,7 +101,7 @@ func (s *Server) getToolGroupHandler() gin.HandlerFunc {
 				Name:        group.Name,
 				Description: group.Description,
 			},
-			ToolGroupEndpoints: getToolGroupEndpoints(c, group.Name),
+			ToolGroupEndpoints: s.getToolGroupEndpoints(c, group.Name),
 		}
 
 		// Get included tools
@@ -308,6 +308,10 @@ func (s *Server) toolGroupMCPServerCallHandler() gin.HandlerFunc {
 	}
 }
 
+// toolGroupProxyPathPrefix returns the root path for a tool group's MCP/SSE routes: [HTTP_PATH_PREFIX]/v0/groups/<name>.
+func (s *Server) toolGroupProxyPathPrefix(groupName string) string {
+	return s.v0SubgroupMountBasePath("groups", groupName)
+}
 // getGroupSseServer returns a server.SSEServer for a specific group, creating one if it doesn't already exist.
 func (s *Server) getGroupSseServer(c *gin.Context, groupName string) (*server.SSEServer, error) {
 	tid := tenant.MustFromContext(c.Request.Context())
@@ -325,7 +329,7 @@ func (s *Server) getGroupSseServer(c *gin.Context, groupName string) (*server.SS
 	sseServer := server.NewSSEServer(
 		groupSseMcpServer,
 		server.WithDynamicBasePath(func(r *http.Request, sessionID string) string {
-			return fmt.Sprintf("%s/groups/%s", V0PathPrefix, groupName)
+			return s.toolGroupProxyPathPrefix(groupName)
 		}),
 	)
 
@@ -372,17 +376,13 @@ func (s *Server) toolGroupSseMCPServerCallMessageHandler() gin.HandlerFunc {
 
 // getToolGroupEndpoints deduces the proxy MCP server endpoint URLs for a given tool group.
 // It returns the streamable HTTP endpoint and the SSE endpoints
-func getToolGroupEndpoints(c *gin.Context, groupName string) *types.ToolGroupEndpoints {
-	// This logic of creating the API endpoints is duplicated from internal/api/server.go
-	// TODO: centralize this logic into one place and use that everywhere.
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
-	}
+func (s *Server) getToolGroupEndpoints(c *gin.Context, groupName string) *types.ToolGroupEndpoints {
+	scheme := s.publicSchemeForURLs(c)
+	basePath := s.toolGroupProxyPathPrefix(groupName)
 	endpointURL := &url.URL{
 		Scheme: scheme,
 		Host:   c.Request.Host,
-		Path:   fmt.Sprintf("%s/groups/%s", V0PathPrefix, groupName),
+		Path:   basePath,
 	}
 	baseEndpoint := endpointURL.String()
 

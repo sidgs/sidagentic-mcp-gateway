@@ -36,6 +36,14 @@ var getGroupCmd = &cobra.Command{
 	RunE: runGetGroup,
 }
 
+var getPromptGroupCmd = &cobra.Command{
+	Use:   "prompt-group [name]",
+	Args:  cobra.ExactArgs(1),
+	Short: "Get information about a specific prompt group",
+	Long: "Get prompt group configuration and MCP endpoint URLs for clients.\n",
+	RunE: runGetPromptGroup,
+}
+
 var getPromptCmd = &cobra.Command{
 	Use:   "prompt [name]",
 	Args:  cobra.ExactArgs(1),
@@ -74,6 +82,7 @@ func init() {
 	)
 
 	getCmd.AddCommand(getGroupCmd)
+	getCmd.AddCommand(getPromptGroupCmd)
 	getCmd.AddCommand(getPromptCmd)
 	getCmd.AddCommand(getResourceCmd)
 	rootCmd.AddCommand(getCmd)
@@ -135,6 +144,66 @@ func runGetGroup(cmd *cobra.Command, args []string) error {
 
 	cmd.Println(
 		"NOTE: If a tool in this group is disabled globally or has been deleted, " +
+			"then it will not be available via the group's MCP endpoint.",
+	)
+
+	return nil
+}
+
+func runGetPromptGroup(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	group, err := apiClient.GetPromptGroup(name)
+	if err != nil {
+		return fmt.Errorf("failed to get prompt group: %w", err)
+	}
+
+	cmd.Println(group.Name)
+	if group.Description != "" {
+		cmd.Println()
+		cmd.Println("Description: " + group.Description)
+	}
+
+	cmd.Println()
+	cmd.Println("MCP Server streamable http endpoint:")
+	cmd.Println(group.StreamableHTTPEndpoint)
+	cmd.Println()
+	cmd.Println("MCP server SSE endpoints:")
+	cmd.Println(group.SSEEndpoint)
+	cmd.Println(group.SSEMessageEndpoint)
+	cmd.Println()
+
+	if len(group.IncludedPrompts) == 0 {
+		cmd.Println("Included Prompts: None")
+	} else {
+		cmd.Println("Included Prompts:")
+		for i, p := range group.IncludedPrompts {
+			cmd.Printf("%d. %s\n", i+1, p)
+		}
+	}
+	cmd.Println()
+
+	if len(group.IncludedServers) == 0 {
+		cmd.Println("Included Servers: None")
+	} else {
+		cmd.Println("Included Servers:")
+		for i, s := range group.IncludedServers {
+			cmd.Printf("%d. %s\n", i+1, s)
+		}
+	}
+	cmd.Println()
+
+	if len(group.ExcludedPrompts) == 0 {
+		cmd.Println("Excluded Prompts: None")
+	} else {
+		cmd.Println("Excluded Prompts:")
+		for i, p := range group.ExcludedPrompts {
+			cmd.Printf("%d. %s\n", i+1, p)
+		}
+	}
+	cmd.Println()
+
+	cmd.Println(
+		"NOTE: If a prompt in this group is disabled globally or has been deleted, " +
 			"then it will not be available via the group's MCP endpoint.",
 	)
 

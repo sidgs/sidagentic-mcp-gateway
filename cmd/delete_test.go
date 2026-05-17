@@ -22,7 +22,7 @@ func TestDeleteCommandStructure(t *testing.T) {
 
 	// Test subcommands count
 	subcommands := deleteCmd.Commands()
-	testhelpers.AssertEqual(t, 3, len(subcommands))
+	testhelpers.AssertEqual(t, 4, len(subcommands))
 }
 
 func TestDeleteMcpClientSubcommand(t *testing.T) {
@@ -101,6 +101,30 @@ func TestDeleteToolGroupSubcommand(t *testing.T) {
 	}
 }
 
+func TestDeletePromptGroupSubcommand(t *testing.T) {
+	// Test command properties
+	testhelpers.AssertEqual(t, "prompt-group [name]", deletePromptGroupCmd.Use)
+	testhelpers.AssertEqual(t, "Delete a prompt group", deletePromptGroupCmd.Short)
+	testhelpers.AssertNotNil(t, deletePromptGroupCmd.Long)
+	testhelpers.AssertTrue(t, len(deletePromptGroupCmd.Long) > 0, "Long description should not be empty")
+
+	// Test command functions
+	testhelpers.AssertNotNil(t, deletePromptGroupCmd.RunE)
+	testhelpers.AssertNotNil(t, deletePromptGroupCmd.Args)
+
+	// Test long description content
+	longDesc := deletePromptGroupCmd.Long
+	expectedPhrases := []string{
+		"Delete a prompt group from mcpjungle",
+		"/v0/prompt-groups/",
+	}
+
+	for _, phrase := range expectedPhrases {
+		testhelpers.AssertTrue(t, testhelpers.Contains(longDesc, phrase),
+			"Expected long description to contain: "+phrase)
+	}
+}
+
 // Integration tests for delete commands
 func TestDeleteCommandIntegration(t *testing.T) {
 	// Verify that deleteCmd is properly initialized
@@ -108,7 +132,7 @@ func TestDeleteCommandIntegration(t *testing.T) {
 
 	// Test all delete subcommands are properly configured
 	subcommands := deleteCmd.Commands()
-	expectedSubcommands := []string{"mcp-client", "user", "group"}
+	expectedSubcommands := []string{"mcp-client", "user", "group", "prompt-group"}
 
 	testhelpers.AssertEqual(t, len(expectedSubcommands), len(subcommands))
 
@@ -130,4 +154,5 @@ func TestDeleteCommandArgumentValidation(t *testing.T) {
 	testhelpers.AssertNotNil(t, deleteMcpClientCmd.Args)
 	testhelpers.AssertNotNil(t, deleteUserCmd.Args)
 	testhelpers.AssertNotNil(t, deleteToolGroupCmd.Args)
+	testhelpers.AssertNotNil(t, deletePromptGroupCmd.Args)
 }

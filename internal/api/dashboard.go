@@ -2,11 +2,23 @@ package api
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
+
+func maskBearerToken(token string) string {
+	t := strings.TrimSpace(token)
+	if t == "" {
+		return ""
+	}
+	if len(t) <= 8 {
+		return "••••••••"
+	}
+	return t[:4] + "…" + t[len(t)-4:]
+}
 
 func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -107,6 +119,16 @@ func (s *Server) dashboardDiagnosticsHandler() gin.HandlerFunc {
 		if err != nil {
 			handleServiceError(c, err)
 			return
+		}
+		if model.IsEnterpriseMode(mode) {
+			admin, err := s.userService.GetBootstrapAdminUser(c.Request.Context())
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if admin != nil && admin.AccessToken != "" {
+				resp.AdminAccessTokenMasked = maskBearerToken(admin.AccessToken)
+			}
 		}
 		c.JSON(http.StatusOK, resp)
 	}

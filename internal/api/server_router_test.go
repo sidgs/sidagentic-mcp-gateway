@@ -12,6 +12,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
+	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	userSvc "github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
@@ -56,8 +57,9 @@ func newTestAPIServer(t *testing.T, httpPathPrefix string, oidcCfg *OIDCSettings
 		MCPClientService:  mcpclient.NewMCPClientService(db),
 		ConfigService:     cfgSvc,
 		DashboardService:  dashboard.NewService(db, false),
-		UserService:       userSvc.NewUserService(db),
-		ToolGroupService:  mustNewToolGroupService(t, db, mcpService),
+		UserService:         userSvc.NewUserService(db),
+		ToolGroupService:    mustNewToolGroupService(t, db, mcpService),
+		PromptGroupService:  mustNewPromptGroupService(t, db, mcpService),
 		Metrics:           telemetry.NewNoopCustomMetrics(),
 		HTTPPathPrefix:    httpPathPrefix,
 		OIDC:              oidcCfg,
@@ -70,6 +72,13 @@ func newTestAPIServer(t *testing.T, httpPathPrefix string, oidcCfg *OIDCSettings
 func mustNewToolGroupService(t *testing.T, db *gorm.DB, mcpService *mcpSvc.MCPService) *toolgroup.ToolGroupService {
 	t.Helper()
 	svc, err := toolgroup.NewToolGroupService(db, mcpService)
+	testhelpers.AssertNoError(t, err)
+	return svc
+}
+
+func mustNewPromptGroupService(t *testing.T, db *gorm.DB, mcpService *mcpSvc.MCPService) *promptgroup.PromptGroupService {
+	t.Helper()
+	svc, err := promptgroup.NewPromptGroupService(db, mcpService)
 	testhelpers.AssertNoError(t, err)
 	return svc
 }

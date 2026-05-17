@@ -100,8 +100,11 @@ func TestMCPServiceInitialization(t *testing.T) {
 	if mcpService.toolDeletionCallback == nil {
 		t.Error("Expected toolDeletionCallback to be initialized")
 	}
-	if mcpService.toolAdditionCallback == nil {
-		t.Error("Expected toolAdditionCallback to be initialized")
+	if mcpService.promptDeletionCallback == nil {
+		t.Error("Expected promptDeletionCallback to be initialized")
+	}
+	if mcpService.promptAdditionCallback == nil {
+		t.Error("Expected promptAdditionCallback to be initialized")
 	}
 }
 

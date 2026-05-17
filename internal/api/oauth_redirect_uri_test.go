@@ -72,3 +72,45 @@ func TestOAuthRedirectURL_DerivedFromRequest(t *testing.T) {
 
 	require.Equal(t, "https://app.dev/pfx/auth/callback", s.oauthRedirectURL(c))
 }
+
+func TestNormalizePublicURLScheme(t *testing.T) {
+	t.Parallel()
+
+	got, err := normalizePublicURLScheme("")
+	require.NoError(t, err)
+	require.Equal(t, "", got)
+
+	got, err = normalizePublicURLScheme("HTTPS")
+	require.NoError(t, err)
+	require.Equal(t, "https", got)
+
+	_, err = normalizePublicURLScheme("ftp")
+	require.Error(t, err)
+}
+
+func TestPublicGatewayRoot_PublicURLSchemeForcesHTTPS(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{httpPathPrefix: "/pfx", publicURLScheme: "https"}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.Host = "app.dev"
+	c.Request.URL.Host = ""
+
+	require.Equal(t, "https://app.dev/pfx", s.publicGatewayRoot(c))
+	require.Equal(t, "https://app.dev/pfx/auth/callback", s.oauthRedirectURL(c))
+	require.True(t, s.oauthCookieSecure(c))
+}
+
+func TestPublicGatewayRoot_PublicURLSchemeForcesHTTP(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{httpPathPrefix: "", publicURLScheme: "http"}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.Host = "localhost:8080"
+	c.Request.Header.Set("X-Forwarded-Proto", "https")
+
+	require.Equal(t, "http://localhost:8080", s.publicGatewayRoot(c))
+	require.False(t, s.oauthCookieSecure(c))
+}

@@ -16,6 +16,60 @@ import (
 	"gorm.io/gorm"
 )
 
+// PromptDeletionCallback is invoked when one or more prompts are removed from the global MCP proxy
+// (deregister server or disable). Names are tenant-qualified proxy names (tenant::server__prompt).
+type PromptDeletionCallback func(qualifiedPromptNames ...string)
+
+// PromptAdditionCallback is invoked when a prompt is registered or re-enabled on the global MCP proxy.
+// The argument is the tenant-qualified proxy name.
+type PromptAdditionCallback func(qualifiedPromptName string) error
+
+// SetPromptDeletionCallback registers a listener for prompt removal from the global proxy.
+func (m *MCPService) SetPromptDeletionCallback(cb PromptDeletionCallback) {
+	m.promptDeletionCallback = cb
+}
+
+// SetPromptAdditionCallback registers a listener for prompt additions to the global proxy.
+func (m *MCPService) SetPromptAdditionCallback(cb PromptAdditionCallback) {
+	m.promptAdditionCallback = cb
+}
+
+func (m *MCPService) notifyPromptDeletion(qualifiedNames ...string) {
+	m.promptDeletionCallback(qualifiedNames...)
+}
+
+func (m *MCPService) notifyPromptAddition(qualifiedName string) {
+	if err := m.promptAdditionCallback(qualifiedName); err != nil {
+		log.Printf("[ERROR] prompt addition callback failed for prompt %s: %v", qualifiedName, err)
+	}
+}
+
+// GetPromptParentServer returns the MCP server model for a canonical prompt name (server__prompt).
+func (m *MCPService) GetPromptParentServer(ctx context.Context, name string) (*model.McpServer, error) {
+	serverName, _, ok := splitServerPromptName(name)
+	if !ok {
+		return nil, fmt.Errorf("prompt name does not contain a %s separator: %w", serverPromptNameSep, apierrors.ErrInvalidInput)
+	}
+	return m.GetMcpServer(ctx, serverName)
+}
+
+// QualifiedProxyPrompt builds an mcp.Prompt with tenant-qualified name for registration on a group proxy.
+func (m *MCPService) QualifiedProxyPrompt(ctx context.Context, tenantID, canonicalPrompt string) (mcp.Prompt, error) {
+	p, err := m.GetPrompt(ctx, canonicalPrompt)
+	if err != nil {
+		return mcp.Prompt{}, err
+	}
+	if !p.Enabled {
+		return mcp.Prompt{}, fmt.Errorf("prompt %s is disabled: %w", canonicalPrompt, apierrors.ErrInvalidInput)
+	}
+	mcpPrompt, err := convertPromptModelToMcpObject(p)
+	if err != nil {
+		return mcp.Prompt{}, err
+	}
+	mcpPrompt.Name = tenant.QualifyProxyName(tenantID, canonicalPrompt)
+	return mcpPrompt, nil
+}
+
 // ListPrompts returns all prompts registered in the registry.
 func (m *MCPService) ListPrompts(ctx context.Context) ([]model.Prompt, error) {
 	var prompts []model.Prompt
@@ -190,12 +244,14 @@ func (m *MCPService) setPromptsEnabled(ctx context.Context, entity string, enabl
 			} else {
 				m.mcpProxyServer.AddPrompt(mcpPrompt, m.mcpProxyPromptHandler)
 			}
+			m.notifyPromptAddition(proxyName)
 		} else {
 			if s.Transport == types.TransportSSE {
 				m.sseMcpProxyServer.DeletePrompts(proxyName)
 			} else {
 				m.mcpProxyServer.DeletePrompts(proxyName)
 			}
+			m.notifyPromptDeletion(proxyName)
 		}
 
 		return []string{entity}, nil
@@ -235,12 +291,14 @@ func (m *MCPService) setPromptsEnabled(ctx context.Context, entity string, enabl
 			} else {
 				m.mcpProxyServer.AddPrompt(mcpPrompt, m.mcpProxyPromptHandler)
 			}
+			m.notifyPromptAddition(proxyName)
 		} else {
 			if s.Transport == types.TransportSSE {
 				m.sseMcpProxyServer.DeletePrompts(proxyName)
 			} else {
 				m.mcpProxyServer.DeletePrompts(proxyName)
 			}
+			m.notifyPromptDeletion(proxyName)
 		}
 
 		changedPromptNames = append(changedPromptNames, canonicalPromptName)
@@ -270,13 +328,15 @@ func (m *MCPService) registerServerPrompts(ctx context.Context, s *model.McpServ
 		if err := m.dbTenant(ctx).Create(p).Error; err != nil {
 			log.Printf("[ERROR] failed to register prompt %s in DB: %v", canonicalPromptName, err)
 		} else {
-			prompt.Name = tenant.QualifyProxyName(s.TenantID, canonicalPromptName)
+			regPrompt := prompt
+			regPrompt.Name = tenant.QualifyProxyName(s.TenantID, canonicalPromptName)
 
 			if s.Transport == types.TransportSSE {
-				m.sseMcpProxyServer.AddPrompt(prompt, m.mcpProxyPromptHandler)
+				m.sseMcpProxyServer.AddPrompt(regPrompt, m.mcpProxyPromptHandler)
 			} else {
-				m.mcpProxyServer.AddPrompt(prompt, m.mcpProxyPromptHandler)
+				m.mcpProxyServer.AddPrompt(regPrompt, m.mcpProxyPromptHandler)
 			}
+			m.notifyPromptAddition(regPrompt.Name)
 		}
 	}
 	return nil
@@ -304,6 +364,8 @@ func (m *MCPService) deregisterServerPrompts(ctx context.Context, s *model.McpSe
 	} else {
 		m.mcpProxyServer.DeletePrompts(promptNames...)
 	}
+
+	m.notifyPromptDeletion(promptNames...)
 
 	return nil
 }

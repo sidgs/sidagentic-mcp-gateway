@@ -261,6 +261,7 @@ func SetupTestDB(t *testing.T) *TestDBSetup {
 		&model.Tool{},
 		&model.ServerConfig{},
 		&model.ToolGroup{},
+		&model.PromptGroup{},
 		&model.Prompt{},
 		&model.Resource{},
 		&model.UpstreamOAuthPendingSession{},

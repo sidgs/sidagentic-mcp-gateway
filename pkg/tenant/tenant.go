@@ -90,3 +90,8 @@ func SessionKey(tenantID, serverName string) string {
 func ToolGroupMapKey(tenantID, groupName string) string {
 	return tenantID + ProxyNameSep + groupName
 }
+
+// PromptGroupMapKey combines tenant and prompt group name so caches stay distinct from tool groups with the same display name.
+func PromptGroupMapKey(tenantID, groupName string) string {
+	return "pg" + ProxyNameSep + tenantID + ProxyNameSep + groupName
+}

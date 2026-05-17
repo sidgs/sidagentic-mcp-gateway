@@ -186,6 +186,11 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 	return res, err
 }
 
+// MCPProxyPromptHandler forwards getPrompt to upstream MCP servers; exposed for prompt-group proxy servers.
+func (m *MCPService) MCPProxyPromptHandler(ctx context.Context, request mcp.GetPromptRequest) (*mcp.GetPromptResult, error) {
+	return m.mcpProxyPromptHandler(ctx, request)
+}
+
 // initMCPProxyServer initializes the MCP proxy server.
 // It loads all the registered MCP tools, prompts and resources from the database into the proxy server.
 func (m *MCPService) initMCPProxyServer() error {

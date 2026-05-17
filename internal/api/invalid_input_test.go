@@ -10,6 +10,7 @@ import (
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
+	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
@@ -39,12 +40,17 @@ func setupInvalidInputServer(t *testing.T) *Server {
 	if err != nil {
 		t.Fatalf("failed to create tool group service: %v", err)
 	}
+	pgSvc, err := promptgroup.NewPromptGroupService(setup.DB, mcpSvc)
+	if err != nil {
+		t.Fatalf("failed to create prompt group service: %v", err)
+	}
 
 	return &Server{
-		mcpService:       mcpSvc,
-		mcpClientService: mcpclient.NewMCPClientService(setup.DB),
-		toolGroupService: tgSvc,
-		userService:      user.NewUserService(setup.DB),
+		mcpService:         mcpSvc,
+		mcpClientService:   mcpclient.NewMCPClientService(setup.DB),
+		toolGroupService:   tgSvc,
+		promptGroupService: pgSvc,
+		userService:        user.NewUserService(setup.DB),
 	}
 }
 

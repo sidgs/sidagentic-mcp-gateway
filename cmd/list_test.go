@@ -106,6 +106,12 @@ func TestListResourcesSubcommand(t *testing.T) {
 	testhelpers.AssertTrue(t, len(serverFlag.Usage) > 0, "Server flag should have usage description")
 }
 
+func TestListPromptGroupsSubcommand(t *testing.T) {
+	testhelpers.AssertEqual(t, "prompt-groups", listPromptGroupsCmd.Use)
+	testhelpers.AssertEqual(t, "List prompt groups", listPromptGroupsCmd.Short)
+	testhelpers.AssertNotNil(t, listPromptGroupsCmd.RunE)
+}
+
 // Integration tests for list commands
 func TestListCommandIntegration(t *testing.T) {
 	// Verify that listCmd is properly initialized
@@ -113,7 +119,7 @@ func TestListCommandIntegration(t *testing.T) {
 
 	// Test all list subcommands are properly configured
 	subcommands := listCmd.Commands()
-	expectedSubcommands := []string{"tools", "prompts", "resources", "servers", "mcp-clients", "users", "groups"}
+	expectedSubcommands := []string{"tools", "prompts", "resources", "servers", "mcp-clients", "users", "groups", "prompt-groups"}
 
 	testhelpers.AssertEqual(t, len(expectedSubcommands), len(subcommands))
 

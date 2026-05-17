@@ -39,8 +39,8 @@ const benefitItems: Array<{
   },
   {
     icon: LayersOutlinedIcon,
-    title: "Tool groups",
-    body: "Curate subsets of tools for least-privilege access and dedicated group MCP endpoints—ideal for shared team gateways and scoped automations.",
+    title: "Tool & prompt groups",
+    body: "Curate subsets of tools and MCP prompts for least-privilege access and dedicated group endpoints—ideal for shared team gateways and scoped automations.",
   },
   {
     icon: AssignmentOutlinedIcon,
@@ -241,6 +241,14 @@ export function HomePage({
                 sx={{ color: "common.white", fontWeight: 600, "&:hover": { bgcolor: "rgba(255,255,255,0.1)" } }}
               >
                 Tool groups
+              </Button>
+              <Button
+                variant="text"
+                size="large"
+                onClick={() => onNavigate("prompt_groups")}
+                sx={{ color: "common.white", fontWeight: 600, "&:hover": { bgcolor: "rgba(255,255,255,0.1)" } }}
+              >
+                Prompt groups
               </Button>
             </Stack>
           </Stack>

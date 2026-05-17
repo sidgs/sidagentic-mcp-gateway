@@ -49,6 +49,20 @@ func TestGetGroupSubcommand(t *testing.T) {
 	})
 }
 
+func TestGetPromptGroupSubcommand(t *testing.T) {
+	t.Run("command_properties", func(t *testing.T) {
+		testhelpers.AssertEqual(t, "prompt-group [name]", getPromptGroupCmd.Use)
+		testhelpers.AssertEqual(t, "Get information about a specific prompt group", getPromptGroupCmd.Short)
+		testhelpers.AssertNotNil(t, getPromptGroupCmd.Long)
+		testhelpers.AssertTrue(t, len(getPromptGroupCmd.Long) > 0, "Long description should not be empty")
+	})
+
+	t.Run("command_functions", func(t *testing.T) {
+		testhelpers.AssertNotNil(t, getPromptGroupCmd.RunE)
+		testhelpers.AssertNotNil(t, getPromptGroupCmd.Args)
+	})
+}
+
 func TestGetResourceSubcommand(t *testing.T) {
 	testhelpers.AssertEqual(t, "resource [uri]", getResourceCmd.Use)
 	testhelpers.AssertEqual(t, "Get resource metadata", getResourceCmd.Short)

@@ -68,6 +68,22 @@ func TestCreateAdminUser(t *testing.T) {
 	if user.AccessToken == "" {
 		t.Error("Expected access token to be generated")
 	}
+
+	got, err := svc.GetBootstrapAdminUser(context.Background())
+	testhelpers.AssertNoError(t, err)
+	testhelpers.AssertNotNil(t, got)
+	testhelpers.AssertEqual(t, user.AccessToken, got.AccessToken)
+}
+
+func TestGetBootstrapAdminUser_NotFound(t *testing.T) {
+	setup, _ := testhelpers.SetupUserTest(t)
+	defer setup.Cleanup()
+	svc := NewUserService(setup.DB)
+	got, err := svc.GetBootstrapAdminUser(context.Background())
+	testhelpers.AssertNoError(t, err)
+	if got != nil {
+		t.Fatalf("expected nil user, got %#v", got)
+	}
 }
 
 func TestCreateUserAccessToken(t *testing.T) {

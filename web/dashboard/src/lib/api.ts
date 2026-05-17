@@ -1,5 +1,6 @@
 import type {
   DashboardAuthStatusResponse,
+  DashboardCreatePromptGroupInput,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
   DashboardOAuthSessionResponse,
@@ -8,6 +9,7 @@ import type {
   DashboardRegisterServerInput,
   DashboardRegisterServerResponse,
   DashboardResourcesResponse,
+  DashboardPromptGroupsResponse,
   DashboardServersResponse,
   DashboardToolGroupsResponse,
   DashboardToolsResponse,
@@ -96,6 +98,7 @@ export const api = {
   servers: () => requestJSON<DashboardServersResponse>("/dashboard/servers"),
   tools: () => requestJSON<DashboardToolsResponse>("/dashboard/tools"),
   toolGroups: () => requestJSON<DashboardToolGroupsResponse>("/dashboard/tool-groups"),
+  promptGroups: () => requestJSON<DashboardPromptGroupsResponse>("/dashboard/prompt-groups"),
   prompts: () => requestJSON<DashboardPromptsResponse>("/dashboard/prompts"),
   resources: () => requestJSON<DashboardResourcesResponse>("/dashboard/resources"),
   diagnostics: () => requestJSON<DashboardDiagnosticsResponse>("/dashboard/diagnostics"),
@@ -117,6 +120,16 @@ export const api = {
     }),
   deleteToolGroup: (name: string) =>
     requestJSON(`/dashboard/tool-groups/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
+  createPromptGroup: (body: DashboardCreatePromptGroupInput) =>
+    requestJSON("/dashboard/prompt-groups", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  deletePromptGroup: (name: string) =>
+    requestJSON(`/dashboard/prompt-groups/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
   deleteServer: (name: string) =>

@@ -19,6 +19,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
+	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
@@ -50,8 +51,9 @@ type ServerOptions struct {
 	MCPClientService *mcpclient.McpClientService
 	ConfigService    *config.ServerConfigService
 	UserService      *user.UserService
-	ToolGroupService *toolgroup.ToolGroupService
-	DashboardService *dashboard.Service
+	ToolGroupService  *toolgroup.ToolGroupService
+	PromptGroupService *promptgroup.PromptGroupService
+	DashboardService  *dashboard.Service
 
 	OtelProviders *telemetry.Providers
 	Metrics       telemetry.CustomMetrics
@@ -59,6 +61,9 @@ type ServerOptions struct {
 	// HTTPPathPrefix is an optional path prefix (e.g. /ai/v1/sami-mcp-gateway) for every route.
 	// Empty means routes are served from the host root.
 	HTTPPathPrefix string
+
+	// PublicURLScheme optionally forces http or https for externally advertised URLs when TLS terminates upstream without X-Forwarded-Proto (see PUBLIC_URL_SCHEME env).
+	PublicURLScheme string
 
 	// OIDC configures optional Cognito (or OIDC-compliant) login for the dashboard (/login, /auth/callback).
 	OIDC *OIDCSettings
@@ -90,16 +95,18 @@ type Server struct {
 
 	configService    *config.ServerConfigService
 	userService      *user.UserService
-	toolGroupService *toolgroup.ToolGroupService
-	dashboardService *dashboard.Service
+	toolGroupService  *toolgroup.ToolGroupService
+	promptGroupService *promptgroup.PromptGroupService
+	dashboardService  *dashboard.Service
 
 	otelProviders *telemetry.Providers
 	metrics       telemetry.CustomMetrics
 
-	// groupMcpServers keeps track of mcp-go's server.SSEServer instances created for each tool group.
-	// These instances serve the requests made to tool groups' SSE tools.
-	// We need to maintain one instance for each group for sse to work correctly.
+	// groupSseServers caches SSE MCP sessions for tool groups (key tenant::group).
 	groupSseServers sync.Map
+
+	// promptGroupSseServers caches SSE sessions for prompt groups (key pg::tenant::group).
+	promptGroupSseServers sync.Map
 
 	// Lazy-cached OIDC issuer (Cognito or other OIDC-compliant IdP).
 	oidcProviderMu     sync.Mutex
@@ -124,6 +131,9 @@ type Server struct {
 
 	// cognitoOAuthRedirectURI overrides OAuth2 redirect_uri passed to Cognito when COGNITO_REDIRECT_URI is set.
 	cognitoOAuthRedirectURI string
+
+	// publicURLScheme when https or http forces that scheme for publicly advertised URLs instead of inferring from the request connection.
+	publicURLScheme string
 
 	// defaultTenantID is used when X-Tenant-ID is missing and for non-HTTP operations.
 	defaultTenantID string
@@ -187,6 +197,12 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		}
 	}
 
+	publicSchemeRaw := strings.TrimSpace(opts.PublicURLScheme)
+	publicScheme, errPS := normalizePublicURLScheme(publicSchemeRaw)
+	if errPS != nil {
+		return nil, fmt.Errorf("PublicURLScheme: %w", errPS)
+	}
+
 	s := &Server{
 		mcpProxyServer:        opts.MCPProxyServer,
 		sseMcpProxyServer:     opts.SseMcpProxyServer,
@@ -195,6 +211,7 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		configService:         opts.ConfigService,
 		userService:           opts.UserService,
 		toolGroupService:      opts.ToolGroupService,
+		promptGroupService:    opts.PromptGroupService,
 		dashboardService:      opts.DashboardService,
 		otelProviders:         opts.OtelProviders,
 		metrics:               opts.Metrics,
@@ -203,7 +220,8 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		postLoginRedirectURL:      postLogin,
 		cognitoOAuthRedirectURI:   cognitoOAuthRedirect,
 		defaultTenantID:           def,
-		oidcSettings:          opts.OIDC,
+		publicURLScheme:           publicScheme,
+		oidcSettings:              opts.OIDC,
 		oidcSessionStore:      sessionStore,
 		oidcSessionMaxTTL:     maxTTL,
 	}
@@ -220,6 +238,9 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 	}
 	if cognitoOAuthRedirect != "" {
 		log.Printf("[oidc] OAuth2 redirect_uri override: %s\n", cognitoOAuthRedirect)
+	}
+	if publicScheme != "" {
+		log.Printf("[server] PUBLIC_URL_SCHEME override: %s (public MCP/dashboard URLs)\n", publicScheme)
 	}
 
 	return s, nil
@@ -273,21 +294,66 @@ func (s *Server) HTTPPathPrefix() string {
 	return s.httpPathPrefix
 }
 
+// normalizePublicURLScheme validates PUBLIC_URL_SCHEME: empty → auto detect; otherwise "http" or "https" (case-insensitive).
+func normalizePublicURLScheme(raw string) (string, error) {
+	raw = strings.TrimSpace(strings.ToLower(raw))
+	if raw == "" {
+		return "", nil
+	}
+	if raw == "http" || raw == "https" {
+		return raw, nil
+	}
+	return "", fmt.Errorf("must be empty, http, or https, got %q", raw)
+}
+
+// inferRequestScheme returns http/https from TLS or X-Forwarded-Proto (ignores PUBLIC_URL_SCHEME).
+func inferRequestScheme(c *gin.Context) string {
+	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
+		return "https"
+	}
+	return "http"
+}
+
+func (s *Server) publicSchemeForURLs(c *gin.Context) string {
+	if s.publicURLScheme != "" {
+		return s.publicURLScheme
+	}
+	return inferRequestScheme(c)
+}
+
+// schemeHostPublicURL returns scheme://host used in advertised MCP and dashboard URLs.
+func (s *Server) schemeHostPublicURL(c *gin.Context) string {
+	return s.publicSchemeForURLs(c) + "://" + c.Request.Host
+}
+
 // publicGatewayRoot returns scheme://host[/prefix] with no trailing slash (before path segments like /mcp).
 func (s *Server) publicGatewayRoot(c *gin.Context) string {
-	hostRoot := requestSchemeHost(c)
+	hostRoot := s.schemeHostPublicURL(c)
 	if s.httpPathPrefix == "" {
 		return hostRoot
 	}
 	return strings.TrimRight(hostRoot, "/") + s.httpPathPrefix
 }
 
-func requestSchemeHost(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil || c.GetHeader("X-Forwarded-Proto") == "https" {
-		scheme = "https"
+// v0SubgroupMountBasePath is the path prefix for /v0/<segment>/<subgroupName> MCP mounts (includes HTTP_PATH_PREFIX when set).
+func (s *Server) v0SubgroupMountBasePath(segment, subgroupName string) string {
+	pp := NormalizeHTTPPathPrefix(s.httpPathPrefix)
+	core := fmt.Sprintf("%s/%s/%s", V0PathPrefix, segment, subgroupName)
+	if pp == "" {
+		return core
 	}
-	return scheme + "://" + c.Request.Host
+	return pp + core
+}
+
+// oauthCookieSecure sets OAuth session cookie Secure when HTTPS is inferred or forced via PUBLIC_URL_SCHEME.
+func (s *Server) oauthCookieSecure(c *gin.Context) bool {
+	if s.publicURLScheme == "https" {
+		return true
+	}
+	if s.publicURLScheme == "http" {
+		return false
+	}
+	return c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https"
 }
 
 // setupRouter sets up the Gin router with the MCP proxy server and API endpoints.
@@ -369,6 +435,13 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		s.toolGroupMCPServerCallHandler(),
 	)
 
+	g.Any(
+		V0PathPrefix+"/prompt-groups/:name/mcp",
+		s.requireInitialized(),
+		s.checkAuthForMcpProxyAccess(),
+		s.promptGroupMCPServerCallHandler(),
+	)
+
 	// Set up the SSE transport-based MCP proxy server for the global /sse endpoint
 	sseServer := server.NewSSEServer(s.sseMcpProxyServer)
 	g.Any(
@@ -395,6 +468,19 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		s.toolGroupSseMCPServerCallMessageHandler(),
+	)
+
+	g.Any(
+		V0PathPrefix+"/prompt-groups/:name/sse",
+		s.requireInitialized(),
+		s.checkAuthForMcpProxyAccess(),
+		s.promptGroupSseHandler(),
+	)
+	g.Any(
+		V0PathPrefix+"/prompt-groups/:name/message",
+		s.requireInitialized(),
+		s.checkAuthForMcpProxyAccess(),
+		s.promptGroupSseMessageHandler(),
 	)
 
 	// Setup /v0 API endpoints
@@ -495,6 +581,13 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		adminAPI.GET("/tool-groups", s.listToolGroupsHandler())
 		adminAPI.DELETE("/tool-groups/:name", s.deleteToolGroupHandler())
 		adminAPI.PUT("/tool-groups/:name", s.updateToolGroupHandler())
+
+		adminAPI.POST("/prompt-groups", s.createPromptGroupHandler())
+		adminAPI.GET("/prompt-groups/:name", s.getPromptGroupHandler())
+		adminAPI.GET("/prompt-groups/:name/effective-prompts", s.getPromptGroupEffectivePromptsHandler())
+		adminAPI.GET("/prompt-groups", s.listPromptGroupsHandler())
+		adminAPI.DELETE("/prompt-groups/:name", s.deletePromptGroupHandler())
+		adminAPI.PUT("/prompt-groups/:name", s.updatePromptGroupHandler())
 	}
 
 	if s.dashboardService != nil {
@@ -526,6 +619,12 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.POST("/tool-groups", s.dashboardCreateToolGroupHandler())
 			dashboardAPI.GET("/tool-groups/:name", s.dashboardGetToolGroupHandler())
 			dashboardAPI.DELETE("/tool-groups/:name", s.dashboardDeleteToolGroupHandler())
+
+			dashboardAPI.GET("/prompt-groups", s.dashboardPromptGroupsHandler())
+			dashboardAPI.POST("/prompt-groups", s.dashboardCreatePromptGroupHandler())
+			dashboardAPI.GET("/prompt-groups/:name", s.dashboardGetPromptGroupHandler())
+			dashboardAPI.DELETE("/prompt-groups/:name", s.dashboardDeletePromptGroupHandler())
+
 			dashboardAPI.GET("/prompts", s.dashboardPromptsHandler())
 			dashboardAPI.PATCH("/prompts/:name/enabled", s.dashboardSetPromptEnabledHandler())
 			dashboardAPI.GET("/resources", s.dashboardResourcesHandler())

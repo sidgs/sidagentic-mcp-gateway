@@ -22,6 +22,7 @@ env:
   # COGNITO_REDIRECT_URI: "https://apps.sidglobal.cloud/api/v1/sami-mcp-gateway/auth/callback"
   POST_LOGIN_REDIRECT_URL: "/apps/mcp-gateway-dashboard/#/home"
   COGNITO_REDIRECT_URI: "https://apps.sidglobal.cloud/api/v1/sami-mcp-gateway/auth/callback"
+  PUBLIC_URL_SCHEME: "https"
 
 secrets:
   COGNITO_CLIENT_SECRET: "38qm6oububnuafmsioncaagh2p932kn1bk134rocuc3a2ngctbj"

@@ -72,3 +72,40 @@ func TestUpdateToolGroupHandler_NotFound(t *testing.T) {
 	testhelpers.AssertEqual(t, http.StatusNotFound, w.Code)
 	testhelpers.AssertStringContains(t, w.Body.String(), "not found")
 }
+
+func TestGetToolGroupEndpoints_IncludesHTTPPathPrefix(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := setupToolGroupServer(t)
+	s.httpPathPrefix = "/api/v1/sami-mcp-gateway"
+
+	c, _ := gin.CreateTestContext(nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.Host = "apps.example.com"
+	c.Request.Header.Set("X-Forwarded-Proto", "https")
+
+	got := s.getToolGroupEndpoints(c, "my-group")
+
+	wantMCP := "https://apps.example.com/api/v1/sami-mcp-gateway/v0/groups/my-group/mcp"
+	wantSSE := "https://apps.example.com/api/v1/sami-mcp-gateway/v0/groups/my-group/sse"
+	wantMsg := "https://apps.example.com/api/v1/sami-mcp-gateway/v0/groups/my-group/message"
+	testhelpers.AssertEqual(t, wantMCP, got.StreamableHTTPEndpoint)
+	testhelpers.AssertEqual(t, wantSSE, got.SSEEndpoint)
+	testhelpers.AssertEqual(t, wantMsg, got.SSEMessageEndpoint)
+}
+
+func TestGetToolGroupEndpoints_NoHTTPPathPrefix(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := setupToolGroupServer(t)
+
+	c, _ := gin.CreateTestContext(nil)
+	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request.Host = "localhost:8080"
+	c.Request.TLS = nil
+	c.Request.Header.Set("X-Forwarded-Proto", "") // http
+
+	got := s.getToolGroupEndpoints(c, "g")
+
+	testhelpers.AssertEqual(t, "http://localhost:8080/v0/groups/g/mcp", got.StreamableHTTPEndpoint)
+	testhelpers.AssertEqual(t, "http://localhost:8080/v0/groups/g/sse", got.SSEEndpoint)
+	testhelpers.AssertEqual(t, "http://localhost:8080/v0/groups/g/message", got.SSEMessageEndpoint)
+}

@@ -12,7 +12,7 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - db_data:/var/lib/postgresql/data
+      - db_data_enterprise:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "PGPASSWORD=sami pg_isready -U sami -d sami"]
       interval: 10s
@@ -37,7 +37,7 @@ services:
         - VITE_DASHBOARD_BASE=${VITE_DASHBOARD_BASE:-/}
     environment:
       DATABASE_URL: postgres://sami:sami@db:5432/sami
-      SERVER_MODE: ${SERVER_MODE:-development}
+      SERVER_MODE: ${SERVER_MODE:-enterprise}
       OTEL_ENABLED: ${OTEL_ENABLED:-false}
       MCP_SERVER_INIT_REQ_TIMEOUT_SEC: ${MCP_SERVER_INIT_REQ_TIMEOUT_SEC:-10}
       HTTP_PATH_PREFIX: ${HTTP_PATH_PREFIX:-/api/v1/sami-mcp-gateway}
@@ -51,6 +51,8 @@ services:
       OIDC_SCOPES: ${OIDC_SCOPES:-email openid phone aws.cognito.signin.user.admin}
       # Optional fixed OAuth redirect_uri for Cognito (https URL; must match Cognito callback allowlist exactly).
       # COGNITO_REDIRECT_URI: ${COGNITO_REDIRECT_URI:-}
+      # Force https or http for advertised MCP/dashboard URLs when X-Forwarded-Proto is missing or wrong upstream.
+      # PUBLIC_URL_SCHEME: ${PUBLIC_URL_SCHEME:-}
       POST_LOGIN_REDIRECT_URL: ${POST_LOGIN_REDIRECT_URL:-/#home}
 
     ports:
@@ -70,3 +72,4 @@ services:
 
 volumes:
   db_data:
+  db_data_enterprise:

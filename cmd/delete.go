@@ -44,10 +44,20 @@ var deleteToolGroupCmd = &cobra.Command{
 	RunE: runDeleteToolGroup,
 }
 
+var deletePromptGroupCmd = &cobra.Command{
+	Use:   "prompt-group [name]",
+	Args:  cobra.ExactArgs(1),
+	Short: "Delete a prompt group",
+	Long: "Delete a prompt group from mcpjungle. The dedicated /v0/prompt-groups/... endpoints stop serving that group.\n" +
+		"Individual prompts remain registered until you deregister their MCP server or disable the prompt.",
+	RunE: runDeletePromptGroup,
+}
+
 func init() {
 	deleteCmd.AddCommand(deleteMcpClientCmd)
 	deleteCmd.AddCommand(deleteUserCmd)
 	deleteCmd.AddCommand(deleteToolGroupCmd)
+	deleteCmd.AddCommand(deletePromptGroupCmd)
 
 	rootCmd.AddCommand(deleteCmd)
 }
@@ -76,5 +86,14 @@ func runDeleteToolGroup(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to delete the tool group: %w", err)
 	}
 	cmd.Printf("Tool group '%s' deleted successfully!\n", name)
+	return nil
+}
+
+func runDeletePromptGroup(cmd *cobra.Command, args []string) error {
+	name := args[0]
+	if err := apiClient.DeletePromptGroup(name); err != nil {
+		return fmt.Errorf("failed to delete the prompt group: %w", err)
+	}
+	cmd.Printf("Prompt group '%s' deleted successfully!\n", name)
 	return nil
 }

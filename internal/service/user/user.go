@@ -42,6 +42,26 @@ func (u *UserService) CreateAdminUser(ctx context.Context) (*model.User, error) 
 	return &user, nil
 }
 
+// GetBootstrapAdminUser returns the built-in enterprise admin user (username "admin"),
+// or (nil, nil) if none exists for the tenant.
+func (u *UserService) GetBootstrapAdminUser(ctx context.Context) (*model.User, error) {
+	tid := tenant.MustFromContext(ctx)
+	var user model.User
+	err := u.db.WithContext(ctx).Where(
+		"tenant_id = ? AND username = ? AND role = ?",
+		tid,
+		"admin",
+		types.UserRoleAdmin,
+	).First(&user).Error
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("failed to load bootstrap admin user: %w", err)
+	}
+	return &user, nil
+}
+
 // GetUserByAccessToken returns a user associated with the provided access token.
 // If no user is found, an error is returned.
 func (u *UserService) GetUserByAccessToken(ctx context.Context, token string) (*model.User, error) {

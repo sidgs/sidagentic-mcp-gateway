@@ -75,6 +75,7 @@ func TestDashboardAPIValidJSON(t *testing.T) {
 		"/dashboard/servers",
 		"/dashboard/tools",
 		"/dashboard/tool-groups",
+		"/dashboard/prompt-groups",
 		"/dashboard/prompts",
 		"/dashboard/resources",
 		"/dashboard/diagnostics",

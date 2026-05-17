@@ -5,6 +5,7 @@ const SECTIONS = new Set<string>([
   "servers",
   "tools",
   "tool_groups",
+  "prompt_groups",
   "prompts",
   "resources",
   "diagnostics",

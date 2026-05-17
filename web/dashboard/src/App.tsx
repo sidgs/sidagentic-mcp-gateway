@@ -22,12 +22,15 @@ import { appSectionToHash, getSectionFromHashOrDefault, parseAppSectionFromHash 
 import type {
   AppSection,
   DashboardAuthStatusResponse,
+  DashboardCreatePromptGroupInput,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
   DashboardOAuthAuthorizationRequired,
   DashboardOverviewResponse,
   DashboardPrompt,
   DashboardPromptsResponse,
+  DashboardPromptGroup,
+  DashboardPromptGroupsResponse,
   DashboardRegisterServerInput,
   DashboardResource,
   DashboardResourcesResponse,
@@ -69,6 +72,7 @@ interface DashboardData {
   servers?: DashboardServersResponse;
   tools?: DashboardToolsResponse;
   toolGroups?: DashboardToolGroupsResponse;
+  promptGroups?: DashboardPromptGroupsResponse;
   prompts?: DashboardPromptsResponse;
   resources?: DashboardResourcesResponse;
   diagnostics?: DashboardDiagnosticsResponse;
@@ -109,6 +113,12 @@ interface ToolGroupFormState {
   selectedTools: string[];
 }
 
+interface PromptGroupFormState {
+  name: string;
+  description: string;
+  selectedPrompts: string[];
+}
+
 interface SchemaFieldSummary {
   path: string;
   type: string;
@@ -143,6 +153,10 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
   tool_groups: {
     title: "Tool Groups",
     subtitle: "",
+  },
+  prompt_groups: {
+    title: "Prompt Groups",
+    subtitle: "Expose a curated subset of prompts at dedicated MCP URLs.",
   },
   prompts: {
     title: "Prompts",
@@ -486,6 +500,14 @@ function createInitialToolGroupForm(): ToolGroupFormState {
   };
 }
 
+function createInitialPromptGroupForm(): PromptGroupFormState {
+  return {
+    name: "",
+    description: "",
+    selectedPrompts: [],
+  };
+}
+
 export default function App() {
   const [section, setSection] = useState<AppSection>(() => getSectionFromHashOrDefault("home"));
   const [authSession, setAuthSession] = useState<DashboardAuthStatusResponse | null>(null);
@@ -515,9 +537,12 @@ export default function App() {
   const [promptFilter, setPromptFilter] = useState("");
   const [toolGroupToolFilter, setToolGroupToolFilter] = useState("");
   const [toolGroupToolServerFilter, setToolGroupToolServerFilter] = useState("all");
+  const [promptGroupPromptFilter, setPromptGroupPromptFilter] = useState("");
+  const [promptGroupPromptServerFilter, setPromptGroupPromptServerFilter] = useState("all");
   const [expandedServer, setExpandedServer] = useState<string | null>(null);
   const [expandedTool, setExpandedTool] = useState<string | null>(null);
   const [expandedToolGroup, setExpandedToolGroup] = useState<string | null>(null);
+  const [expandedPromptGroup, setExpandedPromptGroup] = useState<string | null>(null);
   const [expandedPrompt, setExpandedPrompt] = useState<string | null>(null);
   const [registerOpen, setRegisterOpen] = useState(false);
   const [registerForm, setRegisterForm] = useState<RegisterServerFormState>(createInitialRegisterForm());
@@ -526,6 +551,9 @@ export default function App() {
   const [toolGroupOpen, setToolGroupOpen] = useState(false);
   const [toolGroupForm, setToolGroupForm] = useState<ToolGroupFormState>(createInitialToolGroupForm());
   const [toolGroupError, setToolGroupError] = useState("");
+  const [promptGroupOpen, setPromptGroupOpen] = useState(false);
+  const [promptGroupForm, setPromptGroupForm] = useState<PromptGroupFormState>(createInitialPromptGroupForm());
+  const [promptGroupError, setPromptGroupError] = useState("");
   const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({});
 
   /** Ensure canonical `#/section` when hash is missing or invalid (bookmarkable URLs). */
@@ -559,37 +587,42 @@ export default function App() {
   }, [authSession]);
 
   async function fetchDashboardPanelsAfterOverview(overview: DashboardOverviewResponse) {
-    const [servers, tools, toolGroups, prompts, resources, diagnostics] = await Promise.all([
+    const [servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics] = await Promise.all([
       api.servers(),
       api.tools(),
       api.toolGroups(),
+      api.promptGroups(),
       api.prompts(),
       api.resources(),
       api.diagnostics(),
     ]);
-    return { overview, servers, tools, toolGroups, prompts, resources, diagnostics };
+    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics };
   }
 
   async function fetchFullDashboard() {
-    const [overview, servers, tools, toolGroups, prompts, resources, diagnostics] = await Promise.all([
+    const [overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics] =
+      await Promise.all([
       api.overview(),
       api.servers(),
       api.tools(),
       api.toolGroups(),
+      api.promptGroups(),
       api.prompts(),
       api.resources(),
       api.diagnostics(),
     ]);
-    return { overview, servers, tools, toolGroups, prompts, resources, diagnostics };
+    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics };
   }
 
   function applyDashboardPayload(payload: Required<DashboardData>) {
-    const { overview, servers, tools, toolGroups, prompts, resources, diagnostics } = payload;
+    const { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics } =
+      payload;
     setData({
       overview,
       servers,
       tools,
       toolGroups,
+      promptGroups,
       prompts,
       resources,
       diagnostics,
@@ -599,6 +632,9 @@ export default function App() {
     );
     setExpandedToolGroup((current) =>
       current && toolGroups.tool_groups.some((group) => group.name === current) ? current : null,
+    );
+    setExpandedPromptGroup((current) =>
+      current && promptGroups.prompt_groups.some((group) => group.name === current) ? current : null,
     );
     setExpandedPrompt((current) =>
       current && prompts.prompts.some((prompt) => prompt.canonical_name === current) ? current : null,
@@ -717,6 +753,29 @@ export default function App() {
         toolDescription(tool).toLowerCase().includes(term),
     );
   }, [data.tools?.tools, toolGroupToolFilter, toolGroupToolServerFilter]);
+
+  const uniquePromptServers = useMemo(() => {
+    const servers = new Set((data.prompts?.prompts ?? []).map((prompt) => prompt.server));
+    return Array.from(servers).sort();
+  }, [data.prompts?.prompts]);
+
+  const availablePromptGroupPrompts = useMemo(() => {
+    let prompts = data.prompts?.prompts ?? [];
+    if (promptGroupPromptServerFilter !== "all") {
+      prompts = prompts.filter((prompt) => prompt.server === promptGroupPromptServerFilter);
+    }
+    if (!promptGroupPromptFilter.trim()) {
+      return prompts;
+    }
+    const term = promptGroupPromptFilter.toLowerCase();
+    return prompts.filter(
+      (prompt) =>
+        prompt.name.toLowerCase().includes(term) ||
+        prompt.canonical_name.toLowerCase().includes(term) ||
+        prompt.server.toLowerCase().includes(term) ||
+        promptDescription(prompt).toLowerCase().includes(term),
+    );
+  }, [data.prompts?.prompts, promptGroupPromptFilter, promptGroupPromptServerFilter]);
 
   const filteredPrompts = useMemo(() => {
     const prompts = data.prompts?.prompts ?? [];
@@ -853,6 +912,36 @@ export default function App() {
     setToolGroupForm((current) => ({
       ...current,
       selectedTools: current.selectedTools.filter((name) => name !== canonicalName),
+    }));
+  }
+
+  function openPromptGroupModal() {
+    setPromptGroupForm(createInitialPromptGroupForm());
+    setPromptGroupError("");
+    setPromptGroupPromptFilter("");
+    setPromptGroupPromptServerFilter("all");
+    setPromptGroupOpen(true);
+  }
+
+  function closePromptGroupModal() {
+    setPromptGroupOpen(false);
+    setPromptGroupForm(createInitialPromptGroupForm());
+    setPromptGroupError("");
+  }
+
+  function togglePromptGroupSelection(canonicalName: string) {
+    setPromptGroupForm((current) => ({
+      ...current,
+      selectedPrompts: current.selectedPrompts.includes(canonicalName)
+        ? current.selectedPrompts.filter((name) => name !== canonicalName)
+        : [...current.selectedPrompts, canonicalName],
+    }));
+  }
+
+  function removePromptGroupSelection(canonicalName: string) {
+    setPromptGroupForm((current) => ({
+      ...current,
+      selectedPrompts: current.selectedPrompts.filter((name) => name !== canonicalName),
     }));
   }
 
@@ -1071,6 +1160,47 @@ export default function App() {
     }
   }
 
+  async function submitPromptGroup() {
+    const name = promptGroupForm.name.trim();
+    if (!name) {
+      setPromptGroupError("Group name is required.");
+      return;
+    }
+    if (promptGroupForm.selectedPrompts.length === 0) {
+      setPromptGroupError("Select at least one prompt.");
+      return;
+    }
+    if ((data.promptGroups?.prompt_groups ?? []).some((group) => group.name === name)) {
+      setPromptGroupError("A prompt group with that name already exists.");
+      return;
+    }
+
+    setPromptGroupError("");
+    setFeedback(null);
+    setBusy("prompt-group-create", true);
+    try {
+      const payload: DashboardCreatePromptGroupInput = {
+        name,
+        description: promptGroupForm.description.trim(),
+        prompts: promptGroupForm.selectedPrompts,
+      };
+      await api.createPromptGroup(payload);
+      await loadDashboardData(true);
+      setFeedback({ tone: "success", message: `Prompt group ${name} created.` });
+      closePromptGroupModal();
+      selectSection("prompt_groups");
+    } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Request failed";
+      setPromptGroupError(message);
+      setFeedback({ tone: "error", message });
+    } finally {
+      setBusy("prompt-group-create", false);
+    }
+  }
+
   async function deleteToolGroup(group: DashboardToolGroup) {
     const confirmed = window.confirm(`Delete tool group "${group.name}"?`);
     if (!confirmed) {
@@ -1085,6 +1215,23 @@ export default function App() {
     );
     if (expandedToolGroup === group.name) {
       setExpandedToolGroup(null);
+    }
+  }
+
+  async function deletePromptGroup(group: DashboardPromptGroup) {
+    const confirmed = window.confirm(`Delete prompt group "${group.name}"?`);
+    if (!confirmed) {
+      return;
+    }
+    await runMutation(
+      `prompt-group-delete:${group.name}`,
+      async () => {
+        await api.deletePromptGroup(group.name);
+      },
+      `${group.name} deleted.`,
+    );
+    if (expandedPromptGroup === group.name) {
+      setExpandedPromptGroup(null);
     }
   }
 
@@ -1818,6 +1965,179 @@ export default function App() {
               </SectionCard>
             ) : null}
 
+            {section === "prompt_groups" && data.promptGroups ? (
+              <SectionCard
+                title="Configured prompt groups"
+                subtitle=""
+                action={
+                  <Button variant="contained" onClick={openPromptGroupModal}>
+                    + Add Prompt Group
+                  </Button>
+                }
+              >
+                {data.promptGroups.empty_state && data.promptGroups.prompt_groups.length === 0 ? (
+                  <EmptyStateCard emptyState={data.promptGroups.empty_state} />
+                ) : (
+                  <div className="tools-table-wrap">
+                    <table className="data-table compact-table prompts-table">
+                      <thead>
+                        <tr>
+                          <th aria-hidden="true" className="expand-column"></th>
+                          <th>Group</th>
+                          <th>Prompts</th>
+                          <th>Description</th>
+                          <th>Actions</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {data.promptGroups.prompt_groups.map((group) => {
+                          const expanded = expandedPromptGroup === group.name;
+                          return (
+                            <Fragment key={group.name}>
+                              <tr
+                                aria-expanded={expanded}
+                                className={`${expanded ? "is-selected" : ""} tool-summary-row`}
+                                onClick={() => setExpandedPromptGroup(expanded ? null : group.name)}
+                              >
+                                <td className="expand-column">
+                                  <ChevronIcon expanded={expanded} />
+                                </td>
+                                <td>
+                                  <div className="table-primary">{group.name}</div>
+                                </td>
+                                <td>
+                                  <strong>{group.prompt_count}</strong>
+                                </td>
+                                <td>
+                                  <div className="clamped-description" title={group.description || "No description"}>
+                                    {group.description || "No description"}
+                                  </div>
+                                </td>
+                                <td>
+                                  <div className="row-actions" onClick={(event) => event.stopPropagation()}>
+                                    <IconButton
+                                      aria-label="Delete prompt group"
+                                      color="error"
+                                      disabled={isBusy(`prompt-group-delete:${group.name}`)}
+                                      onClick={() => void deletePromptGroup(group)}
+                                      title="Delete prompt group"
+                                      size="small"
+                                    >
+                                      <TrashIcon />
+                                    </IconButton>
+                                  </div>
+                                </td>
+                              </tr>
+                              {expanded ? (
+                                <tr className="tool-expanded-row">
+                                  <td className="tool-expanded-cell" colSpan={5}>
+                                    <div className="tool-detail-panel">
+                                      <div className="tool-detail-header">
+                                        <p className="panel-label">Prompt group details</p>
+                                      </div>
+                                      {group.description ? (
+                                        <dl className="tool-detail-meta">
+                                          <div className="tool-detail-description">
+                                            <dt>Description</dt>
+                                            <dd>{group.description}</dd>
+                                          </div>
+                                        </dl>
+                                      ) : null}
+                                      <div className="tool-schema-section">
+                                        <div className="tool-schema-header">
+                                          <h4>MCP endpoints</h4>
+                                        </div>
+                                        <div className="tool-group-endpoints">
+                                          <div className="tool-group-endpoint-row">
+                                            <span className="tool-group-endpoint-label">Streamable HTTP</span>
+                                            <div className="tool-group-endpoint-value">
+                                              <code
+                                                className="detail-target-code"
+                                                title={group.streamable_http_endpoint}
+                                              >
+                                                {group.streamable_http_endpoint}
+                                              </code>
+                                              <CopyButton
+                                                ariaLabel="Copy Streamable HTTP endpoint"
+                                                title="Copy Streamable HTTP endpoint"
+                                                value={group.streamable_http_endpoint}
+                                              />
+                                            </div>
+                                          </div>
+                                          <div className="tool-group-endpoint-row">
+                                            <span className="tool-group-endpoint-label">SSE</span>
+                                            <div className="tool-group-endpoint-stack">
+                                              <div className="tool-group-endpoint-value">
+                                                <code className="detail-target-code" title={group.sse_endpoint}>
+                                                  {group.sse_endpoint}
+                                                </code>
+                                                <CopyButton
+                                                  ariaLabel="Copy SSE endpoint"
+                                                  title="Copy SSE endpoint"
+                                                  value={group.sse_endpoint}
+                                                />
+                                              </div>
+                                              <div className="tool-group-endpoint-value">
+                                                <code
+                                                  className="detail-target-code"
+                                                  title={group.sse_message_endpoint}
+                                                >
+                                                  {group.sse_message_endpoint}
+                                                </code>
+                                                <CopyButton
+                                                  ariaLabel="Copy SSE message endpoint"
+                                                  title="Copy SSE message endpoint"
+                                                  value={group.sse_message_endpoint}
+                                                />
+                                              </div>
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="tool-schema-section">
+                                        <div className="tool-schema-header">
+                                          <h4>Included prompts</h4>
+                                        </div>
+                                        {group.prompts.length > 0 ? (
+                                          <div className="schema-field-list">
+                                            {group.prompts.map((prompt) => (
+                                              <article className="schema-field-card" key={prompt.canonical_name}>
+                                                <div className="schema-field-head">
+                                                  <code>{prompt.canonical_name}</code>
+                                                  <span className="schema-type-pill">
+                                                    <code>{prompt.server}</code>
+                                                  </span>
+                                                </div>
+                                                <dl className="schema-field-meta">
+                                                  {prompt.description ? (
+                                                    <div>
+                                                      <dt>Description</dt>
+                                                      <dd>{prompt.description}</dd>
+                                                    </div>
+                                                  ) : null}
+                                                </dl>
+                                              </article>
+                                            ))}
+                                          </div>
+                                        ) : (
+                                          <p className="empty-inline">No prompts in this group.</p>
+                                        )}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              ) : null}
+                            </Fragment>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </SectionCard>
+            ) : null}
+
             {section === "prompts" && data.prompts ? (
               <SectionCard
                 title="Prompts"
@@ -2092,6 +2412,62 @@ export default function App() {
                       <strong>{diagnostics.database}</strong>
                     </div>
                   </div>
+                  {diagnostics.admin_access_token_masked ? (
+                    <Box
+                      sx={{
+                        mt: 2,
+                        p: 2,
+                        borderRadius: 2,
+                        bgcolor: "action.hover",
+                        border: 1,
+                        borderColor: "divider",
+                      }}
+                    >
+                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                        Admin API token (masked)
+                      </Typography>
+                      <Typography
+                        variant="body2"
+                        component="code"
+                        sx={{ display: "block", fontFamily: "monospace", mb: 1.5, wordBreak: "break-all" }}
+                      >
+                        {diagnostics.admin_access_token_masked}
+                      </Typography>
+                      <Box
+                        component="ul"
+                        sx={{
+                          m: 0,
+                          pl: 2.5,
+                          "& li": { mb: 0.75 },
+                          typography: "caption",
+                          color: "text.secondary",
+                        }}
+                      >
+                        <li>
+                          The full secret is not shown. Send it as{" "}
+                          <Box component="code" sx={{ fontSize: "0.85em" }}>
+                            Authorization: Bearer …
+                          </Box>{" "}
+                          on{" "}
+                          <Box component="code" sx={{ fontSize: "0.85em" }}>
+                            /api/v0/…
+                          </Box>{" "}
+                          requests in enterprise mode.
+                        </li>
+                        <li>
+                          Call{" "}
+                          <Box component="code" sx={{ fontSize: "0.85em" }}>
+                            POST …/init
+                          </Box>{" "}
+                          with enterprise mode; the JSON response includes{" "}
+                          <Box component="code" sx={{ fontSize: "0.85em" }}>
+                            admin_access_token
+                          </Box>
+                          . If your deployment logs bootstrap on first start, check server output.
+                        </li>
+                      </Box>
+                    </Box>
+                  ) : null}
                 </SectionCard>
 
                 <SectionCard title="Runtime details" subtitle="System information">
@@ -2264,6 +2640,155 @@ export default function App() {
               onClick={() => void submitToolGroup()}
             >
               {isBusy("tool-group-create") ? "Saving..." : "+ Add Tool Group"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={promptGroupOpen} onClose={closePromptGroupModal} maxWidth="md" fullWidth scroll="paper">
+          <DialogTitle sx={{ pr: 6 }}>
+            <Stack
+              direction="row"
+              spacing={2}
+              sx={{ justifyContent: "space-between", alignItems: "flex-start" }}
+            >
+              <Box>
+                <Typography variant="caption" sx={{ letterSpacing: "0.12em", fontWeight: 600 }}>
+                  Prompt Groups
+                </Typography>
+                <Typography variant="h5" sx={{ mt: 0.5 }}>
+                  Add Prompt Group
+                </Typography>
+              </Box>
+              <Button variant="outlined" size="small" onClick={closePromptGroupModal}>
+                Close
+              </Button>
+            </Stack>
+          </DialogTitle>
+
+          <DialogContent dividers>
+            <Stack spacing={2}>
+              <TextField
+                label="Group name"
+                placeholder="reviews"
+                fullWidth
+                size="small"
+                value={promptGroupForm.name}
+                onChange={(event) =>
+                  setPromptGroupForm((current) => ({ ...current, name: event.target.value }))
+                }
+              />
+              <TextField
+                label="Description"
+                placeholder="Prompts useful for PR review workflows"
+                fullWidth
+                size="small"
+                value={promptGroupForm.description}
+                onChange={(event) =>
+                  setPromptGroupForm((current) => ({ ...current, description: event.target.value }))
+                }
+              />
+
+              <div className="tool-group-builder">
+                <div className="tool-group-selector panel">
+                  <div className="tool-group-selector-header">
+                    <strong>Available prompts</strong>
+                  </div>
+                  {(data.prompts?.prompts.length ?? 0) > 0 ? (
+                    <>
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ mb: 1 }}>
+                        <TextField
+                          placeholder="Search prompts"
+                          size="small"
+                          value={promptGroupPromptFilter}
+                          onChange={(event) => setPromptGroupPromptFilter(event.target.value)}
+                          sx={{ flex: 1, minWidth: 0 }}
+                        />
+                        <FormControl size="small" sx={{ minWidth: 160 }}>
+                          <InputLabel id="pg-server-filter">Server</InputLabel>
+                          <Select
+                            labelId="pg-server-filter"
+                            label="Server"
+                            value={promptGroupPromptServerFilter}
+                            onChange={(event) => setPromptGroupPromptServerFilter(event.target.value)}
+                          >
+                            <MenuItem value="all">All servers</MenuItem>
+                            {uniquePromptServers.map((server) => (
+                              <MenuItem key={server} value={server}>
+                                {server}
+                              </MenuItem>
+                            ))}
+                          </Select>
+                        </FormControl>
+                      </Stack>
+                      <div className="tool-pick-list">
+                        {availablePromptGroupPrompts.map((prompt) => {
+                          const selected = promptGroupForm.selectedPrompts.includes(prompt.canonical_name);
+                          return (
+                            <button
+                              className={`tool-pick-item ${selected ? "is-selected" : ""}`}
+                              key={prompt.canonical_name}
+                              onClick={() => togglePromptGroupSelection(prompt.canonical_name)}
+                              type="button"
+                            >
+                              <div className="table-primary">{prompt.name}</div>
+                              <code className="identifier-code" title={prompt.canonical_name}>
+                                {prompt.canonical_name}
+                              </code>
+                              <div className="table-secondary">{prompt.server}</div>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </>
+                  ) : (
+                    <p className="empty-inline">
+                      Register MCP servers first so prompts are available to group.
+                    </p>
+                  )}
+                </div>
+
+                <div className="tool-group-selector panel">
+                  <div className="tool-group-selector-header">
+                    <strong>Selected prompts</strong>
+                  </div>
+                  {promptGroupForm.selectedPrompts.length > 0 ? (
+                    <div className="selected-tool-list">
+                      {promptGroupForm.selectedPrompts.map((promptName) => (
+                        <button
+                          className="selected-tool-chip"
+                          key={promptName}
+                          onClick={() => removePromptGroupSelection(promptName)}
+                          type="button"
+                        >
+                          <code>{promptName}</code>
+                          <span>Remove</span>
+                        </button>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="empty-inline">Select at least one prompt.</p>
+                  )}
+                </div>
+              </div>
+
+              {promptGroupError ? (
+                <Typography color="error" variant="body2">
+                  {promptGroupError}
+                </Typography>
+              ) : null}
+            </Stack>
+          </DialogContent>
+
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" onClick={closePromptGroupModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              disabled={isBusy("prompt-group-create")}
+              onClick={() => void submitPromptGroup()}
+            >
+              {isBusy("prompt-group-create") ? "Saving..." : "+ Add Prompt Group"}
             </Button>
           </DialogActions>
         </Dialog>

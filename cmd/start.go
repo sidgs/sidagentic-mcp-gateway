@@ -27,6 +27,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
+	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
@@ -46,6 +47,9 @@ const (
 
 	// HTTPPathPrefixEnvVar sets a path prefix for all HTTP routes (e.g. /ai/v1/sami-mcp-gateway).
 	HTTPPathPrefixEnvVar = "HTTP_PATH_PREFIX"
+
+	// PublicURLSchemeEnvVar optionally forces http or https for advertised MCP/dashboard URLs (behind TLS-terminated proxies without X-Forwarded-Proto).
+	PublicURLSchemeEnvVar = "PUBLIC_URL_SCHEME"
 
 	// DefaultTenantIDEnvVar selects the tenant when the X-Tenant-ID header is omitted.
 	DefaultTenantIDEnvVar = "DEFAULT_TENANT_ID"
@@ -622,6 +626,11 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create Tool Group service: %v", err)
 	}
 
+	promptGroupService, err := promptgroup.NewPromptGroupService(dbConn, mcpService)
+	if err != nil {
+		return fmt.Errorf("failed to create Prompt Group service: %v", err)
+	}
+
 	defaultTenantID, err := getDefaultTenantID()
 	if err != nil {
 		return err
@@ -666,12 +675,14 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		MCPClientService:     mcpClientService,
 		ConfigService:        configService,
 		UserService:          userService,
-		ToolGroupService:     toolGroupService,
+		ToolGroupService:      toolGroupService,
+		PromptGroupService: promptGroupService,
 		DashboardService:     dashboardService,
 		OtelProviders:        otelProviders,
 		Metrics:              mcpMetrics,
-		HTTPPathPrefix:       strings.TrimSpace(os.Getenv(HTTPPathPrefixEnvVar)),
-		OIDC:                 oidcSettings,
+		HTTPPathPrefix:          strings.TrimSpace(os.Getenv(HTTPPathPrefixEnvVar)),
+		PublicURLScheme:         strings.TrimSpace(os.Getenv(PublicURLSchemeEnvVar)),
+		OIDC:                    oidcSettings,
 		OIDCRedis:            oidcRedis,
 		OIDCSessionTTL:       oidcSessionTTL,
 		PostLoginRedirectURL: strings.TrimSpace(os.Getenv(PostLoginRedirectURLEnvVar)),

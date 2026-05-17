@@ -3,6 +3,7 @@ export type AppSection =
   | "servers"
   | "tools"
   | "tool_groups"
+  | "prompt_groups"
   | "prompts"
   | "resources"
   | "diagnostics";
@@ -117,6 +118,28 @@ export interface DashboardToolGroupsResponse {
   empty_state?: DashboardEmptyState;
 }
 
+export interface DashboardPromptGroupPrompt {
+  name: string;
+  canonical_name: string;
+  server: string;
+  description?: string;
+}
+
+export interface DashboardPromptGroup {
+  name: string;
+  description?: string;
+  prompt_count: number;
+  prompts: DashboardPromptGroupPrompt[];
+  streamable_http_endpoint: string;
+  sse_endpoint: string;
+  sse_message_endpoint: string;
+}
+
+export interface DashboardPromptGroupsResponse {
+  prompt_groups: DashboardPromptGroup[];
+  empty_state?: DashboardEmptyState;
+}
+
 export interface DashboardPrompt {
   name: string;
   canonical_name: string;
@@ -165,6 +188,8 @@ export interface DashboardDiagnosticsResponse {
   tool_count: number;
   prompt_count: number;
   resource_count: number;
+  /** First/last few characters only; enterprise mode when dashboard is available. */
+  admin_access_token_masked?: string;
   empty_state?: DashboardEmptyState;
 }
 
@@ -185,6 +210,12 @@ export interface DashboardCreateToolGroupInput {
   name: string;
   description?: string;
   tools: string[];
+}
+
+export interface DashboardCreatePromptGroupInput {
+  name: string;
+  description?: string;
+  prompts: string[];
 }
 
 export interface DashboardOAuthAuthorizationRequired {

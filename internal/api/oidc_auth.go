@@ -61,10 +61,6 @@ func oauthCookiePath(prefix string) string {
 	return prefix
 }
 
-func oauthCookieSecure(c *gin.Context) bool {
-	return c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https"
-}
-
 // normalizeOAuth2AuthorizeRedirectURI validates COGNITO_REDIRECT_URI: non-empty absolute http(s) URL (OAuth2 redirect_uri).
 func normalizeOAuth2AuthorizeRedirectURI(raw string) (string, error) {
 	raw = strings.TrimSpace(raw)
@@ -205,7 +201,7 @@ func (s *Server) cognitoOAuthLoginHandler() gin.HandlerFunc {
 		conf := s.newOAuth2Config(provider, s.oauthRedirectURL(c))
 		redirect := conf.AuthCodeURL(state)
 
-		ok := oauthCookieSecure(c)
+		ok := s.oauthCookieSecure(c)
 		http.SetCookie(c.Writer, &http.Cookie{
 			Name:     oauthStateCookieName,
 			Value:    state,
@@ -312,7 +308,7 @@ func (s *Server) cognitoOAuthCallbackHandler() gin.HandlerFunc {
 			return
 		}
 
-		okSecure := oauthCookieSecure(c)
+		okSecure := s.oauthCookieSecure(c)
 
 		expirePast := &http.Cookie{
 			Name:     oauthStateCookieName,
@@ -385,7 +381,7 @@ func (s *Server) cognitoLogoutHandler() gin.HandlerFunc {
 			return
 		}
 
-		sec := oauthCookieSecure(c)
+		sec := s.oauthCookieSecure(c)
 		path := oauthCookiePath(s.httpPathPrefix)
 
 		if ck, err := c.Request.Cookie(oidcSessionCookieName); err == nil && ck.Value != "" {

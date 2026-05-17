@@ -139,18 +139,19 @@ type DashboardAuthStatusResponse struct {
 }
 
 type DashboardDiagnosticsResponse struct {
-	Version              string               `json:"version"`
-	Mode                 string               `json:"mode"`
-	ConfigSource         string               `json:"config_source,omitempty"`
-	ConfigPath           string               `json:"config_path,omitempty"`
-	Database             string               `json:"database"`
-	EnabledTransports    []string             `json:"enabled_transports"`
-	MetricsEndpoint      string               `json:"metrics_endpoint,omitempty"`
-	PrimaryEndpoint      string               `json:"primary_endpoint"`
-	TroubleshootingHints []string             `json:"troubleshooting_hints"`
-	ServerCount          int                  `json:"server_count"`
-	ToolCount            int                  `json:"tool_count"`
-	PromptCount          int                  `json:"prompt_count"`
-	ResourceCount        int                  `json:"resource_count"`
-	EmptyState           *DashboardEmptyState `json:"empty_state,omitempty"`
+	Version                  string               `json:"version"`
+	Mode                     string               `json:"mode"`
+	ConfigSource             string               `json:"config_source,omitempty"`
+	ConfigPath               string               `json:"config_path,omitempty"`
+	Database                 string               `json:"database"`
+	EnabledTransports        []string             `json:"enabled_transports"`
+	MetricsEndpoint          string               `json:"metrics_endpoint,omitempty"`
+	PrimaryEndpoint          string               `json:"primary_endpoint"`
+	TroubleshootingHints     []string             `json:"troubleshooting_hints"`
+	ServerCount              int                  `json:"server_count"`
+	ToolCount                int                  `json:"tool_count"`
+	PromptCount              int                  `json:"prompt_count"`
+	ResourceCount            int                  `json:"resource_count"`
+	AdminAccessTokenMasked   string               `json:"admin_access_token_masked,omitempty"`
+	EmptyState               *DashboardEmptyState `json:"empty_state,omitempty"`
 }

@@ -13,14 +13,15 @@ import (
 const defaultExportTargetDir = ".mcpjungle"
 
 const (
-	exportMcpServersDir = "servers"
-	exportToolGroupsDir = "groups"
+	exportMcpServersDir     = "servers"
+	exportToolGroupsDir     = "groups"
+	exportPromptGroupsDir   = "prompt-groups"
 )
 
 var exportCmd = &cobra.Command{
 	Use:   "export",
 	Short: "Export configuration files of all entities",
-	Long: "This command creates configuration files for all entities (mcp servers, groups) that exist in mcpjungle.\n" +
+	Long: "This command creates configuration files for all entities (mcp servers, tool groups, prompt groups) that exist in mcpjungle.\n" +
 		"This is useful when you want to track all the entities registered in mcpjungle as code.\n" +
 		fmt.Sprintf("By default, the configurations are exported to a directory named %s in the current working directory.\n\n", defaultExportTargetDir) +
 		"NOTE: In enterprise mode, you must be an admin to export all configurations successfully.",
@@ -115,6 +116,10 @@ func runExport(cmd *cobra.Command, args []string) error {
 	if err := os.Mkdir(groupsDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create groups directory: %w", err)
 	}
+	promptGroupsDir := filepath.Join(targetDir, exportPromptGroupsDir)
+	if err := os.Mkdir(promptGroupsDir, 0o755); err != nil {
+		return fmt.Errorf("failed to create prompt-groups directory: %w", err)
+	}
 	serversDir := filepath.Join(targetDir, exportMcpServersDir)
 	if err := os.Mkdir(serversDir, 0o755); err != nil {
 		return fmt.Errorf("failed to create mcp servers directory: %w", err)
@@ -133,6 +138,25 @@ func runExport(cmd *cobra.Command, args []string) error {
 
 			for _, g := range groups {
 				if err := writeJSONConfigFile(groupsDir, g.Name, g); err != nil {
+					return err
+				}
+			}
+		}
+	}
+
+	cmd.Println("Fetching Prompt Group configurations...")
+
+	pgroups, pErr := apiClient.GetPromptGroupConfigs()
+	if pErr != nil {
+		cmd.Printf("warning: failed to fetch prompt group configurations: %v\n", pErr)
+	} else {
+		if len(pgroups) == 0 {
+			cmd.Println("No Prompt Groups found.")
+		} else {
+			cmd.Printf("Writing Prompt Groups configurations to %s\n", promptGroupsDir)
+
+			for _, g := range pgroups {
+				if err := writeJSONConfigFile(promptGroupsDir, g.Name, g); err != nil {
 					return err
 				}
 			}
