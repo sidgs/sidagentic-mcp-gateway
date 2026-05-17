@@ -55,6 +55,8 @@ const (
 	CognitoClientIDEnvVar     = "COGNITO_CLIENT_ID"
 	CognitoClientSecretEnvVar = "COGNITO_CLIENT_SECRET"
 	CognitoRegionEnvVar       = "COGNITO_REGION"
+	// CognitoRedirectURIEnvVar optionally overrides OAuth2 redirect_uri (absolute https or http URL; must match Cognito hosted UI / app client callbacks).
+	CognitoRedirectURIEnvVar = "COGNITO_REDIRECT_URI"
 
 	// Redis (optional OIDC dashboard session backing when Cognito/OIDC login is enabled)
 	RedisURLEnvVar       = "REDIS_URL"
@@ -673,6 +675,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		OIDCRedis:            oidcRedis,
 		OIDCSessionTTL:       oidcSessionTTL,
 		PostLoginRedirectURL: strings.TrimSpace(os.Getenv(PostLoginRedirectURLEnvVar)),
+		CognitoOAuthRedirectURI: strings.TrimSpace(os.Getenv(CognitoRedirectURIEnvVar)),
 		DefaultTenantID:      defaultTenantID,
 	}
 	s, err := api.NewServer(opts)

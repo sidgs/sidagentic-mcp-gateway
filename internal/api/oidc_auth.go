@@ -65,8 +65,33 @@ func oauthCookieSecure(c *gin.Context) bool {
 	return c.Request.TLS != nil || c.Request.Header.Get("X-Forwarded-Proto") == "https"
 }
 
-// oauthRedirectURL builds the OAuth2 redirect_uri (absolute) for Cognito allowlists.
+// normalizeOAuth2AuthorizeRedirectURI validates COGNITO_REDIRECT_URI: non-empty absolute http(s) URL (OAuth2 redirect_uri).
+func normalizeOAuth2AuthorizeRedirectURI(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+	u, err := url.Parse(raw)
+	if err != nil {
+		return "", fmt.Errorf("parse redirect URI: %w", err)
+	}
+	if strings.TrimSpace(u.Scheme) == "" || strings.TrimSpace(u.Host) == "" {
+		return "", errors.New("COGNITO_REDIRECT_URI must be an absolute URL with scheme and host (e.g. https://example.com/path/auth/callback)")
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+		return u.String(), nil
+	default:
+		return "", fmt.Errorf("COGNITO_REDIRECT_URI unsupported scheme %q (use http or https)", u.Scheme)
+	}
+}
+
+// oauthRedirectURL builds the OAuth2 redirect_uri passed to Cognito (must match Cognito app client settings).
+// When CognitoOAuthRedirectURI is configured (COGNITO_REDIRECT_URI env), it is used as-is instead of deriving from the request Host.
 func (s *Server) oauthRedirectURL(c *gin.Context) string {
+	if s.cognitoOAuthRedirectURI != "" {
+		return s.cognitoOAuthRedirectURI
+	}
 	root := strings.TrimRight(s.publicGatewayRoot(c), "/")
 	return root + "/auth/callback"
 }

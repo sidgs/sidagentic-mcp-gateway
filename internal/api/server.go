@@ -71,6 +71,9 @@ type ServerOptions struct {
 	// Empty means redirect to "/" or "{HTTP_PATH_PREFIX}/". Validated at server construction.
 	PostLoginRedirectURL string
 
+	// CognitoOAuthRedirectURI optionally overrides OAuth2 authorize redirect_uri (COGNITO_REDIRECT_URI env: absolute https or http URL, must match Cognito app client callback).
+	CognitoOAuthRedirectURI string
+
 	// DefaultTenantID is used when the X-Tenant-ID header is absent (typically from DEFAULT_TENANT_ID).
 	DefaultTenantID string
 }
@@ -118,6 +121,9 @@ type Server struct {
 
 	// postLoginRedirectURL, when set, overrides the default browser redirect target after OIDC callback success and after /logout.
 	postLoginRedirectURL string
+
+	// cognitoOAuthRedirectURI overrides OAuth2 redirect_uri passed to Cognito when COGNITO_REDIRECT_URI is set.
+	cognitoOAuthRedirectURI string
 
 	// defaultTenantID is used when X-Tenant-ID is missing and for non-HTTP operations.
 	defaultTenantID string
@@ -169,6 +175,18 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		}
 	}
 
+	cognitoOAuthRedirect := strings.TrimSpace(opts.CognitoOAuthRedirectURI)
+	if cognitoOAuthRedirect != "" {
+		if opts.OIDC == nil {
+			return nil, fmt.Errorf("CognitoOAuthRedirectURI is set but OIDC is not configured")
+		}
+		var errCR error
+		cognitoOAuthRedirect, errCR = normalizeOAuth2AuthorizeRedirectURI(cognitoOAuthRedirect)
+		if errCR != nil {
+			return nil, fmt.Errorf("CognitoOAuthRedirectURI: %w", errCR)
+		}
+	}
+
 	s := &Server{
 		mcpProxyServer:        opts.MCPProxyServer,
 		sseMcpProxyServer:     opts.SseMcpProxyServer,
@@ -181,9 +199,10 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		otelProviders:         opts.OtelProviders,
 		metrics:               opts.Metrics,
 		dashboardOAuthResults: make(map[string]dashboardOAuthSessionResult),
-		httpPathPrefix:        NormalizeHTTPPathPrefix(opts.HTTPPathPrefix),
-		postLoginRedirectURL:  postLogin,
-		defaultTenantID:       def,
+		httpPathPrefix:            NormalizeHTTPPathPrefix(opts.HTTPPathPrefix),
+		postLoginRedirectURL:      postLogin,
+		cognitoOAuthRedirectURI:   cognitoOAuthRedirect,
+		defaultTenantID:           def,
 		oidcSettings:          opts.OIDC,
 		oidcSessionStore:      sessionStore,
 		oidcSessionMaxTTL:     maxTTL,
@@ -198,6 +217,9 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 
 	if postLogin != "" && opts.OIDC != nil {
 		log.Printf("[oidc] post-login redirect: %s\n", postLogin)
+	}
+	if cognitoOAuthRedirect != "" {
+		log.Printf("[oidc] OAuth2 redirect_uri override: %s\n", cognitoOAuthRedirect)
 	}
 
 	return s, nil

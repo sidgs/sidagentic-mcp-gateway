@@ -49,7 +49,8 @@ services:
       REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
       OIDC_SESSION_TTL_SECONDS: ${OIDC_SESSION_TTL_SECONDS:-259200}
       OIDC_SCOPES: ${OIDC_SCOPES:-email openid phone aws.cognito.signin.user.admin}
-      # Optional: https://host/path or root-relative path (e.g. /dashboard). Empty = gateway root (/ or HTTP_PATH_PREFIX/).
+      # Optional fixed OAuth redirect_uri for Cognito (https URL; must match Cognito callback allowlist exactly).
+      # COGNITO_REDIRECT_URI: ${COGNITO_REDIRECT_URI:-}
       POST_LOGIN_REDIRECT_URL: ${POST_LOGIN_REDIRECT_URL:-/#home}
 
     ports:

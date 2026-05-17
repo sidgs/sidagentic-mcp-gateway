@@ -18,7 +18,10 @@ env:
   REDIS_URL: "redis://redis.commons:6379/0"
   OIDC_SESSION_TTL_SECONDS: "259200"
   OIDC_SCOPES: "email openid phone aws.cognito.signin.user.admin"
+  # Optional: fixed OAuth2 authorize redirect_uri for Cognito (https; must match app client callback URLs exactly). Use when X-Forwarded-Proto is unreliable behind CDNs.
+  # COGNITO_REDIRECT_URI: "https://apps.sidglobal.cloud/api/v1/sami-mcp-gateway/auth/callback"
   POST_LOGIN_REDIRECT_URL: "/apps/mcp-gateway-dashboard/#/home"
+  COGNITO_REDIRECT_URI: "https://apps.sidglobal.cloud/api/v1/sami-mcp-gateway/auth/callback"
 
 secrets:
   COGNITO_CLIENT_SECRET: "38qm6oububnuafmsioncaagh2p932kn1bk134rocuc3a2ngctbj"
