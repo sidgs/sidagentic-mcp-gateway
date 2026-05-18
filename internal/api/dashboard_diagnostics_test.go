@@ -11,6 +11,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/migrations"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	configSvc "github.com/mcpjungle/mcpjungle/internal/service/config"
+	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
@@ -78,6 +79,7 @@ func TestDashboardDiagnosticsHandler_EnterpriseMasksAdminToken(t *testing.T) {
 		SseMcpProxyServer:  sseProxy,
 		MCPService:         mcpService,
 		MCPClientService:   mcpclient.NewMCPClientService(db),
+		AgentAppService:    agentapp.New(db, ""),
 		ConfigService:      cfg,
 		UserService:        usr,
 		DashboardService:   dashboard.NewService(db, false),
@@ -151,6 +153,7 @@ func TestDashboardDiagnosticsHandler_DevOmitsMaskEvenIfAdminExists(t *testing.T)
 		SseMcpProxyServer:  sseProxy,
 		MCPService:         mcpService,
 		MCPClientService:   mcpclient.NewMCPClientService(db),
+		AgentAppService:    agentapp.New(db, ""),
 		ConfigService:      cfg,
 		UserService:        usr,
 		DashboardService:   dashboard.NewService(db, false),

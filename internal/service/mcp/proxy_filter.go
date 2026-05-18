@@ -4,7 +4,9 @@ import (
 	"context"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mcpjungle/mcpjungle/internal/agentappauth"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 )
 
@@ -29,6 +31,23 @@ func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 
 	c, ok := ctx.Value("client").(*model.McpClient)
 	if !ok || c == nil {
+		if aa, ok := agentappauth.PrincipalFromContext(ctx); ok {
+			reqTenant := tenant.MustFromContext(ctx)
+			var filtered []mcp.Tool
+			for _, tool := range tools {
+				toolTenant, canonical, qual := tenant.SplitProxyToolName(tool.Name)
+				if !qual || toolTenant != reqTenant {
+					continue
+				}
+				if _, _, ok := splitServerToolName(canonical); !ok {
+					continue
+				}
+				filtered = append(filtered, tool)
+			}
+			if tg, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok && aa.AllowsToolGroup(tg) {
+				return filtered
+			}
+		}
 		return nil
 	}
 

@@ -15,6 +15,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/dashboardui"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/config"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
@@ -53,7 +54,8 @@ type ServerOptions struct {
 	UserService      *user.UserService
 	ToolGroupService  *toolgroup.ToolGroupService
 	PromptGroupService *promptgroup.PromptGroupService
-	DashboardService  *dashboard.Service
+	DashboardService   *dashboard.Service
+	AgentAppService    *agentapp.Service
 
 	OtelProviders *telemetry.Providers
 	Metrics       telemetry.CustomMetrics
@@ -97,7 +99,8 @@ type Server struct {
 	userService      *user.UserService
 	toolGroupService  *toolgroup.ToolGroupService
 	promptGroupService *promptgroup.PromptGroupService
-	dashboardService  *dashboard.Service
+	dashboardService   *dashboard.Service
+	agentAppService    *agentapp.Service
 
 	otelProviders *telemetry.Providers
 	metrics       telemetry.CustomMetrics
@@ -213,6 +216,7 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		toolGroupService:      opts.ToolGroupService,
 		promptGroupService:    opts.PromptGroupService,
 		dashboardService:      opts.DashboardService,
+		agentAppService:       opts.AgentAppService,
 		otelProviders:         opts.OtelProviders,
 		metrics:               opts.Metrics,
 		dashboardOAuthResults: make(map[string]dashboardOAuthSessionResult),
@@ -272,11 +276,32 @@ func (s *Server) GetMode() (model.ServerMode, error) {
 	return c.Mode, nil
 }
 
+// BootstrapServerIfUninitialized persists server mode for the tenant when no initialized
+// config exists yet. For enterprise modes it also creates the bootstrap admin user.
+// If the server is already initialized, it returns created=false and does nothing (idempotent).
+func (s *Server) BootstrapServerIfUninitialized(ctx context.Context, mode model.ServerMode) (created bool, enterpriseAdminToken string, err error) {
+	createdFlag, err := s.configService.Init(ctx, mode)
+	if err != nil {
+		return false, "", err
+	}
+	if !createdFlag {
+		return false, "", nil
+	}
+	if model.IsEnterpriseMode(mode) {
+		admin, err := s.userService.CreateAdminUser(ctx)
+		if err != nil {
+			return false, "", fmt.Errorf("failed to create bootstrap admin user: %w", err)
+		}
+		return true, admin.AccessToken, nil
+	}
+	return true, "", nil
+}
+
 // InitDev initializes the server configuration in the Development mode.
 // This method does not create an admin user because that is irrelevant in dev mode.
 func (s *Server) InitDev() error {
 	ctx := tenant.WithContext(context.Background(), s.defaultTenantID)
-	_, err := s.configService.Init(ctx, model.ModeDev)
+	_, _, err := s.BootstrapServerIfUninitialized(ctx, model.ModeDev)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server config in dev mode: %w", err)
 	}
@@ -483,6 +508,12 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		s.promptGroupSseMessageHandler(),
 	)
 
+	g.POST(
+		V0ApiPathPrefix+"/agent-apps/oauth/token",
+		s.requireInitialized(),
+		s.agentAppOAuthTokenHandler(),
+	)
+
 	// Setup /v0 API endpoints
 	apiV0 := g.Group(
 		V0ApiPathPrefix,
@@ -509,6 +540,13 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		userAPI.POST("/prompts/render", s.getPromptWithArgsHandler())
 
 		userAPI.GET("/users/whoami", requireEnterpriseMode, s.whoAmIHandler())
+
+		userAPI.POST("/agent-apps", s.createAgentAppHandler())
+		userAPI.GET("/agent-apps", s.listAgentAppsHandler())
+		userAPI.GET("/agent-apps/:id", s.getAgentAppHandler())
+		userAPI.PATCH("/agent-apps/:id", s.patchAgentAppHandler())
+		userAPI.DELETE("/agent-apps/:id", s.deleteAgentAppHandler())
+		userAPI.POST("/agent-apps/:id/rotate-secret", s.rotateAgentAppSecretHandler())
 	}
 
 	// endpoints only accessible by an admin user in enterprise mode or anyone in development mode
@@ -624,6 +662,12 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.POST("/prompt-groups", s.dashboardCreatePromptGroupHandler())
 			dashboardAPI.GET("/prompt-groups/:name", s.dashboardGetPromptGroupHandler())
 			dashboardAPI.DELETE("/prompt-groups/:name", s.dashboardDeletePromptGroupHandler())
+
+			dashboardAPI.GET("/agent-apps", s.dashboardAgentAppsHandler())
+			dashboardAPI.POST("/agent-apps", s.dashboardCreateAgentAppHandler())
+			dashboardAPI.PATCH("/agent-apps/:id", s.dashboardPatchAgentAppHandler())
+			dashboardAPI.DELETE("/agent-apps/:id", s.dashboardDeleteAgentAppHandler())
+			dashboardAPI.POST("/agent-apps/:id/rotate-secret", s.dashboardRotateAgentAppSecretHandler())
 
 			dashboardAPI.GET("/prompts", s.dashboardPromptsHandler())
 			dashboardAPI.PATCH("/prompts/:name/enabled", s.dashboardSetPromptEnabledHandler())

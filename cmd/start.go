@@ -23,6 +23,7 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/db"
 	"github.com/mcpjungle/mcpjungle/internal/migrations"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/config"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
@@ -53,6 +54,9 @@ const (
 
 	// DefaultTenantIDEnvVar selects the tenant when the X-Tenant-ID header is omitted.
 	DefaultTenantIDEnvVar = "DEFAULT_TENANT_ID"
+
+	// AgentAppJWTSigningKeyEnvVar sets the HS256 key for agent-app Bearer tokens (client_credentials). Empty disables JWT mint and Bearer JWT MCP auth.
+	AgentAppJWTSigningKeyEnvVar = "AGENT_APP_JWT_SIGNING_KEY"
 
 	// Cognito / OIDC (optional dashboard login)
 	CognitoIssuerURLEnvVar    = "COGNITO_ISSUER_URL"
@@ -111,7 +115,8 @@ var startServerCmd = &cobra.Command{
 	Short: "Start the MCPJungle server",
 	Long: "Starts the MCPJungle HTTP Registry and the MCP Gateway\n\n" +
 		"The server is started in development mode by default, which is ideal for running mcpjungle locally.\n" +
-		"Teams & Enterprises should run mcpjungle in enterprise mode.\n\n" +
+		"Teams & Enterprises should run mcpjungle in enterprise mode.\n" +
+		"If the database is not yet initialized, startup completes initialization automatically for the selected mode; on first enterprise startup the bootstrap admin access token is printed once to stdout.\n\n" +
 		"By default, this command creates a SQLite database file in the current directory (if it doesn't already exist).\n" +
 		"You can also supply a custom DSN in the DATABASE_URL environment variable.\n" +
 		"eg: export DATABASE_URL='postgres://user:password@localhost:5432/mcpjungle'\n" +
@@ -221,6 +226,14 @@ func getDesiredServerMode(cmd *cobra.Command) (model.ServerMode, error) {
 	}
 
 	return desiredServerMode, nil
+}
+
+// normalizeServerMode treats deprecated production mode as enterprise for comparisons against stored config.
+func normalizeServerMode(m model.ServerMode) model.ServerMode {
+	if m == model.ModeProd {
+		return model.ModeEnterprise
+	}
+	return m
 }
 
 // isTelemetryEnabled returns true if telemetry should be enabled.
@@ -616,6 +629,11 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 	}
 
 	mcpClientService := mcpclient.NewMCPClientService(dbConn)
+	agentAppSigningKey := strings.TrimSpace(os.Getenv(AgentAppJWTSigningKeyEnvVar))
+	agentAppService := agentapp.New(dbConn, agentAppSigningKey)
+	if agentAppSigningKey != "" {
+		log.Printf("[server] agent-app JWT signing enabled (%s is set)", AgentAppJWTSigningKeyEnvVar)
+	}
 
 	configService := config.NewServerConfigService(dbConn)
 	userService := user.NewUserService(dbConn)
@@ -678,6 +696,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		ToolGroupService:      toolGroupService,
 		PromptGroupService: promptGroupService,
 		DashboardService:     dashboardService,
+		AgentAppService:      agentAppService,
 		OtelProviders:        otelProviders,
 		Metrics:              mcpMetrics,
 		HTTPPathPrefix:          strings.TrimSpace(os.Getenv(HTTPPathPrefixEnvVar)),
@@ -694,39 +713,31 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create server: %v", err)
 	}
 
-	// determine server init status
-	ok, err := s.IsInitialized()
+	// Ensure server config exists (idempotent). First startup creates dev or enterprise row,
+	// matching POST /init behavior for enterprise (bootstrap admin user + token).
+	ctxInit := tenant.WithContext(context.Background(), defaultTenantID)
+	created, bootstrapAdminToken, err := s.BootstrapServerIfUninitialized(ctxInit, desiredServerMode)
 	if err != nil {
-		return fmt.Errorf("failed to check if server is initialized: %v", err)
+		return fmt.Errorf("failed to initialize server: %w", err)
 	}
-	if ok {
-		// If the server is already initialized, then the mode supplied to this command (desired mode)
-		// must match the configured mode.
-		mode, err := s.GetMode()
-		if err != nil {
-			return fmt.Errorf("failed to get server mode: %v", err)
-		}
-		if desiredServerMode != mode {
-			return fmt.Errorf(
-				"server is already initialized in %s mode, cannot start in %s mode",
-				mode, desiredServerMode,
-			)
-		}
-	} else {
-		// If server isn't already initialized and the desired mode is dev, silently initialize the server.
-		// Individual (dev mode) users need not worry about server initialization.
-		if desiredServerMode == model.ModeDev {
-			if err := s.InitDev(); err != nil {
-				return fmt.Errorf("failed to initialize server in development mode: %v", err)
-			}
+	if created {
+		if bootstrapAdminToken != "" {
+			log.Printf("[server] enterprise bootstrap complete (first run)")
+			cmd.Printf("\nBootstrap admin access token (save securely; shown once): %s\n\n", bootstrapAdminToken)
 		} else {
-			// If desired mode is enterprise, then server initialization is a manual next step to be taken by the user.
-			// This is so that they can obtain the admin access token on their client machine.
-			cmd.Println(
-				"Starting server in Enterprise mode," +
-					" don't forget to initialize it by running the `init-server` command",
-			)
+			log.Printf("[server] first-time initialization complete (%s mode)", desiredServerMode)
 		}
+	}
+
+	mode, err := s.GetMode()
+	if err != nil {
+		return fmt.Errorf("failed to get server mode: %v", err)
+	}
+	if normalizeServerMode(mode) != normalizeServerMode(desiredServerMode) {
+		return fmt.Errorf(
+			"server is already initialized in %s mode, cannot start in %s mode",
+			mode, desiredServerMode,
+		)
 	}
 
 	// Display startup banner when the server is started

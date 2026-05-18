@@ -1,5 +1,8 @@
 import type {
+  DashboardAgentAppsResponse,
   DashboardAuthStatusResponse,
+  DashboardCreateAgentAppInput,
+  DashboardCreateAgentAppResponse,
   DashboardCreatePromptGroupInput,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
@@ -153,5 +156,27 @@ export const api = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ enabled }),
+    }),
+
+  agentApps: () => requestJSON<DashboardAgentAppsResponse>("/dashboard/agent-apps"),
+  createAgentApp: (body: DashboardCreateAgentAppInput) =>
+    requestJSON<DashboardCreateAgentAppResponse>("/dashboard/agent-apps", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  patchAgentApp: (id: number, body: Record<string, unknown>) =>
+    requestJSON(`/dashboard/agent-apps/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  deleteAgentApp: (id: number) =>
+    requestJSON(`/dashboard/agent-apps/${id}`, {
+      method: "DELETE",
+    }),
+  rotateAgentAppSecret: (id: number) =>
+    requestJSON<{ client_secret: string }>(`/dashboard/agent-apps/${id}/rotate-secret`, {
+      method: "POST",
     }),
 };

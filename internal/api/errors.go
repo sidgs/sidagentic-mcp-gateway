@@ -26,5 +26,9 @@ func handleServiceError(c *gin.Context, err error) {
 		c.JSON(http.StatusBadRequest, resp)
 		return
 	}
+	if errors.Is(err, apierrors.ErrUnauthorized) {
+		c.JSON(http.StatusUnauthorized, types.APIErrorResponse{Error: err.Error()})
+		return
+	}
 	c.JSON(http.StatusInternalServerError, types.APIErrorResponse{Error: err.Error()})
 }

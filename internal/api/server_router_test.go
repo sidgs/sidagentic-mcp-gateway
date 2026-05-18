@@ -9,6 +9,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/migrations"
 	configSvc "github.com/mcpjungle/mcpjungle/internal/service/config"
+	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
@@ -55,6 +56,7 @@ func newTestAPIServer(t *testing.T, httpPathPrefix string, oidcCfg *OIDCSettings
 		SseMcpProxyServer: sseMcpProxy,
 		MCPService:        mcpService,
 		MCPClientService:  mcpclient.NewMCPClientService(db),
+		AgentAppService:     agentapp.New(db, "unit-test-agent-app-jwt-signing-key-secret-minimum-length"),
 		ConfigService:     cfgSvc,
 		DashboardService:  dashboard.NewService(db, false),
 		UserService:         userSvc.NewUserService(db),

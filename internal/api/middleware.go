@@ -2,12 +2,15 @@ package api
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"github.com/mcpjungle/mcpjungle/internal/agentappauth"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
@@ -179,6 +182,13 @@ func (s *Server) requireServerMode(m model.ServerMode) gin.HandlerFunc {
 // checkAuthForMcpProxyAccess is middleware for MCP proxy that checks for a valid MCP client token
 // if the server is in enterprise mode.
 // In development mode, mcp clients do not require auth to access the MCP proxy.
+//
+// Enterprise mode accepts:
+// - Bearer <opaque token> for legacy MCP clients (unchanged),
+// - Bearer <JWT> for agent-apps (when AGENT_APP_JWT_SIGNING_KEY is set),
+// - Basic base64(client_id:client_secret) for agent-apps.
+//
+// Agent-app credentials may only access tool-group or prompt-group MCP/SSE URLs (/v0/groups/... or /v0/prompt-groups/...).
 func (s *Server) checkAuthForMcpProxyAccess() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mode, exists := c.Get("mode")
@@ -203,22 +213,119 @@ func (s *Server) checkAuthForMcpProxyAccess() gin.HandlerFunc {
 			return
 		}
 
-		authHeader := c.GetHeader("Authorization")
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing MCP client access token"})
-			return
-		}
-		client, err := s.mcpClientService.GetClientByToken(c.Request.Context(), token)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid MCP client token"})
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if authHeader == "" {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing authorization"})
 			return
 		}
 
-		// inject the authenticated MCP client in context for the proxy to use
-		ctx = context.WithValue(c.Request.Context(), "client", client)
-		c.Request = c.Request.WithContext(ctx)
+		fullPath := c.FullPath()
 
-		c.Next()
+		if user, pass, ok := parseMCPBasicAuth(authHeader); ok {
+			if s.agentAppService == nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
+				return
+			}
+			principal, err := s.agentAppService.ResolvePrincipalFromBasic(c.Request.Context(), user, pass)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
+				return
+			}
+			if !agentAppAllowedMCPFullPath(fullPath) {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "agent-app credentials may only access tool-group or prompt-group MCP endpoints"})
+				return
+			}
+			ctx = injectMCPGroupRouteContext(c, c.Request.Context())
+			ctx = agentappauth.WithPrincipal(ctx, principal)
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
+		}
+
+		const bearerPrefix = "Bearer "
+		if len(authHeader) > len(bearerPrefix) && strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
+			token := strings.TrimSpace(authHeader[len(bearerPrefix):])
+			if token == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+				return
+			}
+
+			client, err := s.mcpClientService.GetClientByToken(c.Request.Context(), token)
+			if err == nil {
+				ctx = context.WithValue(c.Request.Context(), "client", client)
+				c.Request = c.Request.WithContext(ctx)
+				c.Next()
+				return
+			}
+
+			if s.agentAppService == nil || !s.agentAppService.JWTConfigured() {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid MCP client token"})
+				return
+			}
+
+			principal, err := s.agentAppService.ResolvePrincipalFromBearerJWT(c.Request.Context(), token)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid MCP client token"})
+				return
+			}
+			if !agentAppAllowedMCPFullPath(fullPath) {
+				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "agent-app credentials may only access tool-group or prompt-group MCP endpoints"})
+				return
+			}
+			ctx = injectMCPGroupRouteContext(c, c.Request.Context())
+			ctx = agentappauth.WithPrincipal(ctx, principal)
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
+		}
+
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unsupported authorization scheme"})
+	}
+}
+
+func parseMCPBasicAuth(authHeader string) (username, password string, ok bool) {
+	const prefix = "Basic "
+	if len(authHeader) < len(prefix) || !strings.EqualFold(authHeader[:len(prefix)], prefix) {
+		return "", "", false
+	}
+	payload := strings.TrimSpace(authHeader[len(prefix):])
+	raw, err := base64.StdEncoding.DecodeString(payload)
+	if err != nil {
+		return "", "", false
+	}
+	s := string(raw)
+	idx := strings.IndexByte(s, ':')
+	if idx < 0 {
+		return "", "", false
+	}
+	return s[:idx], s[idx+1:], true
+}
+
+func injectMCPGroupRouteContext(c *gin.Context, ctx context.Context) context.Context {
+	switch c.FullPath() {
+	case V0PathPrefix + "/groups/:name/mcp",
+		V0PathPrefix + "/groups/:name/sse",
+		V0PathPrefix + "/groups/:name/message":
+		return mcpgatewayctx.WithToolGroupRoute(ctx, c.Param("name"))
+	case V0PathPrefix + "/prompt-groups/:name/mcp",
+		V0PathPrefix + "/prompt-groups/:name/sse",
+		V0PathPrefix + "/prompt-groups/:name/message":
+		return mcpgatewayctx.WithPromptGroupRoute(ctx, c.Param("name"))
+	default:
+		return ctx
+	}
+}
+
+func agentAppAllowedMCPFullPath(fullPath string) bool {
+	switch fullPath {
+	case V0PathPrefix + "/groups/:name/mcp",
+		V0PathPrefix + "/groups/:name/sse",
+		V0PathPrefix + "/groups/:name/message",
+		V0PathPrefix + "/prompt-groups/:name/mcp",
+		V0PathPrefix + "/prompt-groups/:name/sse",
+		V0PathPrefix + "/prompt-groups/:name/message":
+		return true
+	default:
+		return false
 	}
 }

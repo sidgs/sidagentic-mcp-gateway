@@ -10,6 +10,9 @@ var ErrNotFound = errors.New("not found")
 // ErrInvalidInput is returned by service methods when user input is invalid (e.g. invalid mcp tool name).
 var ErrInvalidInput = errors.New("invalid user input")
 
+// ErrUnauthorized is returned when credentials are missing or invalid for the requested operation.
+var ErrUnauthorized = errors.New("unauthorized")
+
 // ErrUpstreamOAuthRequired indicates that the upstream server requires OAuth
 // before registration can proceed.
 var ErrUpstreamOAuthRequired = errors.New("upstream OAuth authorization required")

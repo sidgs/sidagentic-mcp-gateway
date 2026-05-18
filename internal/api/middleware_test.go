@@ -8,6 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/config"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
@@ -395,7 +396,7 @@ func TestCheckAuthForMcpProxyAccess(t *testing.T) {
 			authHeader:     "",
 			setupClient:    func() error { return nil },
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"missing MCP client access token"}`,
+			expectedBody:   `{"error":"missing authorization"}`,
 		},
 	}
 
@@ -412,7 +413,7 @@ func TestCheckAuthForMcpProxyAccess(t *testing.T) {
 					c.Set("mode", tt.mode)
 				}
 			})
-			server := &Server{mcpClientService: mcpClientService}
+			server := &Server{mcpClientService: mcpClientService, agentAppService: agentapp.New(testDB, "")}
 			router.Use(server.checkAuthForMcpProxyAccess())
 			router.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"status": "success"})

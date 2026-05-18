@@ -6,6 +6,7 @@ const SECTIONS = new Set<string>([
   "tools",
   "tool_groups",
   "prompt_groups",
+  "agent_apps",
   "prompts",
   "resources",
   "diagnostics",

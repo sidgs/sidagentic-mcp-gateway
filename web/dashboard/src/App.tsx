@@ -21,7 +21,11 @@ import { DashboardAuthRequiredError, redirectToGatewayLogin } from "@/lib/auth";
 import { appSectionToHash, getSectionFromHashOrDefault, parseAppSectionFromHash } from "@/lib/hashRoute";
 import type {
   AppSection,
+  DashboardAgentApp,
+  DashboardAgentAppGroupEndpoints,
+  DashboardAgentAppsResponse,
   DashboardAuthStatusResponse,
+  DashboardCreateAgentAppInput,
   DashboardCreatePromptGroupInput,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
@@ -76,6 +80,7 @@ interface DashboardData {
   prompts?: DashboardPromptsResponse;
   resources?: DashboardResourcesResponse;
   diagnostics?: DashboardDiagnosticsResponse;
+  agentApps?: DashboardAgentAppsResponse;
 }
 
 interface FeedbackMessage {
@@ -166,6 +171,10 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
     title: "Resources",
     subtitle: "Resources registered and proxied through the gateway.",
   },
+  agent_apps: {
+    title: "Agent Apps",
+    subtitle: "OAuth clients scoped to attached tool and prompt groups.",
+  },
   diagnostics: {
     title: "System Info",
     subtitle: "",
@@ -181,6 +190,13 @@ function shortVersion(version?: string) {
     return match[0];
   }
   return version.length > 16 ? version.slice(0, 16) : version;
+}
+
+function splitCommaList(raw: string): string[] {
+  return raw
+    .split(",")
+    .map((s) => s.trim())
+    .filter((part) => part.length > 0);
 }
 
 function transportLabel(value?: string) {
@@ -554,6 +570,15 @@ export default function App() {
   const [promptGroupOpen, setPromptGroupOpen] = useState(false);
   const [promptGroupForm, setPromptGroupForm] = useState<PromptGroupFormState>(createInitialPromptGroupForm());
   const [promptGroupError, setPromptGroupError] = useState("");
+  const [agentAppDialogOpen, setAgentAppDialogOpen] = useState(false);
+  const [agentAppName, setAgentAppName] = useState("");
+  const [agentAppDescription, setAgentAppDescription] = useState("");
+  const [agentAppToolGroups, setAgentAppToolGroups] = useState("");
+  const [agentAppPromptGroups, setAgentAppPromptGroups] = useState("");
+  const [agentAppCreateError, setAgentAppCreateError] = useState("");
+  const [agentAppSecretReveal, setAgentAppSecretReveal] = useState<{ title: string; secret: string } | null>(
+    null,
+  );
   const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({});
 
   /** Ensure canonical `#/section` when hash is missing or invalid (bookmarkable URLs). */
@@ -587,7 +612,8 @@ export default function App() {
   }, [authSession]);
 
   async function fetchDashboardPanelsAfterOverview(overview: DashboardOverviewResponse) {
-    const [servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics] = await Promise.all([
+    const [servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps] =
+      await Promise.all([
       api.servers(),
       api.tools(),
       api.toolGroups(),
@@ -595,12 +621,13 @@ export default function App() {
       api.prompts(),
       api.resources(),
       api.diagnostics(),
+      api.agentApps(),
     ]);
-    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics };
+    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps };
   }
 
   async function fetchFullDashboard() {
-    const [overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics] =
+    const [overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps] =
       await Promise.all([
       api.overview(),
       api.servers(),
@@ -610,12 +637,13 @@ export default function App() {
       api.prompts(),
       api.resources(),
       api.diagnostics(),
+      api.agentApps(),
     ]);
-    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics };
+    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps };
   }
 
   function applyDashboardPayload(payload: Required<DashboardData>) {
-    const { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics } =
+    const { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps } =
       payload;
     setData({
       overview,
@@ -626,6 +654,7 @@ export default function App() {
       prompts,
       resources,
       diagnostics,
+      agentApps,
     });
     setExpandedTool((current) =>
       current && tools.tools.some((tool) => tool.canonical_name === current) ? current : null,
@@ -794,6 +823,7 @@ export default function App() {
 
   const overview = data.overview;
   const diagnostics = data.diagnostics;
+  const agentApps = data.agentApps;
   const needsDashboardAuth =
     authSession !== null && authSession.oidc_enabled && !authSession.authenticated;
   const dashboardSignOutHref =
@@ -1233,6 +1263,182 @@ export default function App() {
     if (expandedPromptGroup === group.name) {
       setExpandedPromptGroup(null);
     }
+  }
+
+  function openAgentAppModal() {
+    setAgentAppName("");
+    setAgentAppDescription("");
+    setAgentAppToolGroups("");
+    setAgentAppPromptGroups("");
+    setAgentAppCreateError("");
+    setAgentAppDialogOpen(true);
+  }
+
+  function closeAgentAppModal() {
+    setAgentAppDialogOpen(false);
+    setAgentAppCreateError("");
+    setAgentAppName("");
+    setAgentAppDescription("");
+    setAgentAppToolGroups("");
+    setAgentAppPromptGroups("");
+  }
+
+  async function submitAgentAppCreate() {
+    const name = agentAppName.trim();
+    if (!name) {
+      setAgentAppCreateError("Name is required.");
+      return;
+    }
+    setAgentAppCreateError("");
+    setFeedback(null);
+    setBusy("agent-app-create", true);
+    try {
+      const payload: DashboardCreateAgentAppInput = {
+        name,
+        description: agentAppDescription.trim() || undefined,
+        tool_group_names: splitCommaList(agentAppToolGroups),
+        prompt_group_names: splitCommaList(agentAppPromptGroups),
+      };
+      const res = await api.createAgentApp(payload);
+      setAgentAppSecretReveal({
+        title: `Client secret for ${res.app.name}`,
+        secret: res.client_secret,
+      });
+      closeAgentAppModal();
+      await loadDashboardData(true);
+      setFeedback({
+        tone: "success",
+        message: `${res.app.name} created. Copy the client secret from the dialog — it will not be shown again.`,
+      });
+    } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Request failed";
+      setAgentAppCreateError(message);
+      setFeedback({ tone: "error", message });
+    } finally {
+      setBusy("agent-app-create", false);
+    }
+  }
+
+  async function deleteAgentApp(app: DashboardAgentApp) {
+    const confirmed = window.confirm(`Delete agent app "${app.name}"? This cannot be undone.`);
+    if (!confirmed) {
+      return;
+    }
+    await runMutation(
+      `agent-app-delete:${app.id}`,
+      async () => {
+        await api.deleteAgentApp(app.id);
+      },
+      `${app.name} deleted.`,
+    );
+  }
+
+  async function toggleAgentAppStatus(app: DashboardAgentApp) {
+    const nextStatus = app.status === "enabled" ? "disabled" : "enabled";
+    await runMutation(
+      `agent-app-status:${app.id}`,
+      async () => {
+        await api.patchAgentApp(app.id, { status: nextStatus });
+      },
+      nextStatus === "enabled" ? `${app.name} enabled.` : `${app.name} disabled.`,
+    );
+  }
+
+  async function rotateAgentAppSecret(app: DashboardAgentApp) {
+    const confirmed = window.confirm(
+      `Rotate secret for "${app.name}"? The previous secret stops working immediately.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    setFeedback(null);
+    setBusy(`agent-app-rotate:${app.id}`, true);
+    try {
+      const res = await api.rotateAgentAppSecret(app.id);
+      setAgentAppSecretReveal({
+        title: `New client secret for ${app.name}`,
+        secret: res.client_secret,
+      });
+      await loadDashboardData(true);
+      setFeedback({
+        tone: "success",
+        message: `Secret rotated for ${app.name}. Copy it from the dialog — it will not be shown again.`,
+      });
+    } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Request failed";
+      setFeedback({ tone: "error", message });
+    } finally {
+      setBusy(`agent-app-rotate:${app.id}`, false);
+    }
+  }
+
+  function renderAgentAppGroupEndpoints(
+    title: string,
+    endpoints: DashboardAgentAppGroupEndpoints[] | null | undefined,
+  ) {
+    if (!endpoints?.length) {
+      return null;
+    }
+    return (
+      <Box sx={{ mt: 2 }}>
+        <Typography variant="subtitle2" sx={{ mb: 1 }}>
+          {title}
+        </Typography>
+        <Stack spacing={2}>
+          {endpoints.map((ge) => (
+            <Paper key={ge.name} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+              <Typography variant="body2" sx={{ fontWeight: 700, mb: 1 }}>
+                {ge.name}
+              </Typography>
+              <div className="tool-group-endpoints">
+                <div className="tool-group-endpoint-row">
+                  <span className="tool-group-endpoint-label">Streamable HTTP</span>
+                  <div className="tool-group-endpoint-value">
+                    <code className="detail-target-code" title={ge.streamable_http_endpoint}>
+                      {ge.streamable_http_endpoint}
+                    </code>
+                    <CopyButton
+                      ariaLabel="Copy Streamable HTTP endpoint"
+                      title="Copy Streamable HTTP endpoint"
+                      value={ge.streamable_http_endpoint}
+                    />
+                  </div>
+                </div>
+                <div className="tool-group-endpoint-row">
+                  <span className="tool-group-endpoint-label">SSE</span>
+                  <div className="tool-group-endpoint-stack">
+                    <div className="tool-group-endpoint-value">
+                      <code className="detail-target-code" title={ge.sse_endpoint}>
+                        {ge.sse_endpoint}
+                      </code>
+                      <CopyButton ariaLabel="Copy SSE endpoint" title="Copy SSE endpoint" value={ge.sse_endpoint} />
+                    </div>
+                    {ge.sse_message_endpoint ? (
+                      <div className="tool-group-endpoint-value">
+                        <code className="detail-target-code" title={ge.sse_message_endpoint}>
+                          {ge.sse_message_endpoint}
+                        </code>
+                        <CopyButton
+                          ariaLabel="Copy SSE message endpoint"
+                          title="Copy SSE message endpoint"
+                          value={ge.sse_message_endpoint}
+                        />
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            </Paper>
+          ))}
+        </Stack>
+      </Box>
+    );
   }
 
   const dashboardReady = loadState === "ready";
@@ -2378,6 +2584,121 @@ export default function App() {
               </SectionCard>
             ) : null}
 
+            {section === "agent_apps" && data.agentApps ? (
+              <SectionCard
+                title="Agent apps"
+                subtitle="Each app has a client ID and secret. Use Bearer JWT or HTTP Basic, then connect only via the MCP URLs for attached groups (under your gateway HTTP prefix)."
+                action={
+                  <Button variant="contained" onClick={openAgentAppModal}>
+                    + Create agent app
+                  </Button>
+                }
+              >
+                {data.agentApps.apps.length === 0 ? (
+                  <Typography color="text.secondary" variant="body2">
+                    No agent apps yet. Create one to mint tokens scoped to specific tool and prompt groups.
+                  </Typography>
+                ) : (
+                  <Stack spacing={2.5}>
+                    {data.agentApps.apps.map((app) => (
+                      <Paper key={app.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
+                        <Stack
+                          direction={{ xs: "column", sm: "row" }}
+                          spacing={2}
+                          sx={{ justifyContent: "space-between", alignItems: { sm: "flex-start" } }}
+                        >
+                          <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", mb: 0.5 }}>
+                              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
+                                {app.name}
+                              </Typography>
+                              <StatusBadge
+                                tone={app.status === "enabled" ? "good" : "muted"}
+                                text={app.status === "enabled" ? "enabled" : "disabled"}
+                              />
+                            </Stack>
+                            {app.description ? (
+                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                                {app.description}
+                              </Typography>
+                            ) : null}
+                            <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.5 }}>
+                              Client ID
+                            </Typography>
+                            <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1, flexWrap: "wrap" }}>
+                              <Typography
+                                component="code"
+                                variant="body2"
+                                sx={{ wordBreak: "break-all", fontFamily: monospaceFontFamily }}
+                              >
+                                {app.client_id}
+                              </Typography>
+                              <CopyButton ariaLabel="Copy client ID" title="Copy client ID" value={app.client_id} />
+                            </Stack>
+                            <Typography variant="caption" color="text.secondary">
+                              Tool groups:{" "}
+                              {app.tool_group_names?.length ? app.tool_group_names.join(", ") : "—"} · Prompt groups:{" "}
+                              {app.prompt_group_names?.length ? app.prompt_group_names.join(", ") : "—"}
+                            </Typography>
+                          </Box>
+                          <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: "wrap" }}>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              disabled={isBusy(`agent-app-status:${app.id}`)}
+                              onClick={() => void toggleAgentAppStatus(app)}
+                            >
+                              {app.status === "enabled" ? "Disable" : "Enable"}
+                            </Button>
+                            <Button
+                              size="small"
+                              variant="outlined"
+                              color="warning"
+                              disabled={isBusy(`agent-app-rotate:${app.id}`)}
+                              onClick={() => void rotateAgentAppSecret(app)}
+                            >
+                              Rotate secret
+                            </Button>
+                            <IconButton
+                              aria-label={`Delete ${app.name}`}
+                              color="error"
+                              size="small"
+                              disabled={isBusy(`agent-app-delete:${app.id}`)}
+                              onClick={() => void deleteAgentApp(app)}
+                              title="Delete agent app"
+                            >
+                              <TrashIcon />
+                            </IconButton>
+                          </Stack>
+                        </Stack>
+
+                        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: "divider" }}>
+                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+                            OAuth token URL
+                          </Typography>
+                          <div className="tool-group-endpoint-row">
+                            <div className="tool-group-endpoint-value">
+                              <code className="detail-target-code" title={app.oauth_token_url}>
+                                {app.oauth_token_url}
+                              </code>
+                              <CopyButton
+                                ariaLabel="Copy OAuth token URL"
+                                title="Copy OAuth token URL"
+                                value={app.oauth_token_url}
+                              />
+                            </div>
+                          </div>
+                        </Box>
+
+                        {renderAgentAppGroupEndpoints("Tool group MCP URLs", app.tool_group_endpoints)}
+                        {renderAgentAppGroupEndpoints("Prompt group MCP URLs", app.prompt_group_endpoints)}
+                      </Paper>
+                    ))}
+                  </Stack>
+                )}
+              </SectionCard>
+            ) : null}
+
             {section === "diagnostics" && diagnostics ? (
               <>
                 <SectionCard title="System Info" subtitle="Runtime details">
@@ -3081,6 +3402,103 @@ export default function App() {
                 </Button>
               </>
             )}
+          </DialogActions>
+        </Dialog>
+
+        <Dialog open={agentAppDialogOpen} onClose={closeAgentAppModal} maxWidth="sm" fullWidth scroll="paper">
+          <DialogTitle>Create agent app</DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2} sx={{ pt: 1 }}>
+              <TextField
+                label="Name"
+                fullWidth
+                required
+                size="small"
+                value={agentAppName}
+                onChange={(e) => setAgentAppName(e.target.value)}
+              />
+              <TextField
+                label="Description"
+                fullWidth
+                size="small"
+                multiline
+                minRows={2}
+                value={agentAppDescription}
+                onChange={(e) => setAgentAppDescription(e.target.value)}
+              />
+              <TextField
+                label="Tool groups"
+                fullWidth
+                size="small"
+                placeholder="group-a, group-b"
+                helperText="Comma-separated names; must match existing tool groups."
+                value={agentAppToolGroups}
+                onChange={(e) => setAgentAppToolGroups(e.target.value)}
+              />
+              <TextField
+                label="Prompt groups"
+                fullWidth
+                size="small"
+                placeholder="my-prompts"
+                helperText="Comma-separated names; must match existing prompt groups."
+                value={agentAppPromptGroups}
+                onChange={(e) => setAgentAppPromptGroups(e.target.value)}
+              />
+              {agentAppCreateError ? (
+                <Typography color="error" variant="body2">
+                  {agentAppCreateError}
+                </Typography>
+              ) : null}
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="outlined" onClick={closeAgentAppModal}>
+              Cancel
+            </Button>
+            <Button
+              variant="contained"
+              disabled={isBusy("agent-app-create")}
+              onClick={() => void submitAgentAppCreate()}
+            >
+              {isBusy("agent-app-create") ? "Creating..." : "Create"}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        <Dialog
+          open={agentAppSecretReveal !== null}
+          onClose={() => setAgentAppSecretReveal(null)}
+          maxWidth="sm"
+          fullWidth
+        >
+          <DialogTitle>Client secret</DialogTitle>
+          <DialogContent dividers>
+            <Stack spacing={2}>
+              <Typography variant="body2">{agentAppSecretReveal?.title}</Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                  <Typography
+                    component="code"
+                    sx={{ flex: 1, wordBreak: "break-all", fontFamily: monospaceFontFamily }}
+                  >
+                    {agentAppSecretReveal?.secret}
+                  </Typography>
+                  <CopyButton
+                    ariaLabel="Copy client secret"
+                    title="Copy client secret"
+                    value={agentAppSecretReveal?.secret ?? ""}
+                  />
+                </Stack>
+              </Paper>
+              <Typography variant="caption" color="text.secondary">
+                Store this secret securely. It will not be shown again after you close this dialog.
+              </Typography>
+            </Stack>
+          </DialogContent>
+          <DialogActions sx={{ px: 3, py: 2 }}>
+            <Button variant="contained" onClick={() => setAgentAppSecretReveal(null)}>
+              Done
+            </Button>
           </DialogActions>
         </Dialog>
       </Box>

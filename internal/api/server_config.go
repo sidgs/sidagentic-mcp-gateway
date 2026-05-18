@@ -16,35 +16,23 @@ func (s *Server) registerInitServerHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body: " + err.Error()})
 			return
 		}
-		ok, err := s.configService.Init(c.Request.Context(), req.Mode)
+		created, token, err := s.BootstrapServerIfUninitialized(c.Request.Context(), req.Mode)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to initialize server: " + err.Error()})
 			return
 		}
-		if !ok {
+		if !created {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "Server is already initialized"})
 			return
 		}
-		if req.Mode == model.ModeDev {
-			// If the server was successfully initialized and the mode is dev,
-			// return a success message without creating an admin user
-			c.JSON(http.StatusOK, gin.H{"status": "Server initialized successfully in development mode"})
+		if model.IsEnterpriseMode(req.Mode) {
+			payload := gin.H{
+				"status":             "Server initialized successfully",
+				"admin_access_token": token,
+			}
+			c.JSON(http.StatusOK, payload)
 			return
 		}
-		// The server was successfully initialized and the mode is enterprise (either ModeEnterprise or ModeProd),
-		// create an admin user and return its access token
-		admin, err := s.userService.CreateAdminUser(c.Request.Context())
-		if err != nil {
-			c.JSON(
-				http.StatusInternalServerError,
-				gin.H{"error": "Initialization succeeded but failed to create admin user: " + err.Error()},
-			)
-			return
-		}
-		payload := gin.H{
-			"status":             "Server initialized successfully",
-			"admin_access_token": admin.AccessToken,
-		}
-		c.JSON(http.StatusOK, payload)
+		c.JSON(http.StatusOK, gin.H{"status": "Server initialized successfully in development mode"})
 	}
 }

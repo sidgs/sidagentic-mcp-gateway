@@ -32,6 +32,7 @@ import (
 	configSvc "github.com/mcpjungle/mcpjungle/internal/service/config"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
+	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
 	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
@@ -157,6 +158,7 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 		SseMcpProxyServer:  sseMcpProxy,
 		MCPService:         mcpService,
 		MCPClientService:   mcpclient.NewMCPClientService(db),
+		AgentAppService:    agentapp.New(db, "e2e-agent-app-jwt-signing-key-secret-min-len!!"),
 		ConfigService:      cfgSvc,
 		DashboardService:   dashboard.NewService(db, false),
 		UserService:        usrSvc,

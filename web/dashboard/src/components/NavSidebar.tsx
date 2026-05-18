@@ -10,6 +10,7 @@ import HandymanOutlinedIcon from "@mui/icons-material/HandymanOutlined";
 import HomeOutlinedIcon from "@mui/icons-material/HomeOutlined";
 import InfoOutlinedIcon from "@mui/icons-material/InfoOutlined";
 import LayersOutlinedIcon from "@mui/icons-material/LayersOutlined";
+import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
@@ -39,6 +40,8 @@ function SectionIcon({ section, ...props }: { section: AppSection } & SvgIconPro
       return <LayersOutlinedIcon {...props} />;
     case "prompt_groups":
       return <TextSnippetOutlinedIcon {...props} />;
+    case "agent_apps":
+      return <AppsOutlinedIcon {...props} />;
     case "prompts":
       return <AssignmentOutlinedIcon {...props} />;
     case "resources":
@@ -56,6 +59,7 @@ const items: Array<{ key: AppSection; label: string }> = [
   { key: "tools", label: "Tools" },
   { key: "tool_groups", label: "Tool Groups" },
   { key: "prompt_groups", label: "Prompt Groups" },
+  { key: "agent_apps", label: "Agent Apps" },
   { key: "prompts", label: "Prompts" },
   { key: "resources", label: "Resources" },
   { key: "diagnostics", label: "System Info" },

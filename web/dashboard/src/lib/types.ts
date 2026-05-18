@@ -4,6 +4,7 @@ export type AppSection =
   | "tools"
   | "tool_groups"
   | "prompt_groups"
+  | "agent_apps"
   | "prompts"
   | "resources"
   | "diagnostics";
@@ -238,4 +239,49 @@ export interface DashboardOAuthSessionResponse {
   server_name?: string;
   expires_at?: string;
   error?: string;
+}
+
+export interface DashboardAgentAppGroupEndpoints {
+  name: string;
+  streamable_http_endpoint: string;
+  sse_endpoint: string;
+  sse_message_endpoint: string;
+}
+
+export interface DashboardAgentApp {
+  id: number;
+  name: string;
+  description?: string;
+  client_id: string;
+  status: string;
+  tool_group_names: string[];
+  prompt_group_names: string[];
+  oauth_token_url: string;
+  tool_group_endpoints: DashboardAgentAppGroupEndpoints[];
+  prompt_group_endpoints: DashboardAgentAppGroupEndpoints[];
+}
+
+export interface DashboardAgentAppsResponse {
+  apps: DashboardAgentApp[];
+}
+
+export interface DashboardCreateAgentAppInput {
+  name: string;
+  description?: string;
+  tool_group_names?: string[];
+  prompt_group_names?: string[];
+}
+
+export interface DashboardCreateAgentAppResponse {
+  app: {
+    id: number;
+    name: string;
+    description?: string;
+    client_id: string;
+    status: string;
+    tool_group_names: string[];
+    prompt_group_names: string[];
+  };
+  client_secret: string;
+  oauth_token_url?: string;
 }

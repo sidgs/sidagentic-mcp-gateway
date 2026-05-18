@@ -6,7 +6,9 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mcpjungle/mcpjungle/internal/agentappauth"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
@@ -19,7 +21,26 @@ func authorizeProxyServerAccess(ctx context.Context, serverName string) error {
 		return nil
 	}
 
-	c := ctx.Value("client").(*model.McpClient)
+	if aa, ok := agentappauth.PrincipalFromContext(ctx); ok {
+		if tg, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok {
+			if aa.AllowsToolGroup(tg) {
+				return nil
+			}
+			return fmt.Errorf("agent-app is not authorized for tool group %s", tg)
+		}
+		if pg, ok := mcpgatewayctx.PromptGroupRoute(ctx); ok {
+			if aa.AllowsPromptGroup(pg) {
+				return nil
+			}
+			return fmt.Errorf("agent-app is not authorized for prompt group %s", pg)
+		}
+		return fmt.Errorf("agent-app requires group-scoped MCP endpoint")
+	}
+
+	c, ok := ctx.Value("client").(*model.McpClient)
+	if !ok || c == nil {
+		return fmt.Errorf("missing MCP client credentials")
+	}
 	if c.TenantID != tenant.MustFromContext(ctx) {
 		return fmt.Errorf("client is not authorized for this tenant")
 	}

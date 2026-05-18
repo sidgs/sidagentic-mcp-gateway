@@ -6,6 +6,7 @@ import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
 import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
+import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -249,6 +250,15 @@ export function HomePage({
                 sx={{ color: "common.white", fontWeight: 600, "&:hover": { bgcolor: "rgba(255,255,255,0.1)" } }}
               >
                 Prompt groups
+              </Button>
+              <Button
+                variant="text"
+                size="large"
+                startIcon={<AppsOutlinedIcon />}
+                onClick={() => onNavigate("agent_apps")}
+                sx={{ color: "common.white", fontWeight: 600, "&:hover": { bgcolor: "rgba(255,255,255,0.1)" } }}
+              >
+                Agent apps
               </Button>
             </Stack>
           </Stack>
