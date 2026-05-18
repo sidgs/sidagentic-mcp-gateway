@@ -2,13 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"gorm.io/datatypes"
 )
@@ -74,9 +72,9 @@ func (s *Server) dashboardPromptGroupsHandler() gin.HandlerFunc {
 				Title:       "No prompt groups configured yet.",
 				Description: "Create a prompt group to expose a focused subset of MCP prompts.",
 				Commands: []string{
-					fmt.Sprintf("%s create prompt-group --conf prompt-group.json", cliapp.ExecutableName),
-					fmt.Sprintf("%s list prompt-groups", cliapp.ExecutableName),
-					fmt.Sprintf("%s get prompt-group <name>", cliapp.ExecutableName),
+					// fmt.Sprintf("%s create prompt-group --conf prompt-group.json", cliapp.ExecutableName),
+					// fmt.Sprintf("%s list prompt-groups", cliapp.ExecutableName),
+					// fmt.Sprintf("%s get prompt-group <name>", cliapp.ExecutableName),
 				},
 			}
 		}

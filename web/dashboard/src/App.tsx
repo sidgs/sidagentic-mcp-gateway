@@ -2747,7 +2747,7 @@ export default function App() {
                   color="text.secondary"
                   sx={{ display: { xs: "none", sm: "inline" } }}
                 >
-                  Endpoint
+                  Global Endpoint
                 </Typography>
                 <Typography
                   component="code"
@@ -2763,7 +2763,7 @@ export default function App() {
                 >
                   {overview.endpoints[0].url}
                 </Typography>
-                <CopyButton ariaLabel="Copy endpoint" title="Copy endpoint" value={overview.endpoints[0].url} />
+                <CopyButton ariaLabel="Copy global endpoint" title="Copy global endpoint" value={overview.endpoints[0].url} />
               </Stack>
             ) : null}
           </Stack>

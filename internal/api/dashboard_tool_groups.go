@@ -2,13 +2,11 @@ package api
 
 import (
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"gorm.io/datatypes"
 )
@@ -76,9 +74,9 @@ func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
 				Title:       "No tool groups configured yet.",
 				Description: "Create a tool group to expose a focused subset of MCP tools.",
 				Commands: []string{
-					fmt.Sprintf("%s create group --conf group.json", cliapp.ExecutableName),
-					fmt.Sprintf("%s list groups", cliapp.ExecutableName),
-					fmt.Sprintf("%s get group <group-name>", cliapp.ExecutableName),
+					// fmt.Sprintf("%s create group --conf group.json", cliapp.ExecutableName),
+					// fmt.Sprintf("%s list groups", cliapp.ExecutableName),
+					// fmt.Sprintf("%s get group <group-name>", cliapp.ExecutableName),
 				},
 			}
 		}

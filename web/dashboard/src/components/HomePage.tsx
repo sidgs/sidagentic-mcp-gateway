@@ -16,7 +16,6 @@ import Container from "@mui/material/Container";
 import Stack from "@mui/material/Stack";
 import Typography from "@mui/material/Typography";
 import type { AppSection, DashboardAuthStatusResponse, DashboardOverviewResponse } from "@/lib/types";
-import { monospaceFontFamily } from "@/theme";
 
 const benefitItems: Array<{
   icon: typeof HubOutlinedIcon;
@@ -284,26 +283,6 @@ export function HomePage({
             <StatPill label="Tools" value={overview.tool_count} />
             <StatPill label="Prompts" value={overview.prompt_count} />
             <StatPill label="Resources" value={overview.resource_count} />
-            {overview.endpoints[0]?.url ? (
-              <Typography
-                component="code"
-                variant="caption"
-                sx={{
-                  display: "block",
-                  fontFamily: monospaceFontFamily,
-                  bgcolor: "grey.100",
-                  px: 1.5,
-                  py: 0.75,
-                  borderRadius: 2,
-                  maxWidth: "100%",
-                  overflow: "hidden",
-                  textOverflow: "ellipsis",
-                }}
-                title={overview.endpoints[0].url}
-              >
-                {overview.endpoints[0].url}
-              </Typography>
-            ) : null}
           </Stack>
         </Stack>
       ) : null}

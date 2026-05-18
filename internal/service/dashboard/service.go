@@ -179,10 +179,7 @@ func (s *Service) Prompts() (*types.DashboardPromptsResponse, error) {
 		resp.EmptyState = emptyState(
 			"No prompts discovered yet",
 			"Registered servers can expose prompt templates. None are currently available.",
-			[]string{
-				fmt.Sprintf("%s list prompts", cliapp.ExecutableName),
-				fmt.Sprintf("%s get prompt <prompt-name>", cliapp.ExecutableName),
-			},
+			nil,
 		)
 	}
 	return resp, nil
@@ -214,8 +211,8 @@ func (s *Service) Resources() (*types.DashboardResourcesResponse, error) {
 			"No resources discovered yet",
 			"Registered servers can expose MCP resources. None are currently available.",
 			[]string{
-				fmt.Sprintf("%s list resources", cliapp.ExecutableName),
-				fmt.Sprintf("%s get resource --read <uri>", cliapp.ExecutableName),
+				// fmt.Sprintf("%s get resource --read <uri>", cliapp.ExecutableName),
+				
 			},
 		)
 	}
