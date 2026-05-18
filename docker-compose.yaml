@@ -54,6 +54,7 @@ services:
       # Force https or http for advertised MCP/dashboard URLs when X-Forwarded-Proto is missing or wrong upstream.
       # PUBLIC_URL_SCHEME: ${PUBLIC_URL_SCHEME:-}
       POST_LOGIN_REDIRECT_URL: ${POST_LOGIN_REDIRECT_URL:-/#home}
+      GLOBAL_MCP_API_KEY: ${GLOBAL_MCP_API_KEY:-1234567890}
 
     ports:
       - "${HOST_PORT:-8080}:8080"

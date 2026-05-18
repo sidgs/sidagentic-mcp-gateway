@@ -256,12 +256,12 @@ func SetupTestDB(t *testing.T) *TestDBSetup {
 	// Migrate all common models
 	err = db.AutoMigrate(
 		&model.User{},
-		&model.McpClient{},
 		&model.McpServer{},
 		&model.Tool{},
 		&model.ServerConfig{},
 		&model.ToolGroup{},
 		&model.PromptGroup{},
+		&model.AgentApp{},
 		&model.Prompt{},
 		&model.Resource{},
 		&model.UpstreamOAuthPendingSession{},
@@ -322,26 +322,6 @@ func SetupMCPTest(t *testing.T) *TestDBSetup {
 	return setup
 }
 
-// SetupClientTest creates a test database with MCP client models and a basic test client
-func SetupClientTest(t *testing.T) (*TestDBSetup, *model.McpClient) {
-	t.Helper()
-
-	setup := SetupTestDB(t)
-
-	// Create a basic test MCP client
-	testClient := &model.McpClient{
-		Name:        "test-client",
-		Description: "Test MCP client for unit tests",
-		AccessToken: "test-client-token-789",
-		AllowList:   []byte("[]"), // Empty allow list
-	}
-
-	err := setup.DB.Create(testClient).Error
-	AssertNoError(t, err)
-
-	return setup, testClient
-}
-
 // SetupServerConfigTest creates a test database with server config models
 func SetupServerConfigTest(t *testing.T) *TestDBSetup {
 	t.Helper()
@@ -367,37 +347,6 @@ func (s *TestDBSetup) CreateTestUser(username string, role types.UserRole, acces
 	}
 
 	return user
-}
-
-// CreateTestMcpClient creates a test MCP client with the given parameters
-func (s *TestDBSetup) CreateTestMcpClient(name, description, accessToken string, allowList []string) *model.McpClient {
-	allowListJSON := []byte("[]")
-	if len(allowList) > 0 {
-		// Create a proper JSON array
-		jsonStr := "["
-		for i, item := range allowList {
-			if i > 0 {
-				jsonStr += ","
-			}
-			jsonStr += fmt.Sprintf(`"%s"`, item)
-		}
-		jsonStr += "]"
-		allowListJSON = []byte(jsonStr)
-	}
-
-	client := &model.McpClient{
-		Name:        name,
-		Description: description,
-		AccessToken: accessToken,
-		AllowList:   allowListJSON,
-	}
-
-	err := s.DB.Create(client).Error
-	if err != nil {
-		panic(fmt.Sprintf("Failed to create test MCP client: %v", err))
-	}
-
-	return client
 }
 
 // CreateTestMcpServer creates a test MCP server with the given parameters

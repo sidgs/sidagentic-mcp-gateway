@@ -14,7 +14,6 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
 	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	userSvc "github.com/mcpjungle/mcpjungle/internal/service/user"
@@ -78,7 +77,7 @@ func TestDashboardDiagnosticsHandler_EnterpriseMasksAdminToken(t *testing.T) {
 		MCPProxyServer:     mcpProxy,
 		SseMcpProxyServer:  sseProxy,
 		MCPService:         mcpService,
-		MCPClientService:   mcpclient.NewMCPClientService(db),
+		GlobalMCPAPIKey:    "diag-enterprise-global-mcp-key",
 		AgentAppService:    agentapp.New(db, ""),
 		ConfigService:      cfg,
 		UserService:        usr,
@@ -152,7 +151,7 @@ func TestDashboardDiagnosticsHandler_DevOmitsMaskEvenIfAdminExists(t *testing.T)
 		MCPProxyServer:     mcpProxy,
 		SseMcpProxyServer:  sseProxy,
 		MCPService:         mcpService,
-		MCPClientService:   mcpclient.NewMCPClientService(db),
+		GlobalMCPAPIKey:    "",
 		AgentAppService:    agentapp.New(db, ""),
 		ConfigService:      cfg,
 		UserService:        usr,

@@ -27,7 +27,6 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/config"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
 	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
@@ -57,6 +56,9 @@ const (
 
 	// AgentAppJWTSigningKeyEnvVar sets the HS256 key for agent-app Bearer tokens (client_credentials). Empty disables JWT mint and Bearer JWT MCP auth.
 	AgentAppJWTSigningKeyEnvVar = "AGENT_APP_JWT_SIGNING_KEY"
+
+	// GlobalMCPAPIKeyEnvVar is required in enterprise mode for authenticating to the global MCP proxy (/mcp, /sse).
+	GlobalMCPAPIKeyEnvVar = "GLOBAL_MCP_API_KEY"
 
 	// Cognito / OIDC (optional dashboard login)
 	CognitoIssuerURLEnvVar    = "COGNITO_ISSUER_URL"
@@ -628,7 +630,6 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create MCP service: %v", err)
 	}
 
-	mcpClientService := mcpclient.NewMCPClientService(dbConn)
 	agentAppSigningKey := strings.TrimSpace(os.Getenv(AgentAppJWTSigningKeyEnvVar))
 	agentAppService := agentapp.New(dbConn, agentAppSigningKey)
 	if agentAppSigningKey != "" {
@@ -686,11 +687,12 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 	}
 
 	// create the API server
+	globalMCPAPIKey := strings.TrimSpace(os.Getenv(GlobalMCPAPIKeyEnvVar))
 	opts := &api.ServerOptions{
-		MCPProxyServer:       mcpProxyServer,
-		SseMcpProxyServer:    sseMcpProxyServer,
-		MCPService:           mcpService,
-		MCPClientService:     mcpClientService,
+		MCPProxyServer:    mcpProxyServer,
+		SseMcpProxyServer: sseMcpProxyServer,
+		MCPService:        mcpService,
+		GlobalMCPAPIKey:   globalMCPAPIKey,
 		ConfigService:        configService,
 		UserService:          userService,
 		ToolGroupService:      toolGroupService,
@@ -737,6 +739,13 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(
 			"server is already initialized in %s mode, cannot start in %s mode",
 			mode, desiredServerMode,
+		)
+	}
+
+	if model.IsEnterpriseMode(mode) && globalMCPAPIKey == "" {
+		return fmt.Errorf(
+			"enterprise mode requires %s to be set for global MCP proxy access (/mcp, /sse)",
+			GlobalMCPAPIKeyEnvVar,
 		)
 	}
 

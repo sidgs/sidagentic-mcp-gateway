@@ -28,3 +28,4 @@ secrets:
   COGNITO_CLIENT_SECRET: "38qm6oububnuafmsioncaagh2p932kn1bk134rocuc3a2ngctbj"
   COGNITO_CLIENT_ID: "1k5ltdnfpgs208e2j3eltsmqbn"
   FOO: "bar"
+  GLOBAL_MCP_API_KEY: "1234567890"

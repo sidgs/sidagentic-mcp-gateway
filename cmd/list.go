@@ -59,14 +59,6 @@ var listServersCmd = &cobra.Command{
 	RunE:  runListServers,
 }
 
-var listMcpClientsCmd = &cobra.Command{
-	Use:   "mcp-clients",
-	Short: "List MCP clients (Enterprise mode)",
-	Long: "List MCP clients that are authorized to access the MCP Proxy server.\n" +
-		"This command is only available in Enterprise mode.",
-	RunE: runListMcpClients,
-}
-
 var listUsersCmd = &cobra.Command{
 	Use:   "users",
 	Short: "List users (Enterprise mode)",
@@ -118,7 +110,6 @@ func init() {
 	listCmd.AddCommand(listPromptsCmd)
 	listCmd.AddCommand(listResourcesCmd)
 	listCmd.AddCommand(listServersCmd)
-	listCmd.AddCommand(listMcpClientsCmd)
 	listCmd.AddCommand(listUsersCmd)
 	listCmd.AddCommand(listGroupsCmd)
 	listCmd.AddCommand(listPromptGroupsCmd)
@@ -252,37 +243,6 @@ func runListServers(cmd *cobra.Command, args []string) error {
 		}
 
 		if i < len(servers)-1 {
-			fmt.Println()
-		}
-	}
-
-	return nil
-}
-
-func runListMcpClients(cmd *cobra.Command, args []string) error {
-	clients, err := apiClient.ListMcpClients()
-	if err != nil {
-		return fmt.Errorf("failed to list MCP clients: %w", err)
-	}
-
-	if len(clients) == 0 {
-		fmt.Println("There are no MCP clients in the registry")
-		return nil
-	}
-	for i, c := range clients {
-		fmt.Printf("%d. %s\n", i+1, c.Name)
-
-		if c.Description != "" {
-			fmt.Println("Description: ", c.Description)
-		}
-
-		if len(c.AllowList) > 0 {
-			fmt.Println("Allowed servers: " + strings.Join(c.AllowList, ","))
-		} else {
-			fmt.Println("This client does not have access to any MCP servers.")
-		}
-
-		if i < len(clients)-1 {
 			fmt.Println()
 		}
 	}

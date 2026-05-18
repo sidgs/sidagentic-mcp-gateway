@@ -291,6 +291,7 @@ export interface DashboardAgentAppsResponse {
 export interface DashboardCreateAgentAppInput {
   name: string;
   description?: string;
+  /** Exactly one of tool_group_names or prompt_group_names must contain a single group name. */
   tool_group_names?: string[];
   prompt_group_names?: string[];
 }
@@ -300,6 +301,7 @@ export interface DashboardPatchAgentAppInput {
   name?: string;
   description?: string;
   status?: string;
+  /** Exact XOR single-group rule; see CreateAgentAppInput. */
   tool_group_names?: string[];
   prompt_group_names?: string[];
 }

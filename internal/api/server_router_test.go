@@ -12,7 +12,6 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
 	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	userSvc "github.com/mcpjungle/mcpjungle/internal/service/user"
@@ -55,8 +54,8 @@ func newTestAPIServer(t *testing.T, httpPathPrefix string, oidcCfg *OIDCSettings
 		MCPProxyServer:    mcpProxy,
 		SseMcpProxyServer: sseMcpProxy,
 		MCPService:        mcpService,
-		MCPClientService:  mcpclient.NewMCPClientService(db),
-		AgentAppService:     agentapp.New(db, "unit-test-agent-app-jwt-signing-key-secret-minimum-length"),
+		AgentAppService:   agentapp.New(db, "unit-test-agent-app-jwt-signing-key-secret-minimum-length"),
+		GlobalMCPAPIKey:   "unit-test-global-mcp-api-key",
 		ConfigService:     cfgSvc,
 		DashboardService:  dashboard.NewService(db, false),
 		UserService:         userSvc.NewUserService(db),

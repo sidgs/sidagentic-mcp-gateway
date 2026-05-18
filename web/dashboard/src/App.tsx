@@ -16,9 +16,7 @@ import FormControl from "@mui/material/FormControl";
 import FormHelperText from "@mui/material/FormHelperText";
 import IconButton from "@mui/material/IconButton";
 import InputLabel from "@mui/material/InputLabel";
-import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
-import OutlinedInput from "@mui/material/OutlinedInput";
 import Paper from "@mui/material/Paper";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
@@ -681,8 +679,9 @@ export default function App() {
   const [agentAppEditingId, setAgentAppEditingId] = useState<number | null>(null);
   const [agentAppName, setAgentAppName] = useState("");
   const [agentAppDescription, setAgentAppDescription] = useState("");
-  const [agentAppToolGroups, setAgentAppToolGroups] = useState<string[]>([]);
-  const [agentAppPromptGroups, setAgentAppPromptGroups] = useState<string[]>([]);
+  const [agentAppToolGroup, setAgentAppToolGroup] = useState("");
+  const [agentAppPromptGroup, setAgentAppPromptGroup] = useState("");
+  const [agentAppLegacyConfigInvalid, setAgentAppLegacyConfigInvalid] = useState(false);
   const [agentAppCreateError, setAgentAppCreateError] = useState("");
   const [agentAppSecretReveal, setAgentAppSecretReveal] = useState<{ title: string; secret: string } | null>(
     null,
@@ -1028,13 +1027,13 @@ export default function App() {
   );
 
   const agentAppToolGroupMenuNames = useMemo(
-    () => mergeSortedUniqueNames(agentAppToolGroupSelectOptions, agentAppToolGroups),
-    [agentAppToolGroupSelectOptions, agentAppToolGroups],
+    () => mergeSortedUniqueNames(agentAppToolGroupSelectOptions, agentAppToolGroup ? [agentAppToolGroup] : []),
+    [agentAppToolGroupSelectOptions, agentAppToolGroup],
   );
 
   const agentAppPromptGroupMenuNames = useMemo(
-    () => mergeSortedUniqueNames(agentAppPromptGroupSelectOptions, agentAppPromptGroups),
-    [agentAppPromptGroupSelectOptions, agentAppPromptGroups],
+    () => mergeSortedUniqueNames(agentAppPromptGroupSelectOptions, agentAppPromptGroup ? [agentAppPromptGroup] : []),
+    [agentAppPromptGroupSelectOptions, agentAppPromptGroup],
   );
 
   const selectedAgentApp = useMemo(() => {
@@ -1621,8 +1620,9 @@ export default function App() {
     setAgentAppEditingId(null);
     setAgentAppName("");
     setAgentAppDescription("");
-    setAgentAppToolGroups([]);
-    setAgentAppPromptGroups([]);
+    setAgentAppToolGroup("");
+    setAgentAppPromptGroup("");
+    setAgentAppLegacyConfigInvalid(false);
     setAgentAppCreateError("");
     setAgentAppDialogOpen(true);
   }
@@ -1631,9 +1631,23 @@ export default function App() {
     setAgentAppEditingId(app.id);
     setAgentAppName(app.name);
     setAgentAppDescription(app.description ?? "");
-    setAgentAppToolGroups([...(app.tool_group_names ?? [])]);
-    setAgentAppPromptGroups([...(app.prompt_group_names ?? [])]);
     setAgentAppCreateError("");
+    const tg = app.tool_group_names ?? [];
+    const pg = app.prompt_group_names ?? [];
+    const bad =
+      (tg.length === 0 && pg.length === 0) ||
+      tg.length > 1 ||
+      pg.length > 1 ||
+      (tg.length > 0 && pg.length > 0);
+    if (bad) {
+      setAgentAppToolGroup("");
+      setAgentAppPromptGroup("");
+      setAgentAppLegacyConfigInvalid(true);
+    } else {
+      setAgentAppLegacyConfigInvalid(false);
+      setAgentAppToolGroup(tg[0] ?? "");
+      setAgentAppPromptGroup(pg[0] ?? "");
+    }
     setAgentAppDialogOpen(true);
   }
 
@@ -1643,14 +1657,24 @@ export default function App() {
     setAgentAppEditingId(null);
     setAgentAppName("");
     setAgentAppDescription("");
-    setAgentAppToolGroups([]);
-    setAgentAppPromptGroups([]);
+    setAgentAppToolGroup("");
+    setAgentAppPromptGroup("");
+    setAgentAppLegacyConfigInvalid(false);
   }
 
   async function submitAgentAppModal() {
     const name = agentAppName.trim();
     if (!name) {
       setAgentAppCreateError("Name is required.");
+      return;
+    }
+    const toolGroupNames = agentAppToolGroup.trim() ? [agentAppToolGroup.trim()] : [];
+    const promptGroupNames = agentAppPromptGroup.trim() ? [agentAppPromptGroup.trim()] : [];
+    const xorOk =
+      (toolGroupNames.length === 1 && promptGroupNames.length === 0) ||
+      (toolGroupNames.length === 0 && promptGroupNames.length === 1);
+    if (!xorOk) {
+      setAgentAppCreateError("Select exactly one tool group or exactly one prompt group.");
       return;
     }
     setAgentAppCreateError("");
@@ -1663,8 +1687,8 @@ export default function App() {
         const patch: DashboardPatchAgentAppInput = {
           name,
           description: agentAppDescription.trim(),
-          tool_group_names: agentAppToolGroups,
-          prompt_group_names: agentAppPromptGroups,
+          tool_group_names: toolGroupNames,
+          prompt_group_names: promptGroupNames,
         };
         await api.patchAgentApp(editingId, patch);
         closeAgentAppModal();
@@ -1675,8 +1699,8 @@ export default function App() {
       const payload: DashboardCreateAgentAppInput = {
         name,
         description: agentAppDescription.trim() || undefined,
-        tool_group_names: agentAppToolGroups,
-        prompt_group_names: agentAppPromptGroups,
+        tool_group_names: toolGroupNames,
+        prompt_group_names: promptGroupNames,
       };
       const res = await api.createAgentApp(payload);
       setAgentAppSecretReveal({
@@ -2576,8 +2600,12 @@ export default function App() {
           <CopyButton ariaLabel="Copy client ID" title="Copy client ID" value={app.client_id} />
         </Stack>
         <Typography variant="caption" color="text.secondary">
-          Tool groups: {app.tool_group_names?.length ? app.tool_group_names.join(", ") : "—"} · Prompt groups:{" "}
-          {app.prompt_group_names?.length ? app.prompt_group_names.join(", ") : "—"}
+          Attached group:{" "}
+          {app.tool_group_names?.length === 1
+            ? `${app.tool_group_names[0]} (tool)`
+            : app.prompt_group_names?.length === 1
+              ? `${app.prompt_group_names[0]} (prompt)`
+              : "— (invalid or unset — edit to fix)"}
         </Typography>
 
         <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: "divider" }}>
@@ -4540,80 +4568,84 @@ export default function App() {
                 value={agentAppDescription}
                 onChange={(e) => setAgentAppDescription(e.target.value)}
               />
+              {agentAppLegacyConfigInvalid ? (
+                <Alert severity="warning">
+                  This app&apos;s saved configuration is invalid (must be exactly one tool group or one prompt group).
+                  Choose one valid group below and save.
+                </Alert>
+              ) : null}
               <FormControl
                 fullWidth
                 size="small"
-                disabled={agentAppToolGroupSelectOptions.length === 0 && agentAppToolGroups.length === 0}
+                disabled={
+                  agentAppToolGroupSelectOptions.length === 0 && agentAppToolGroup === ""
+                }
               >
-                <InputLabel id="agent-app-tool-groups-label">Tool groups</InputLabel>
+                <InputLabel id="agent-app-tool-groups-label">Tool group</InputLabel>
                 <Select
                   labelId="agent-app-tool-groups-label"
                   id="agent-app-tool-groups"
-                  multiple
-                  value={agentAppToolGroups}
+                  value={agentAppToolGroup}
+                  label="Tool group"
                   onChange={(e) => {
                     const v = e.target.value;
-                    setAgentAppToolGroups(typeof v === "string" ? v.split(",") : v);
+                    setAgentAppToolGroup(v);
+                    if (v !== "") {
+                      setAgentAppPromptGroup("");
+                    }
                   }}
-                  input={<OutlinedInput label="Tool groups" />}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {(selected as string[]).map((value) => (
-                        <Chip key={value} label={value} size="small" />
-                      ))}
-                    </Box>
-                  )}
                   MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360 } } } }}
                 >
+                  <MenuItem value="">
+                    <em>— None —</em>
+                  </MenuItem>
                   {agentAppToolGroupMenuNames.map((name) => (
                     <MenuItem key={name} value={name}>
-                      <Checkbox checked={agentAppToolGroups.includes(name)} size="small" />
-                      <ListItemText primary={name} />
+                      {name}
                     </MenuItem>
                   ))}
                 </Select>
                 <FormHelperText>
                   {agentAppToolGroupSelectOptions.length === 0
                     ? "No tool groups yet. Create one in the Tool groups section."
-                    : "Choose one or more tool groups. Attached MCP URLs are shown on the card after save."}
+                    : "Pick exactly one tool group or one prompt group (not both). Choosing a tool group clears the prompt group."}
                 </FormHelperText>
               </FormControl>
               <FormControl
                 fullWidth
                 size="small"
-                disabled={agentAppPromptGroupSelectOptions.length === 0 && agentAppPromptGroups.length === 0}
+                disabled={
+                  agentAppPromptGroupSelectOptions.length === 0 && agentAppPromptGroup === ""
+                }
               >
-                <InputLabel id="agent-app-prompt-groups-label">Prompt groups</InputLabel>
+                <InputLabel id="agent-app-prompt-groups-label">Prompt group</InputLabel>
                 <Select
                   labelId="agent-app-prompt-groups-label"
                   id="agent-app-prompt-groups"
-                  multiple
-                  value={agentAppPromptGroups}
+                  value={agentAppPromptGroup}
+                  label="Prompt group"
                   onChange={(e) => {
                     const v = e.target.value;
-                    setAgentAppPromptGroups(typeof v === "string" ? v.split(",") : v);
+                    setAgentAppPromptGroup(v);
+                    if (v !== "") {
+                      setAgentAppToolGroup("");
+                    }
                   }}
-                  input={<OutlinedInput label="Prompt groups" />}
-                  renderValue={(selected) => (
-                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
-                      {(selected as string[]).map((value) => (
-                        <Chip key={value} label={value} size="small" />
-                      ))}
-                    </Box>
-                  )}
                   MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360 } } } }}
                 >
+                  <MenuItem value="">
+                    <em>— None —</em>
+                  </MenuItem>
                   {agentAppPromptGroupMenuNames.map((name) => (
                     <MenuItem key={name} value={name}>
-                      <Checkbox checked={agentAppPromptGroups.includes(name)} size="small" />
-                      <ListItemText primary={name} />
+                      {name}
                     </MenuItem>
                   ))}
                 </Select>
                 <FormHelperText>
                   {agentAppPromptGroupSelectOptions.length === 0
                     ? "No prompt groups yet. Create one in the Prompt groups section."
-                    : "Choose one or more prompt groups."}
+                    : "Choosing a prompt group clears the tool group."}
                 </FormHelperText>
               </FormControl>
               {agentAppCreateError ? (

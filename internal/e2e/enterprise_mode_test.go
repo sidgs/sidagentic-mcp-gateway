@@ -13,6 +13,7 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -47,7 +48,6 @@ func TestE2E_EnterpriseMode_RegularUser_CannotWrite(t *testing.T) {
 	}{
 		{http.MethodPost, "/api/v0/servers", map[string]any{"name": "x", "transport": "stdio", "command": "echo"}},
 		{http.MethodPost, "/api/v0/tool-groups", map[string]any{"name": "g"}},
-		{http.MethodPost, "/api/v0/clients", map[string]any{"name": "c"}},
 		{http.MethodPost, "/api/v0/users", map[string]any{"username": "u"}},
 	}
 	for _, op := range writeOps {
@@ -60,71 +60,61 @@ func TestE2E_EnterpriseMode_RegularUser_CannotWrite(t *testing.T) {
 }
 
 // -----------------------------------------------------------------------
-// Enterprise mode – admin manages MCP clients (enterprise-only)
+// Enterprise mode – global MCP (GLOBAL_MCP_API_KEY)
 // -----------------------------------------------------------------------
 
-func TestE2E_EnterpriseMode_AdminManagesClients(t *testing.T) {
-	env := setupE2EServer(t, model.ModeEnterprise)
-
-	resp := env.do(t, http.MethodPost, "/api/v0/clients",
-		map[string]any{"name": "myapp", "allow_list": []string{"*"}}, env.adminToken)
-	defer drain(resp)
-	require.Equal(t, http.StatusCreated, resp.StatusCode)
-	var created map[string]any
-	decodeJSON(t, resp, &created)
-	assert.Equal(t, "myapp", created["name"])
-	assert.NotEmpty(t, created["access_token"])
-
-	resp = env.do(t, http.MethodGet, "/api/v0/clients", nil, env.adminToken)
-	require.Equal(t, http.StatusOK, resp.StatusCode)
-	drain(resp)
-}
-
-// -----------------------------------------------------------------------
-// Enterprise mode – MCP proxy: client token required and ACL filtering
-// -----------------------------------------------------------------------
-
-// TestE2E_EnterpriseMode_McpProxy_RequiresClientToken verifies that only a
-// valid MCP client token (not a user/admin token) grants access to /mcp.
-func TestE2E_EnterpriseMode_McpProxy_RequiresClientToken(t *testing.T) {
+// TestE2E_EnterpriseMode_McpProxy_RequiresGlobalKey verifies that global /mcp rejects
+// user/admin bearer tokens and accepts X-API-Key GLOBAL_MCP_API_KEY.
+func TestE2E_EnterpriseMode_McpProxy_RequiresGlobalKey(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
 	for _, token := range []string{"", env.userToken, env.adminToken} {
-		resp := env.do(t, http.MethodGet, "/mcp", nil, token)
-		assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
-		drain(resp)
+		c, err := client.NewStreamableHttpClient(env.baseURL+"/mcp", transport.WithHTTPHeaders(map[string]string{
+			"Authorization": "Bearer " + token,
+		}))
+		require.NoError(t, err)
+		_, err = c.Initialize(context.Background(), mcp.InitializeRequest{
+			Params: mcp.InitializeParams{
+				ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+				ClientInfo:      mcp.Implementation{Name: "e2e", Version: "1.0"},
+			},
+		})
+		require.Error(t, err, "user/admin token must not authenticate global MCP")
+		_ = c.Close()
 	}
 
-	clientToken := createMcpClient(t, env, "auth-client", []string{"*"})
-	resp := env.do(t, http.MethodGet, "/mcp", nil, clientToken)
-	assert.NotEqual(t, http.StatusUnauthorized, resp.StatusCode, "valid client token must not return 401")
-	drain(resp)
+	c, err := client.NewStreamableHttpClient(env.baseURL+"/mcp", transport.WithHTTPHeaders(map[string]string{
+		"X-API-Key": e2eGlobalMCPAPIKey,
+	}))
+	require.NoError(t, err)
+	defer c.Close()
+	_, err = c.Initialize(context.Background(), mcp.InitializeRequest{
+		Params: mcp.InitializeParams{
+			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
+			ClientInfo:      mcp.Implementation{Name: "e2e", Version: "1.0"},
+		},
+	})
+	require.NoError(t, err)
 }
 
-// TestE2E_EnterpriseMode_McpProxy_AllowList_ListAndInvoke registers two servers
-// (svc-a and svc-b) and creates a client restricted to svc-a only.
-//
-// Tools:
-//   - ListTools returns only svc-a tools, not svc-b tools
-//   - CallTool on an allowed tool succeeds; on a restricted tool returns IsError=true
-//
-// Prompts:
-//   - ListPrompts returns prompts from ALL servers regardless of allow list
-//     (ACL filtering is not implemented for prompt listing)
-//   - GetPrompt on an allowed prompt succeeds; on a restricted prompt returns an error
-func TestE2E_EnterpriseMode_McpProxy_AllowList_ListAndInvoke(t *testing.T) {
+// TestE2E_EnterpriseMode_McpProxy_GlobalKeyFullTenantAccess registers two servers and verifies
+// the global MCP proxy exposes tools and prompts from both (no per-client allow list).
+func TestE2E_EnterpriseMode_McpProxy_GlobalKeyFullTenantAccess(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
 	// Register two independent server instances so we can test cross-server scoping.
 	registerEverythingServerAs(t, env, "svc-a", env.adminToken)
 	registerEverythingServerAs(t, env, "svc-b", env.adminToken)
 
-	// Client is restricted to svc-a only.
-	c := newMCPProxyClient(t, env, createMcpClient(t, env, "scoped-client", []string{"svc-a"}))
+	c := newMCPProxyClient(t, env)
+	qa := tenant.QualifyProxyName(tenant.DefaultID, "svc-a__echo")
+	qb := tenant.QualifyProxyName(tenant.DefaultID, "svc-b__echo")
+	pa := tenant.QualifyProxyName(tenant.DefaultID, "svc-a__simple-prompt")
+	pb := tenant.QualifyProxyName(tenant.DefaultID, "svc-b__simple-prompt")
 
 	// --- Tools ---
 
-	t.Run("list tools: only allowed server's tools visible", func(t *testing.T) {
+	t.Run("list tools: both servers visible", func(t *testing.T) {
 		result, err := c.ListTools(context.Background(), mcp.ListToolsRequest{})
 		require.NoError(t, err)
 
@@ -132,14 +122,14 @@ func TestE2E_EnterpriseMode_McpProxy_AllowList_ListAndInvoke(t *testing.T) {
 		for _, tool := range result.Tools {
 			names = append(names, tool.Name)
 		}
-		assert.Contains(t, names, "svc-a__echo", "allowed server tool must be visible")
-		assert.NotContains(t, names, "svc-b__echo", "restricted server tool must not be visible")
+		assert.Contains(t, names, qa)
+		assert.Contains(t, names, qb)
 	})
 
-	t.Run("invoke allowed tool succeeds", func(t *testing.T) {
+	t.Run("invoke svc-a tool succeeds", func(t *testing.T) {
 		result, err := c.CallTool(context.Background(), mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name:      "svc-a__echo",
+				Name:      qa,
 				Arguments: map[string]any{"message": "hello from svc-a"},
 			},
 		})
@@ -150,21 +140,23 @@ func TestE2E_EnterpriseMode_McpProxy_AllowList_ListAndInvoke(t *testing.T) {
 		assert.Contains(t, first.Text, "hello from svc-a")
 	})
 
-	t.Run("invoke restricted tool returns error", func(t *testing.T) {
-		// The ACL check returns a Go error (not an MCP IsError result), so the
-		// mcp-go framework surfaces it as a protocol-level error on the client.
-		_, err := c.CallTool(context.Background(), mcp.CallToolRequest{
+	t.Run("invoke svc-b tool succeeds", func(t *testing.T) {
+		result, err := c.CallTool(context.Background(), mcp.CallToolRequest{
 			Params: mcp.CallToolParams{
-				Name:      "svc-b__echo",
-				Arguments: map[string]any{"message": "should be blocked"},
+				Name:      qb,
+				Arguments: map[string]any{"message": "hello from svc-b"},
 			},
 		})
-		assert.Error(t, err, "calling a tool from a restricted server must return an error")
+		require.NoError(t, err)
+		require.False(t, result.IsError)
+		first, ok := result.Content[0].(mcp.TextContent)
+		require.True(t, ok)
+		assert.Contains(t, first.Text, "hello from svc-b")
 	})
 
 	// --- Prompts ---
 
-	t.Run("list prompts: not filtered by allow list (ACL for prompt listing not implemented)", func(t *testing.T) {
+	t.Run("list prompts: both servers", func(t *testing.T) {
 		result, err := c.ListPrompts(context.Background(), mcp.ListPromptsRequest{})
 		require.NoError(t, err)
 
@@ -172,24 +164,24 @@ func TestE2E_EnterpriseMode_McpProxy_AllowList_ListAndInvoke(t *testing.T) {
 		for _, p := range result.Prompts {
 			names = append(names, p.Name)
 		}
-		// Both servers' prompts appear regardless of the allow list.
-		assert.Contains(t, names, "svc-a__simple-prompt")
-		assert.Contains(t, names, "svc-b__simple-prompt")
+		assert.Contains(t, names, pa)
+		assert.Contains(t, names, pb)
 	})
 
-	t.Run("get allowed prompt succeeds", func(t *testing.T) {
+	t.Run("get prompt from svc-a succeeds", func(t *testing.T) {
 		result, err := c.GetPrompt(context.Background(), mcp.GetPromptRequest{
-			Params: mcp.GetPromptParams{Name: "svc-a__simple-prompt"},
+			Params: mcp.GetPromptParams{Name: pa},
 		})
 		require.NoError(t, err)
 		require.NotEmpty(t, result.Messages)
 	})
 
-	t.Run("get restricted prompt returns error", func(t *testing.T) {
-		_, err := c.GetPrompt(context.Background(), mcp.GetPromptRequest{
-			Params: mcp.GetPromptParams{Name: "svc-b__simple-prompt"},
+	t.Run("get prompt from svc-b succeeds", func(t *testing.T) {
+		result, err := c.GetPrompt(context.Background(), mcp.GetPromptRequest{
+			Params: mcp.GetPromptParams{Name: pb},
 		})
-		assert.Error(t, err, "fetching a prompt from a restricted server must return an error")
+		require.NoError(t, err)
+		require.NotEmpty(t, result.Messages)
 	})
 }
 
@@ -245,14 +237,14 @@ func TestE2E_EnterpriseMode_McpProxy_StripsInboundHeadersForUpstreamCalls(t *tes
 	defer drain(resp)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
-	clientToken := createMcpClient(t, env, "header-proxy-client", []string{"header-proxy"})
+	qEcho := tenant.QualifyProxyName(tenant.DefaultID, "header-proxy__echo")
+	qPrompt := tenant.QualifyProxyName(tenant.DefaultID, "header-proxy__simple-prompt")
 	c, err := client.NewStreamableHttpClient(env.baseURL+"/mcp", transport.WithHTTPHeaders(map[string]string{
-		"Authorization":  "Bearer " + clientToken,
+		"X-API-Key":        e2eGlobalMCPAPIKey,
 		"X-Test-Forward": "downstream-custom-header",
 	}))
 	require.NoError(t, err)
 	defer c.Close()
-
 	_, err = c.Initialize(context.Background(), mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
 			ProtocolVersion: mcp.LATEST_PROTOCOL_VERSION,
@@ -266,7 +258,7 @@ func TestE2E_EnterpriseMode_McpProxy_StripsInboundHeadersForUpstreamCalls(t *tes
 
 	toolRes, err := c.CallTool(context.Background(), mcp.CallToolRequest{
 		Params: mcp.CallToolParams{
-			Name:      "header-proxy__echo",
+			Name:      qEcho,
 			Arguments: map[string]any{"message": "tool ok"},
 		},
 	})
@@ -274,7 +266,7 @@ func TestE2E_EnterpriseMode_McpProxy_StripsInboundHeadersForUpstreamCalls(t *tes
 	require.False(t, toolRes.IsError)
 
 	promptRes, err := c.GetPrompt(context.Background(), mcp.GetPromptRequest{
-		Params: mcp.GetPromptParams{Name: "header-proxy__simple-prompt"},
+		Params: mcp.GetPromptParams{Name: qPrompt},
 	})
 	require.NoError(t, err)
 	require.NotEmpty(t, promptRes.Messages)

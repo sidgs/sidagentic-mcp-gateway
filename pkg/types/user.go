@@ -1,5 +1,11 @@
 package types
 
+// AccessTokenRef tells the CLI where to load a token (environment variable and/or file).
+type AccessTokenRef struct {
+	Env  string `json:"env,omitempty"`
+	File string `json:"file,omitempty"`
+}
+
 // UserRole represents the role of a user in the MCPJungle system.
 type UserRole string
 

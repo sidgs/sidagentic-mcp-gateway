@@ -9,13 +9,13 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
 	"github.com/mcpjungle/mcpjungle/internal/telemetry"
 	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/datatypes"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
@@ -324,14 +324,10 @@ func TestMCPProxyResourceHandlerEnterpriseRejectsUnauthorizedClient(t *testing.T
 	req := mcp.ReadResourceRequest{}
 	req.Params.URI = buildResourceURI(tenant.DefaultID, "test-server", "resource://test/status")
 	ctx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeEnterprise), tenant.DefaultID)
-	ctx = context.WithValue(ctx, "client", &model.McpClient{
-		Name:      "scoped-client",
-		AllowList: datatypes.JSON(`["other-server"]`),
-	})
 
 	_, err := service.mcpProxyResourceHandler(ctx, req)
 	require.Error(t, err)
-	assert.Contains(t, err.Error(), "not authorized to access MCP server test-server")
+	assert.Contains(t, err.Error(), "missing MCP authentication")
 	assert.False(t, sessionCreated)
 }
 
@@ -396,10 +392,7 @@ func TestMCPProxyResourceHandlerEnterpriseAllowsAuthorizedClient(t *testing.T) {
 	req := mcp.ReadResourceRequest{}
 	req.Params.URI = buildResourceURI(tenant.DefaultID, "test-server", "resource://test/status")
 	ctx := tenant.WithContext(context.WithValue(context.Background(), "mode", model.ModeEnterprise), tenant.DefaultID)
-	ctx = context.WithValue(ctx, "client", &model.McpClient{
-		Name:      "scoped-client",
-		AllowList: datatypes.JSON(`["test-server"]`),
-	})
+	ctx = mcpgatewayctx.WithGlobalMCPAPIKeyAuth(ctx, true)
 
 	contents, err := service.mcpProxyResourceHandler(ctx, req)
 	require.NoError(t, err)

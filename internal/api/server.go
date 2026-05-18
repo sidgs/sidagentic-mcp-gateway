@@ -19,7 +19,6 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/service/config"
 	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
 	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
 	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
@@ -48,9 +47,11 @@ type ServerOptions struct {
 	// Both sse & streamable http use http, and we don't want to mix them up either.
 	SseMcpProxyServer *server.MCPServer
 
-	MCPService       *mcp.MCPService
-	MCPClientService *mcpclient.McpClientService
-	ConfigService    *config.ServerConfigService
+	MCPService    *mcp.MCPService
+	ConfigService *config.ServerConfigService
+
+	// GlobalMCPAPIKey is required for enterprise global MCP (/mcp, /sse, /message): send as X-API-Key or Authorization: Bearer <key>.
+	GlobalMCPAPIKey string
 	UserService      *user.UserService
 	ToolGroupService  *toolgroup.ToolGroupService
 	PromptGroupService *promptgroup.PromptGroupService
@@ -92,10 +93,11 @@ type Server struct {
 	mcpProxyServer    *server.MCPServer
 	sseMcpProxyServer *server.MCPServer
 
-	mcpService       *mcp.MCPService
-	mcpClientService *mcpclient.McpClientService
+	mcpService *mcp.MCPService
 
-	configService    *config.ServerConfigService
+	configService *config.ServerConfigService
+
+	globalMcpAPIKey string
 	userService      *user.UserService
 	toolGroupService  *toolgroup.ToolGroupService
 	promptGroupService *promptgroup.PromptGroupService
@@ -209,9 +211,9 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 	s := &Server{
 		mcpProxyServer:        opts.MCPProxyServer,
 		sseMcpProxyServer:     opts.SseMcpProxyServer,
-		mcpService:            opts.MCPService,
-		mcpClientService:      opts.MCPClientService,
-		configService:         opts.ConfigService,
+		mcpService:      opts.MCPService,
+		globalMcpAPIKey: strings.TrimSpace(opts.GlobalMCPAPIKey),
+		configService:   opts.ConfigService,
 		userService:           opts.UserService,
 		toolGroupService:      opts.ToolGroupService,
 		promptGroupService:    opts.PromptGroupService,
@@ -567,28 +569,6 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 
 		adminAPI.POST("/prompts/enable", s.enablePromptsHandler())
 		adminAPI.POST("/prompts/disable", s.disablePromptsHandler())
-
-		// endpoints for managing MCP clients (enterprise mode only)
-		adminAPI.GET(
-			"/clients",
-			requireEnterpriseMode,
-			s.listMcpClientsHandler(),
-		)
-		adminAPI.POST(
-			"/clients",
-			requireEnterpriseMode,
-			s.createMcpClientHandler(),
-		)
-		adminAPI.PUT(
-			"/clients/:name",
-			requireEnterpriseMode,
-			s.updateMcpClientHandler(),
-		)
-		adminAPI.DELETE(
-			"/clients/:name",
-			requireEnterpriseMode,
-			s.deleteMcpClientHandler(),
-		)
 
 		// endpoints for managing human users (enterprise mode only)
 		adminAPI.POST(

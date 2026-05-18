@@ -8,9 +8,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
 	"github.com/mcpjungle/mcpjungle/internal/service/config"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcpclient"
 	"github.com/mcpjungle/mcpjungle/internal/service/user"
 	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
@@ -343,83 +341,77 @@ func TestRequireServerMode(t *testing.T) {
 
 func TestCheckAuthForMcpProxyAccess(t *testing.T) {
 	gin.SetMode(gin.TestMode)
-	setup := testhelpers.SetupTestDB(t)
-	defer setup.Cleanup()
-	testDB := setup.DB
 
-	mcpClientService := mcpclient.NewMCPClientService(testDB)
+	const globalKey = "unit-test-global-mcp-key"
 
 	tests := []struct {
 		name           string
 		mode           model.ServerMode
+		serverKey      string
+		xApiKey        string
 		authHeader     string
-		setupClient    func() error
 		expectedStatus int
-		expectedBody   string
 	}{
 		{
 			name:           "dev mode - no auth required",
 			mode:           model.ModeDev,
+			serverKey:      "",
+			xApiKey:        "",
 			authHeader:     "",
-			setupClient:    func() error { return nil },
 			expectedStatus: http.StatusOK,
-			expectedBody:   "",
 		},
 		{
-			name:       "enterprise mode - valid token",
-			mode:       model.ModeEnterprise,
-			authHeader: "Bearer test-token",
-			setupClient: func() error {
-				client := model.McpClient{
-					Name:        "test-client",
-					Description: "Test client",
-					AllowList:   []byte("[]"),
-				}
-				_, err := mcpClientService.CreateClient(context.Background(), client)
-				if err != nil {
-					return err
-				}
-				var c model.McpClient
-				err = testDB.Where("name = ?", "test-client").First(&c).Error
-				if err != nil {
-					return err
-				}
-				c.AccessToken = "test-token"
-				return testDB.Save(&c).Error
-			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "",
-		},
-		{
-			name:           "enterprise mode - missing token",
+			name:           "enterprise - valid x-api-key",
 			mode:           model.ModeEnterprise,
+			serverKey:      globalKey,
+			xApiKey:        globalKey,
 			authHeader:     "",
-			setupClient:    func() error { return nil },
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "enterprise - valid bearer same as key",
+			mode:           model.ModeEnterprise,
+			serverKey:      globalKey,
+			xApiKey:        "",
+			authHeader:     "Bearer " + globalKey,
+			expectedStatus: http.StatusOK,
+		},
+		{
+			name:           "enterprise - missing credentials",
+			mode:           model.ModeEnterprise,
+			serverKey:      globalKey,
+			xApiKey:        "",
+			authHeader:     "",
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"missing authorization"}`,
+		},
+		{
+			name:           "enterprise - global key not configured",
+			mode:           model.ModeEnterprise,
+			serverKey:      "",
+			xApiKey:        "",
+			authHeader:     "",
+			expectedStatus: http.StatusServiceUnavailable,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.setupClient()
-			if err != nil {
-				t.Fatalf("Setup client failed: %v", err)
-			}
-
 			router := gin.New()
 			router.Use(func(c *gin.Context) {
 				if tt.mode != "" {
 					c.Set("mode", tt.mode)
 				}
 			})
-			server := &Server{mcpClientService: mcpClientService, agentAppService: agentapp.New(testDB, "")}
+			server := &Server{globalMcpAPIKey: tt.serverKey}
 			router.Use(server.checkAuthForMcpProxyAccess())
 			router.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"status": "success"})
 			})
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.xApiKey != "" {
+				req.Header.Set("X-API-Key", tt.xApiKey)
+			}
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
@@ -429,9 +421,6 @@ func TestCheckAuthForMcpProxyAccess(t *testing.T) {
 
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
-			}
-			if tt.expectedBody != "" && w.Body.String() != tt.expectedBody {
-				t.Errorf("Expected body %s, got %s", tt.expectedBody, w.Body.String())
 			}
 		})
 	}

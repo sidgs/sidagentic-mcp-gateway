@@ -5,11 +5,11 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mcpjungle/mcpjungle/internal/agentappauth"
 	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/stretchr/testify/assert"
-	"gorm.io/datatypes"
 )
 
 func TestMcpProxyToolFilter(t *testing.T) {
@@ -18,44 +18,29 @@ func TestMcpProxyToolFilter(t *testing.T) {
 	tests := []struct {
 		name      string
 		mode      model.ServerMode
-		client    *model.McpClient
 		tools     []mcp.Tool
 		wantNames []string
 	}{
 		{
-			name: "development mode returns all tools",
+			name: "development mode returns tenant-qualified tools only",
 			mode: model.ModeDev,
 			tools: []mcp.Tool{
-				{Name: "time__get_current_time"},
+				{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
 				{Name: "deepwiki__search_wiki"},
 			},
-			wantNames: []string{"time__get_current_time", "deepwiki__search_wiki"},
+			wantNames: []string{tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
 		},
 		{
-			name: "enterprise mode filters unauthorized tools",
+			name: "enterprise global MCP key returns all well-formed tenant tools",
 			mode: model.ModeEnterprise,
-			client: &model.McpClient{
-				Name:      "claude",
-				AllowList: datatypes.JSON(`["time"]`),
-			},
 			tools: []mcp.Tool{
-				{Name: "time__get_current_time"},
-				{Name: "deepwiki__search_wiki"},
+				{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
+				{Name: tenant.QualifyProxyName(tenant.DefaultID, "deepwiki__search_wiki")},
 			},
-			wantNames: []string{"time__get_current_time"},
-		},
-		{
-			name: "enterprise mode wildcard allows all tools",
-			mode: model.ModeEnterprise,
-			client: &model.McpClient{
-				Name:      "cursor",
-				AllowList: datatypes.JSON(`["*"]`),
+			wantNames: []string{
+				tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time"),
+				tenant.QualifyProxyName(tenant.DefaultID, "deepwiki__search_wiki"),
 			},
-			tools: []mcp.Tool{
-				{Name: "time__get_current_time"},
-				{Name: "deepwiki__search_wiki"},
-			},
-			wantNames: []string{"time__get_current_time", "deepwiki__search_wiki"},
 		},
 	}
 
@@ -65,8 +50,9 @@ func TestMcpProxyToolFilter(t *testing.T) {
 			t.Parallel()
 
 			ctx := context.WithValue(context.Background(), "mode", tt.mode)
-			if tt.client != nil {
-				ctx = context.WithValue(ctx, "client", tt.client)
+			ctx = tenant.WithContext(ctx, tenant.DefaultID)
+			if tt.mode == model.ModeEnterprise {
+				ctx = mcpgatewayctx.WithGlobalMCPAPIKeyAuth(ctx, true)
 			}
 
 			got := ProxyToolFilter(ctx, tt.tools)
@@ -96,37 +82,13 @@ func TestMcpProxyToolFilter_InvalidModeTypeInContext(t *testing.T) {
 	assert.Empty(t, got)
 }
 
-func TestMcpProxyToolFilter_EnterpriseMissingClientInContext(t *testing.T) {
+func TestMcpProxyToolFilter_EnterpriseMissingAuthInContext(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
+	ctx = tenant.WithContext(ctx, tenant.DefaultID)
 	got := ProxyToolFilter(ctx, []mcp.Tool{
-		{Name: "time__get_current_time"},
-	})
-
-	assert.Empty(t, got)
-}
-
-func TestMcpProxyToolFilter_EnterpriseInvalidClientTypeInContext(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
-	ctx = context.WithValue(ctx, "client", "not-a-client")
-	got := ProxyToolFilter(ctx, []mcp.Tool{
-		{Name: "time__get_current_time"},
-	})
-
-	assert.Empty(t, got)
-}
-
-func TestMcpProxyToolFilter_EnterpriseNilClientInContext(t *testing.T) {
-	t.Parallel()
-
-	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
-	var client *model.McpClient
-	ctx = context.WithValue(ctx, "client", client)
-	got := ProxyToolFilter(ctx, []mcp.Tool{
-		{Name: "time__get_current_time"},
+		{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
 	})
 
 	assert.Empty(t, got)
@@ -136,26 +98,26 @@ func TestMcpProxyToolFilter_EnterpriseMalformedToolNamesAreDenied(t *testing.T) 
 	t.Parallel()
 
 	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
-	ctx = context.WithValue(ctx, "client", &model.McpClient{
-		Name:      "claude",
-		AllowList: datatypes.JSON(`["time"]`),
-	})
+	ctx = tenant.WithContext(ctx, tenant.DefaultID)
+	ctx = mcpgatewayctx.WithGlobalMCPAPIKeyAuth(ctx, true)
 
 	got := ProxyToolFilter(ctx, []mcp.Tool{
 		{Name: "missing_separator"},
-		{Name: "time__get_current_time"},
+		{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
 	})
 
-	assert.Equal(t, []string{"time__get_current_time"}, toolNames(got))
+	assert.Equal(t, []string{tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")}, toolNames(got))
 }
 
-func TestMcpProxyToolFilter_EnterpriseOpenToolGroupAllowsTenantTools(t *testing.T) {
+func TestMcpProxyToolFilter_EnterpriseToolGroupWithAgentApp(t *testing.T) {
 	t.Parallel()
 
 	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
 	ctx = tenant.WithContext(ctx, tenant.DefaultID)
 	ctx = mcpgatewayctx.WithToolGroupRoute(ctx, "mygroup")
-	ctx = mcpgatewayctx.WithOpenGroupMCP(ctx, true)
+	ctx = agentappauth.WithPrincipal(ctx, &agentappauth.Principal{
+		ToolGroups: []string{"mygroup"},
+	})
 
 	tools := []mcp.Tool{
 		{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},

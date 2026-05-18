@@ -11,7 +11,9 @@ type AgentAppPublic struct {
 	PromptGroupNames []string `json:"prompt_group_names"`
 }
 
-// CreateAgentAppRequest creates an agent-app with optional group attachments.
+// CreateAgentAppRequest creates an agent-app with group attachment.
+// Exactly one of ToolGroupNames or PromptGroupNames must list exactly one existing group name;
+// the other slice must be empty. An app cannot attach to both or to neither.
 type CreateAgentAppRequest struct {
 	Name             string   `json:"name"`
 	Description      string   `json:"description,omitempty"`
@@ -26,7 +28,9 @@ type CreateAgentAppResponse struct {
 	OAuthTokenURL string         `json:"oauth_token_url,omitempty"`
 }
 
-// PatchAgentAppRequest partial update.
+// PatchAgentAppRequest partial update. When tool_group_names and/or prompt_group_names are sent,
+// the stored attachment must end as exactly one tool group or exactly one prompt group (see CreateAgentAppRequest).
+// Supplying a non-empty tool_group_names clears prompt attachments; a non-empty prompt_group_names clears tool attachments.
 type PatchAgentAppRequest struct {
 	Name             *string   `json:"name,omitempty"`
 	Description      *string   `json:"description,omitempty"`

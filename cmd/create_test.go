@@ -27,38 +27,7 @@ func TestCreateCommandStructure(t *testing.T) {
 
 	// Test subcommands count
 	subcommands := createCmd.Commands()
-	testhelpers.AssertEqual(t, 4, len(subcommands))
-}
-
-func TestCreateMcpClientSubcommand(t *testing.T) {
-	t.Parallel()
-
-	// Test command properties
-	testhelpers.AssertEqual(t, "mcp-client [name] | --conf <file>", createMcpClientCmd.Use)
-	testhelpers.AssertEqual(t, "Create an authenticated MCP client (Enterprise mode)", createMcpClientCmd.Short)
-	testhelpers.AssertNotNil(t, createMcpClientCmd.Long)
-	testhelpers.AssertTrue(t, len(createMcpClientCmd.Long) > 0, "Long description should not be empty")
-
-	// Test command functions
-	testhelpers.AssertNotNil(t, createMcpClientCmd.RunE)
-	testhelpers.AssertNotNil(t, createMcpClientCmd.Args)
-
-	// Test command flags
-	allowFlag := createMcpClientCmd.Flags().Lookup("allow")
-	testhelpers.AssertNotNil(t, allowFlag)
-	testhelpers.AssertTrue(t, len(allowFlag.Usage) > 0, "Allow flag should have usage description")
-
-	descriptionFlag := createMcpClientCmd.Flags().Lookup("description")
-	testhelpers.AssertNotNil(t, descriptionFlag)
-	testhelpers.AssertTrue(t, len(descriptionFlag.Usage) > 0, "Description flag should have usage description")
-
-	accessTokenFlag := createMcpClientCmd.Flags().Lookup("access-token")
-	testhelpers.AssertNotNil(t, accessTokenFlag)
-	testhelpers.AssertTrue(t, len(accessTokenFlag.Usage) > 0, "Access token flag should have usage description")
-
-	configFlag := createMcpClientCmd.Flags().Lookup("conf")
-	testhelpers.AssertNotNil(t, configFlag)
-	testhelpers.AssertTrue(t, len(configFlag.Usage) > 0, "Config flag should have usage description")
+	testhelpers.AssertEqual(t, 3, len(subcommands))
 }
 
 func TestCreateUserSubcommand(t *testing.T) {
@@ -108,10 +77,6 @@ func TestCreatePromptGroupSubcommand(t *testing.T) {
 }
 
 func TestCreateCommandVariables(t *testing.T) {
-	// Test that command variables are properly initialized to empty values
-	testhelpers.AssertEqual(t, "", createMcpClientCmdAllowedServers)
-	testhelpers.AssertEqual(t, "", createMcpClientCmdDescription)
-	testhelpers.AssertEqual(t, "", createMcpClientCmdConfigFilePath)
 	testhelpers.AssertEqual(t, "", createUserCmdConfigFilePath)
 	testhelpers.AssertEqual(t, "", createToolGroupConfigFilePath)
 	testhelpers.AssertEqual(t, "", createPromptGroupConfigFilePath)
@@ -164,7 +129,7 @@ func TestCreateCommandIntegration(t *testing.T) {
 
 	// Test all create subcommands are properly configured
 	subcommands := createCmd.Commands()
-	expectedSubcommands := []string{"mcp-client", "user", "group", "prompt-group"}
+	expectedSubcommands := []string{"user", "group", "prompt-group"}
 
 	testhelpers.AssertEqual(t, len(expectedSubcommands), len(subcommands))
 
@@ -182,8 +147,6 @@ func TestCreateCommandIntegration(t *testing.T) {
 
 // Test argument validation
 func TestCreateCommandArgumentValidation(t *testing.T) {
-	// Test that commands properly validate arguments
-	testhelpers.AssertNotNil(t, createMcpClientCmd.Args)
 	testhelpers.AssertNotNil(t, createUserCmd.Args)
 	// createToolGroupCmd doesn't have Args validation, which is correct
 
@@ -200,17 +163,6 @@ func TestCreateCommandArgumentValidation(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
-			// Test mcp-client command args validation
-			if createMcpClientCmd.Args != nil {
-				err := createMcpClientCmd.Args(createMcpClientCmd, tc.args)
-				if tc.expectError {
-					testhelpers.AssertError(t, err)
-				} else {
-					testhelpers.AssertNoError(t, err)
-				}
-			}
-
-			// Test user command args validation
 			if createUserCmd.Args != nil {
 				err := createUserCmd.Args(createUserCmd, tc.args)
 				if tc.expectError {

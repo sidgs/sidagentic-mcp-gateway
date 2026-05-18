@@ -31,16 +31,6 @@ var updateToolGroupCmd = &cobra.Command{
 	RunE: runUpdateGroup,
 }
 
-var updateMcpClientCmd = &cobra.Command{
-	Use:   "mcp-client [name]",
-	Args:  cobra.ExactArgs(1),
-	Short: "Update an MCP client",
-	Long: "Update an existing MCP client\n" +
-		"Currently, this command only supports updating the access token of the MCP client.\n" +
-		"This is useful when you use custom tokens and you want to rotate the access token of a client.",
-	RunE: runUpdateMcpClient,
-}
-
 var updateUserCmd = &cobra.Command{
 	Use:   "user [name]",
 	Short: "Update a user",
@@ -52,8 +42,6 @@ var updateUserCmd = &cobra.Command{
 
 var (
 	updateToolGroupConfigFilePath string
-
-	updateMcpClientAccessToken string
 
 	updateUserAccessToken string
 )
@@ -68,14 +56,6 @@ func init() {
 	)
 	_ = updateToolGroupCmd.MarkFlagRequired("conf")
 
-	updateMcpClientCmd.Flags().StringVar(
-		&updateMcpClientAccessToken,
-		"access-token",
-		"",
-		"New access token for the MCP client",
-	)
-	_ = updateMcpClientCmd.MarkFlagRequired("access-token")
-
 	updateUserCmd.Flags().StringVar(
 		&updateUserAccessToken,
 		"access-token",
@@ -85,7 +65,6 @@ func init() {
 	_ = updateUserCmd.MarkFlagRequired("access-token")
 
 	updateCmd.AddCommand(updateToolGroupCmd)
-	updateCmd.AddCommand(updateMcpClientCmd)
 	updateCmd.AddCommand(updateUserCmd)
 
 	rootCmd.AddCommand(updateCmd)
@@ -175,20 +154,6 @@ func runUpdateGroup(cmd *cobra.Command, args []string) error {
 		cmd.Println()
 	}
 
-	return nil
-}
-
-func runUpdateMcpClient(cmd *cobra.Command, args []string) error {
-	client := &types.McpClient{
-		Name:                args[0],
-		AccessToken:         updateMcpClientAccessToken,
-		IsCustomAccessToken: true,
-	}
-	if err := apiClient.UpdateMcpClient(client); err != nil {
-		return fmt.Errorf("failed to update MCP client %s: %w", client.Name, err)
-	}
-
-	cmd.Printf("MCP client %s access token updated successfully.\n", client.Name)
 	return nil
 }
 

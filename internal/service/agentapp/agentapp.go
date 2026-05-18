@@ -98,6 +98,49 @@ func marshalNames(names []string) (datatypes.JSON, error) {
 	return b, nil
 }
 
+// normalizeGroupNames trims entries, drops blanks, and removes duplicates (first occurrence wins).
+func normalizeGroupNames(names []string) []string {
+	if len(names) == 0 {
+		return []string{}
+	}
+	seen := make(map[string]struct{}, len(names))
+	out := make([]string, 0, len(names))
+	for _, raw := range names {
+		n := strings.TrimSpace(raw)
+		if n == "" {
+			continue
+		}
+		if _, ok := seen[n]; ok {
+			continue
+		}
+		seen[n] = struct{}{}
+		out = append(out, n)
+	}
+	return out
+}
+
+func validateAgentAppGroupAttachment(toolGroups, promptGroups []string) error {
+	nt := normalizeGroupNames(toolGroups)
+	np := normalizeGroupNames(promptGroups)
+	if len(nt) > 1 {
+		return fmt.Errorf("agent app may reference at most one tool group: %w", apierrors.ErrInvalidInput)
+	}
+	if len(np) > 1 {
+		return fmt.Errorf("agent app may reference at most one prompt group: %w", apierrors.ErrInvalidInput)
+	}
+	switch {
+	case len(nt) == 1 && len(np) == 0:
+		return nil
+	case len(nt) == 0 && len(np) == 1:
+		return nil
+	default:
+		return fmt.Errorf(
+			"agent app must reference exactly one tool group or exactly one prompt group: %w",
+			apierrors.ErrInvalidInput,
+		)
+	}
+}
+
 func (s *Service) validateAttachedGroups(ctx context.Context, toolGroups, promptGroups []string) error {
 	tid := tenant.MustFromContext(ctx)
 	for _, n := range toolGroups {
@@ -138,6 +181,11 @@ func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description s
 	ownerScopeKey = strings.TrimSpace(ownerScopeKey)
 	if ownerScopeKey == "" {
 		return nil, "", fmt.Errorf("owner scope is required: %w", apierrors.ErrInvalidInput)
+	}
+	toolGroups = normalizeGroupNames(toolGroups)
+	promptGroups = normalizeGroupNames(promptGroups)
+	if err := validateAgentAppGroupAttachment(toolGroups, promptGroups); err != nil {
+		return nil, "", err
 	}
 	if err := s.validateAttachedGroups(ctx, toolGroups, promptGroups); err != nil {
 		return nil, "", err
@@ -221,45 +269,50 @@ func (s *Service) UpdatePatch(ctx context.Context, id uint, ownerScopeKey string
 			return nil, fmt.Errorf("invalid status: %w", apierrors.ErrInvalidInput)
 		}
 	}
-	if toolGroups != nil || promptGroups != nil {
-		tg := app.ToolGroupNames
-		pg := app.PromptGroupNames
-		if toolGroups != nil {
-			if err := s.validateAttachedGroups(ctx, *toolGroups, extractNamesOrEmpty(pg)); err != nil {
-				return nil, err
-			}
-			tgj, err := marshalNames(*toolGroups)
-			if err != nil {
-				return nil, err
-			}
-			tg = tgj
-		}
-		if promptGroups != nil {
-			if err := s.validateAttachedGroups(ctx, extractNamesOrEmpty(tg), *promptGroups); err != nil {
-				return nil, err
-			}
-			pgj, err := marshalNames(*promptGroups)
-			if err != nil {
-				return nil, err
-			}
-			pg = pgj
-		}
-		app.ToolGroupNames = tg
-		app.PromptGroupNames = pg
+
+	curTG, err := app.GetToolGroups()
+	if err != nil {
+		return nil, err
 	}
+	curPG, err := app.GetPromptGroups()
+	if err != nil {
+		return nil, err
+	}
+	tg := normalizeGroupNames(curTG)
+	pg := normalizeGroupNames(curPG)
+	if toolGroups != nil {
+		tg = normalizeGroupNames(*toolGroups)
+		if len(tg) > 0 {
+			pg = []string{}
+		}
+	}
+	if promptGroups != nil {
+		pg = normalizeGroupNames(*promptGroups)
+		if len(pg) > 0 {
+			tg = []string{}
+		}
+	}
+	if err := validateAgentAppGroupAttachment(tg, pg); err != nil {
+		return nil, err
+	}
+	if err := s.validateAttachedGroups(ctx, tg, pg); err != nil {
+		return nil, err
+	}
+	tgj, err := marshalNames(tg)
+	if err != nil {
+		return nil, err
+	}
+	pgj, err := marshalNames(pg)
+	if err != nil {
+		return nil, err
+	}
+	app.ToolGroupNames = tgj
+	app.PromptGroupNames = pgj
+
 	if err := s.dbTenant(ctx).Save(app).Error; err != nil {
 		return nil, err
 	}
 	return app, nil
-}
-
-func extractNamesOrEmpty(j datatypes.JSON) []string {
-	if j == nil {
-		return []string{}
-	}
-	var names []string
-	_ = json.Unmarshal(j, &names)
-	return names
 }
 
 // Delete removes an agent-app owned by ownerScopeKey.

@@ -24,9 +24,6 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(&model.User{}); err != nil {
 		return fmt.Errorf("auto‑migration failed for User model: %v", err)
 	}
-	if err := db.AutoMigrate(&model.McpClient{}); err != nil {
-		return fmt.Errorf("auto‑migration failed for McpClient model: %v", err)
-	}
 	if err := db.AutoMigrate(&model.ToolGroup{}); err != nil {
 		return fmt.Errorf("auto‑migration failed for ToolGroup model: %v", err)
 	}
@@ -70,7 +67,6 @@ func backfillTenantColumns(db *gorm.DB) error {
 	for _, table := range []string{
 		ns.TableName("ServerConfig"),
 		ns.TableName("User"),
-		ns.TableName("McpClient"),
 		ns.TableName("ToolGroup"),
 		ns.TableName("PromptGroup"),
 		ns.TableName("AgentApp"),

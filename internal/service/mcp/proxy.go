@@ -21,7 +21,7 @@ func authorizeProxyServerAccess(ctx context.Context, serverName string) error {
 		return nil
 	}
 
-	if mcpgatewayctx.OpenGroupMCP(ctx) {
+	if mcpgatewayctx.GlobalMCPAPIKeyAuth(ctx) {
 		return nil
 	}
 
@@ -41,18 +41,7 @@ func authorizeProxyServerAccess(ctx context.Context, serverName string) error {
 		return fmt.Errorf("agent-app requires group-scoped MCP endpoint")
 	}
 
-	c, ok := ctx.Value("client").(*model.McpClient)
-	if !ok || c == nil {
-		return fmt.Errorf("missing MCP client credentials")
-	}
-	if c.TenantID != tenant.MustFromContext(ctx) {
-		return fmt.Errorf("client is not authorized for this tenant")
-	}
-	if !c.CheckHasServerAccess(serverName) {
-		return fmt.Errorf("client %s is not authorized to access MCP server %s", c.Name, serverName)
-	}
-
-	return nil
+	return fmt.Errorf("missing MCP authentication")
 }
 
 // MCPProxyToolCallHandler handles tool calls for the MCP proxy server

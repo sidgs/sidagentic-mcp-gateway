@@ -10,7 +10,11 @@ import (
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 )
 
-// ProxyToolFilter filters tools exposed by MCP proxy for enterprise mode based on client allow-list.
+// ProxyToolFilter filters tools exposed by the MCP proxy.
+// In development mode, only tools qualified for the request tenant are returned.
+// In enterprise mode:
+//   - Global /mcp (authenticated with GLOBAL_MCP_API_KEY) returns all tenant-qualified, well-formed tools.
+//   - Tool-group MCP (agent-app principal) returns tools on that group's server when the app is attached to the group.
 func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 	serverMode, ok := ctx.Value("mode").(model.ServerMode)
 	if !ok {
@@ -29,67 +33,43 @@ func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 		return out
 	}
 
-	if mcpgatewayctx.OpenGroupMCP(ctx) {
-		if _, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok {
-			reqTenant := tenant.MustFromContext(ctx)
-			var out []mcp.Tool
-			for _, tool := range tools {
-				tt, _, qual := tenant.SplitProxyToolName(tool.Name)
-				if !qual || tt != reqTenant {
-					continue
-				}
-				out = append(out, tool)
+	if mcpgatewayctx.GlobalMCPAPIKeyAuth(ctx) {
+		return tenantQualifiedEnterpriseTools(ctx, tools)
+	}
+
+	if aa, ok := agentappauth.PrincipalFromContext(ctx); ok {
+		reqTenant := tenant.MustFromContext(ctx)
+		var filtered []mcp.Tool
+		for _, tool := range tools {
+			toolTenant, canonical, qual := tenant.SplitProxyToolName(tool.Name)
+			if !qual || toolTenant != reqTenant {
+				continue
 			}
-			return out
+			if _, _, ok := splitServerToolName(canonical); !ok {
+				continue
+			}
+			filtered = append(filtered, tool)
+		}
+		if tg, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok && aa.AllowsToolGroup(tg) {
+			return filtered
 		}
 	}
 
-	c, ok := ctx.Value("client").(*model.McpClient)
-	if !ok || c == nil {
-		if aa, ok := agentappauth.PrincipalFromContext(ctx); ok {
-			reqTenant := tenant.MustFromContext(ctx)
-			var filtered []mcp.Tool
-			for _, tool := range tools {
-				toolTenant, canonical, qual := tenant.SplitProxyToolName(tool.Name)
-				if !qual || toolTenant != reqTenant {
-					continue
-				}
-				if _, _, ok := splitServerToolName(canonical); !ok {
-					continue
-				}
-				filtered = append(filtered, tool)
-			}
-			if tg, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok && aa.AllowsToolGroup(tg) {
-				return filtered
-			}
-		}
-		return nil
-	}
+	return nil
+}
 
+func tenantQualifiedEnterpriseTools(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 	reqTenant := tenant.MustFromContext(ctx)
-
-	var filteredTools []mcp.Tool
-	allowedServers := make(map[string]bool)
-
+	var out []mcp.Tool
 	for _, tool := range tools {
 		toolTenant, canonical, qual := tenant.SplitProxyToolName(tool.Name)
 		if !qual || toolTenant != reqTenant {
 			continue
 		}
-		serverName, _, ok := splitServerToolName(canonical)
-		if !ok {
+		if _, _, ok := splitServerToolName(canonical); !ok {
 			continue
 		}
-
-		allowed, cached := allowedServers[serverName]
-		if !cached {
-			allowed = c.CheckHasServerAccess(serverName)
-			allowedServers[serverName] = allowed
-		}
-		if allowed {
-			filteredTools = append(filteredTools, tool)
-		}
+		out = append(out, tool)
 	}
-
-	return filteredTools
+	return out
 }

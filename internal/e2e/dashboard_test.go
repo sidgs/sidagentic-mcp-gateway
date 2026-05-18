@@ -208,7 +208,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	firstPrompt := promptsPayload["prompts"].([]any)[0].(map[string]any)
 	require.Equal(t, true, firstPrompt["enabled"])
 
-	proxyClient := newMCPProxyClient(t, env, "")
+	proxyClient := newMCPProxyClient(t, env)
 	toolsBefore, err := proxyClient.ListTools(context.Background(), mcp.ListToolsRequest{})
 	require.NoError(t, err)
 	require.Contains(t, toolResultNames(toolsBefore.Tools), "dashsrv__echo")
@@ -451,7 +451,7 @@ func TestDashboardRegisterServerHandlesOAuth(t *testing.T) {
 	require.Equal(t, http.StatusOK, serversResp.StatusCode)
 	require.Contains(t, readBody(t, serversResp), "oauthdash")
 
-	proxyClient := newMCPProxyClient(t, env, "")
+	proxyClient := newMCPProxyClient(t, env)
 	tools, err := proxyClient.ListTools(context.Background(), mcp.ListToolsRequest{})
 	require.NoError(t, err)
 	require.Contains(t, toolResultNames(tools.Tools), "oauthdash__echo")
