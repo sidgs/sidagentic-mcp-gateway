@@ -160,8 +160,9 @@ func (s *Server) updatePromptGroupHandler() gin.HandlerFunc {
 
 func promptGroupModelToPromptGroupType(g *model.PromptGroup) (*types.PromptGroup, error) {
 	out := &types.PromptGroup{
-		Name:        g.Name,
-		Description: g.Description,
+		Name:            g.Name,
+		Description:     g.Description,
+		SecurityOption: types.NormalizeGroupSecurityOption(g.SecurityOption),
 	}
 	var err error
 	out.IncludedPrompts, err = g.GetPrompts()

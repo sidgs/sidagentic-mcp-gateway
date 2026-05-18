@@ -273,3 +273,121 @@ func (m *MCPService) setMcpServerEnabled(ctx context.Context, name string, enabl
 	}
 	return nil
 }
+
+// DashboardServerConfig returns registration-shaped configuration for the dashboard editor.
+func (m *MCPService) DashboardServerConfig(ctx context.Context, name string) (*types.RegisterServerInput, error) {
+	record, err := m.GetMcpServer(ctx, name)
+	if err != nil {
+		return nil, err
+	}
+	input := &types.RegisterServerInput{
+		Name:        record.Name,
+		Transport:   string(record.Transport),
+		Description: record.Description,
+		SessionMode: string(record.SessionMode),
+	}
+	switch record.Transport {
+	case types.TransportStreamableHTTP:
+		conf, confErr := record.GetStreamableHTTPConfig()
+		if confErr != nil {
+			return nil, confErr
+		}
+		input.URL = conf.URL
+		input.BearerToken = conf.BearerToken
+		input.Headers = conf.Headers
+	case types.TransportStdio:
+		conf, confErr := record.GetStdioConfig()
+		if confErr != nil {
+			return nil, confErr
+		}
+		input.Command = conf.Command
+		input.Args = conf.Args
+		input.Env = conf.Env
+	case types.TransportSSE:
+		conf, confErr := record.GetSSEConfig()
+		if confErr != nil {
+			return nil, confErr
+		}
+		input.URL = conf.URL
+		input.BearerToken = conf.BearerToken
+	}
+	oauthToken, oauthErr := m.GetUpstreamOAuthToken(ctx, record.Name)
+	if oauthErr != nil {
+		if !errors.Is(oauthErr, apierrors.ErrNotFound) {
+			return nil, oauthErr
+		}
+	} else {
+		input.OAuthRedirectURI = oauthToken.RedirectURI
+		input.OAuthClientID = oauthToken.ClientID
+		input.OAuthClientSecret = oauthToken.ClientSecret
+		scopes, scopeErr := ScopesFromJSONForAPI(oauthToken.Scopes)
+		if scopeErr == nil {
+			input.OAuthScopes = scopes
+		}
+	}
+	return input, nil
+}
+
+// UpdateDashboardMcpServer replaces connection configuration for an existing server, re-probes
+// the upstream MCP endpoint, and rebuilds tools, prompts, and resources. Server name and
+// transport cannot change. If the server was disabled, catalog entries are re-imported then the
+// server is disabled again to match the prior state.
+func (m *MCPService) UpdateDashboardMcpServer(ctx context.Context, name string, updated *model.McpServer) error {
+	existing, err := m.GetMcpServer(ctx, name)
+	if err != nil {
+		return err
+	}
+	if existing.Transport != updated.Transport {
+		return fmt.Errorf("cannot change MCP server transport: %w", apierrors.ErrInvalidInput)
+	}
+	wasEnabled := existing.Enabled
+
+	existing.Description = updated.Description
+	existing.SessionMode = updated.SessionMode
+	existing.Config = updated.Config
+
+	if m.sessionManager != nil {
+		m.sessionManager.CloseSessionForServer(existing.TenantID, name)
+	}
+
+	mcpClient, err := createMcpServerConnectionWithDB(ctx, m.db, existing, m.mcpServerInitReqTimeoutSec, true)
+	if err != nil {
+		return err
+	}
+	defer mcpClient.Close()
+
+	if err := m.deregisterServerTools(ctx, existing); err != nil {
+		return err
+	}
+	if err := m.deregisterServerPrompts(ctx, existing); err != nil {
+		return err
+	}
+	if err := m.deregisterServerResources(ctx, existing); err != nil {
+		return err
+	}
+
+	if err := m.dbTenant(ctx).Save(existing).Error; err != nil {
+		return fmt.Errorf("failed to update MCP server %s: %w", name, err)
+	}
+
+	if err := m.registerServerTools(ctx, existing, mcpClient); err != nil {
+		return err
+	}
+	if mcpClient.GetServerCapabilities().Prompts != nil {
+		if err := m.registerServerPrompts(ctx, existing, mcpClient); err != nil {
+			log.Printf("[WARN] failed to register prompts for MCP server %s after update: %v", name, err)
+		}
+	}
+	if mcpClient.GetServerCapabilities().Resources != nil {
+		if err := m.registerServerResources(ctx, existing, mcpClient); err != nil {
+			log.Printf("[WARN] failed to register resources for MCP server %s after update: %v", name, err)
+		}
+	}
+
+	if !wasEnabled {
+		if _, _, err := m.DisableMcpServer(ctx, name); err != nil {
+			return fmt.Errorf("failed to re-apply disabled state for server %s: %w", name, err)
+		}
+	}
+	return nil
+}

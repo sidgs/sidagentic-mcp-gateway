@@ -72,8 +72,9 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_ListTools(t *testing.T) {
 	registerEverythingServer(t, env, "")
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
-		"name":           "scoped-tools-group",
-		"included_tools": []string{"everything__echo"},
+		"name":             "scoped-tools-group",
+		"security_option": "open",
+		"included_tools":   []string{"everything__echo"},
 	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
@@ -99,8 +100,9 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_GetTool(t *testing.T) {
 	registerEverythingServer(t, env, "")
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
-		"name":           "get-tool-group",
-		"included_tools": []string{"everything__echo"},
+		"name":             "get-tool-group",
+		"security_option": "open",
+		"included_tools":   []string{"everything__echo"},
 	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
@@ -130,8 +132,9 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_InvokeTool(t *testing.T) {
 	registerEverythingServer(t, env, "")
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
-		"name":           "invoke-tool-group",
-		"included_tools": []string{"everything__echo"},
+		"name":             "invoke-tool-group",
+		"security_option": "open",
+		"included_tools":   []string{"everything__echo"},
 	}, "")
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)

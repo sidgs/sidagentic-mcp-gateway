@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"log"
 	"sort"
+	"strings"
 	"sync"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
@@ -76,6 +77,10 @@ func (s *PromptGroupService) CreatePromptGroup(ctx context.Context, group *model
 		)
 	}
 	group.TenantID = tenant.MustFromContext(ctx)
+	group.SecurityOption = types.NormalizeGroupSecurityOption(group.SecurityOption)
+	if err := types.ValidateGroupSecurityOption(group.SecurityOption); err != nil {
+		return err
+	}
 
 	promptNames, err := group.ResolveEffectivePrompts(ctx, s.mcpService)
 	if err != nil {
@@ -123,6 +128,14 @@ func (s *PromptGroupService) UpdatePromptGroup(ctx context.Context, name string,
 		return nil, err
 	}
 
+	if strings.TrimSpace(updated.SecurityOption) == "" {
+		updated.SecurityOption = oldGroup.SecurityOption
+	}
+	updated.SecurityOption = types.NormalizeGroupSecurityOption(updated.SecurityOption)
+	if err := types.ValidateGroupSecurityOption(updated.SecurityOption); err != nil {
+		return nil, err
+	}
+
 	oldPrompts, err := oldGroup.ResolveEffectivePrompts(ctx, s.mcpService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve effective prompts of original group: %w", err)
@@ -134,7 +147,9 @@ func (s *PromptGroupService) UpdatePromptGroup(ctx context.Context, name string,
 
 	added, removed := util.DiffTools(oldPrompts, newPrompts)
 
-	if updated.Description == oldGroup.Description && len(added) == 0 && len(removed) == 0 {
+	if updated.Description == oldGroup.Description &&
+		updated.SecurityOption == types.NormalizeGroupSecurityOption(oldGroup.SecurityOption) &&
+		len(added) == 0 && len(removed) == 0 {
 		return oldGroup, nil
 	}
 

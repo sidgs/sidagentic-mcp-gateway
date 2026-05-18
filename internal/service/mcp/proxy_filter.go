@@ -29,6 +29,21 @@ func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 		return out
 	}
 
+	if mcpgatewayctx.OpenGroupMCP(ctx) {
+		if _, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok {
+			reqTenant := tenant.MustFromContext(ctx)
+			var out []mcp.Tool
+			for _, tool := range tools {
+				tt, _, qual := tenant.SplitProxyToolName(tool.Name)
+				if !qual || tt != reqTenant {
+					continue
+				}
+				out = append(out, tool)
+			}
+			return out
+		}
+	}
+
 	c, ok := ctx.Value("client").(*model.McpClient)
 	if !ok || c == nil {
 		if aa, ok := agentappauth.PrincipalFromContext(ctx); ok {

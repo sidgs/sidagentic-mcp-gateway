@@ -456,14 +456,14 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 	g.Any(
 		V0PathPrefix+"/groups/:name/mcp",
 		s.requireInitialized(),
-		s.checkAuthForMcpProxyAccess(),
+		s.checkAuthForGroupMcpProxyAccess(true),
 		s.toolGroupMCPServerCallHandler(),
 	)
 
 	g.Any(
 		V0PathPrefix+"/prompt-groups/:name/mcp",
 		s.requireInitialized(),
-		s.checkAuthForMcpProxyAccess(),
+		s.checkAuthForGroupMcpProxyAccess(false),
 		s.promptGroupMCPServerCallHandler(),
 	)
 
@@ -485,26 +485,26 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 	g.Any(
 		V0PathPrefix+"/groups/:name/sse",
 		s.requireInitialized(),
-		s.checkAuthForMcpProxyAccess(),
+		s.checkAuthForGroupMcpProxyAccess(true),
 		s.toolGroupSseMCPServerCallHandler(),
 	)
 	g.Any(
 		V0PathPrefix+"/groups/:name/message",
 		s.requireInitialized(),
-		s.checkAuthForMcpProxyAccess(),
+		s.checkAuthForGroupMcpProxyAccess(true),
 		s.toolGroupSseMCPServerCallMessageHandler(),
 	)
 
 	g.Any(
 		V0PathPrefix+"/prompt-groups/:name/sse",
 		s.requireInitialized(),
-		s.checkAuthForMcpProxyAccess(),
+		s.checkAuthForGroupMcpProxyAccess(false),
 		s.promptGroupSseHandler(),
 	)
 	g.Any(
 		V0PathPrefix+"/prompt-groups/:name/message",
 		s.requireInitialized(),
-		s.checkAuthForMcpProxyAccess(),
+		s.checkAuthForGroupMcpProxyAccess(false),
 		s.promptGroupSseMessageHandler(),
 	)
 
@@ -647,6 +647,8 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.GET("/overview", s.dashboardOverviewHandler())
 			dashboardAPI.GET("/servers", s.dashboardServersHandler())
 			dashboardAPI.POST("/servers", s.dashboardRegisterServerHandler())
+			dashboardAPI.GET("/servers/:name/config", s.dashboardGetServerConfigHandler())
+			dashboardAPI.PUT("/servers/:name", s.dashboardUpdateServerHandler())
 			dashboardAPI.GET("/oauth/callback", s.dashboardOAuthCallbackHandler())
 			dashboardAPI.GET("/oauth/session/:id", s.dashboardOAuthSessionHandler())
 			dashboardAPI.DELETE("/servers/:name", s.dashboardDeleteServerHandler())
@@ -656,11 +658,13 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.GET("/tool-groups", s.dashboardToolGroupsHandler())
 			dashboardAPI.POST("/tool-groups", s.dashboardCreateToolGroupHandler())
 			dashboardAPI.GET("/tool-groups/:name", s.dashboardGetToolGroupHandler())
+			dashboardAPI.PUT("/tool-groups/:name", s.dashboardUpdateToolGroupHandler())
 			dashboardAPI.DELETE("/tool-groups/:name", s.dashboardDeleteToolGroupHandler())
 
 			dashboardAPI.GET("/prompt-groups", s.dashboardPromptGroupsHandler())
 			dashboardAPI.POST("/prompt-groups", s.dashboardCreatePromptGroupHandler())
 			dashboardAPI.GET("/prompt-groups/:name", s.dashboardGetPromptGroupHandler())
+			dashboardAPI.PUT("/prompt-groups/:name", s.dashboardUpdatePromptGroupHandler())
 			dashboardAPI.DELETE("/prompt-groups/:name", s.dashboardDeletePromptGroupHandler())
 
 			dashboardAPI.GET("/agent-apps", s.dashboardAgentAppsHandler())

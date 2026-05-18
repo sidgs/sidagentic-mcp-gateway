@@ -10,6 +10,7 @@ type routeCtxKey int
 const (
 	keyToolGroupRoute routeCtxKey = iota + 1
 	keyPromptGroupRoute
+	keyOpenGroupMCP
 )
 
 // WithToolGroupRoute annotates the context with the tool group name served by the current MCP route.
@@ -32,4 +33,15 @@ func WithPromptGroupRoute(ctx context.Context, groupName string) context.Context
 func PromptGroupRoute(ctx context.Context) (string, bool) {
 	v, ok := ctx.Value(keyPromptGroupRoute).(string)
 	return v, ok && v != ""
+}
+
+// WithOpenGroupMCP marks the request as using an MCP tool- or prompt-group route with security_option=open.
+func WithOpenGroupMCP(ctx context.Context, open bool) context.Context {
+	return context.WithValue(ctx, keyOpenGroupMCP, open)
+}
+
+// OpenGroupMCP reports whether the group route allows unauthenticated MCP access (enterprise).
+func OpenGroupMCP(ctx context.Context) bool {
+	v, ok := ctx.Value(keyOpenGroupMCP).(bool)
+	return ok && v
 }

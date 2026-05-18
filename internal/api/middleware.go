@@ -3,14 +3,19 @@ package api
 import (
 	"context"
 	"encoding/base64"
+	"errors"
 	"fmt"
 	"net/http"
+	"slices"
 	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/agentappauth"
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
+	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
+	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
+	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
 	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
 )
@@ -280,6 +285,171 @@ func (s *Server) checkAuthForMcpProxyAccess() gin.HandlerFunc {
 		}
 
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "unsupported authorization scheme"})
+	}
+}
+
+// checkAuthForGroupMcpProxyAccess enforces per-group security_option on tool-group and prompt-group MCP routes (including dev mode).
+func (s *Server) checkAuthForGroupMcpProxyAccess(toolGroup bool) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		mode, exists := c.Get("mode")
+		if !exists {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server mode not found in context"})
+			return
+		}
+		m, ok := mode.(model.ServerMode)
+		if !ok {
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "invalid server mode in context"})
+			return
+		}
+
+		ctx := context.WithValue(c.Request.Context(), "mode", m)
+		c.Request = c.Request.WithContext(ctx)
+
+		name := c.Param("name")
+		if name == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "group name is required"})
+			return
+		}
+
+		var sec string
+		if toolGroup {
+			g, err := s.toolGroupService.GetToolGroup(c.Request.Context(), name)
+			if err != nil {
+				if errors.Is(err, toolgroup.ErrToolGroupNotFound) {
+					c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("tool group not found: %s", name)})
+					return
+				}
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			sec = types.NormalizeGroupSecurityOption(g.SecurityOption)
+		} else {
+			g, err := s.promptGroupService.GetPromptGroup(c.Request.Context(), name)
+			if err != nil {
+				if errors.Is(err, promptgroup.ErrPromptGroupNotFound) {
+					c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("prompt group not found: %s", name)})
+					return
+				}
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			sec = types.NormalizeGroupSecurityOption(g.SecurityOption)
+		}
+
+		ctx = injectMCPGroupRouteContext(c, c.Request.Context())
+		c.Request = c.Request.WithContext(ctx)
+
+		switch sec {
+		case types.GroupSecurityOpen:
+			ctx = mcpgatewayctx.WithOpenGroupMCP(c.Request.Context(), true)
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
+		case types.GroupSecurityAPIKey:
+			if s.agentAppService == nil {
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "agent-app service is not configured"})
+				return
+			}
+			key := strings.TrimSpace(c.GetHeader("X-API-Key"))
+			if key == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing x-api-key"})
+				return
+			}
+			app, err := s.agentAppService.GetByClientID(c.Request.Context(), key)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid x-api-key"})
+				return
+			}
+			if !app.IsEnabled() {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid x-api-key"})
+				return
+			}
+			if toolGroup {
+				names, err := app.GetToolGroups()
+				if err != nil || !slices.Contains(names, name) {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized for this tool group"})
+					return
+				}
+			} else {
+				names, err := app.GetPromptGroups()
+				if err != nil || !slices.Contains(names, name) {
+					c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized for this prompt group"})
+					return
+				}
+			}
+			principal, err := agentapp.PrincipalForApp(app)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			ctx = agentappauth.WithPrincipal(c.Request.Context(), principal)
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
+		case types.GroupSecurityBasic:
+			if s.agentAppService == nil {
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "agent-app service is not configured"})
+				return
+			}
+			authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+			user, pass, parseOk := parseMCPBasicAuth(authHeader)
+			if !parseOk {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing or invalid basic authorization"})
+				return
+			}
+			principal, err := s.agentAppService.ResolvePrincipalFromBasic(c.Request.Context(), user, pass)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
+				return
+			}
+			if toolGroup && !principal.AllowsToolGroup(name) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized for this tool group"})
+				return
+			}
+			if !toolGroup && !principal.AllowsPromptGroup(name) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized for this prompt group"})
+				return
+			}
+			ctx = agentappauth.WithPrincipal(c.Request.Context(), principal)
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
+		case types.GroupSecurityBearer:
+			if s.agentAppService == nil || !s.agentAppService.JWTConfigured() {
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "agent-app JWT signing is not configured"})
+				return
+			}
+			authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+			const bearerPrefix = "Bearer "
+			if len(authHeader) <= len(bearerPrefix) || !strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+				return
+			}
+			token := strings.TrimSpace(authHeader[len(bearerPrefix):])
+			if token == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+				return
+			}
+			principal, err := s.agentAppService.ResolvePrincipalFromBearerJWT(c.Request.Context(), token)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid bearer token"})
+				return
+			}
+			if toolGroup && !principal.AllowsToolGroup(name) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized for this tool group"})
+				return
+			}
+			if !toolGroup && !principal.AllowsPromptGroup(name) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized for this prompt group"})
+				return
+			}
+			ctx = agentappauth.WithPrincipal(c.Request.Context(), principal)
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
+		default:
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "invalid group security_option"})
+		}
 	}
 }
 

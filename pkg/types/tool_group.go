@@ -15,6 +15,9 @@ type ToolGroup struct {
 	ExcludedTools []string `json:"excluded_tools,omitempty"`
 
 	Description string `json:"description"`
+
+	// SecurityOption is one of: open, api_key, basic, bearer (default basic when omitted on create).
+	SecurityOption string `json:"security_option,omitempty"`
 }
 
 // ToolGroupEndpoints contains the endpoints a MCP client can use to access a tool group.

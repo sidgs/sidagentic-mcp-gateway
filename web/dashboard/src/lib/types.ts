@@ -97,6 +97,8 @@ export interface DashboardToolsResponse {
   empty_state?: DashboardEmptyState;
 }
 
+export type GroupSecurityOption = "open" | "api_key" | "basic" | "bearer";
+
 export interface DashboardToolGroupTool {
   name: string;
   canonical_name: string;
@@ -107,6 +109,7 @@ export interface DashboardToolGroupTool {
 export interface DashboardToolGroup {
   name: string;
   description?: string;
+  security_option: GroupSecurityOption;
   tool_count: number;
   tools: DashboardToolGroupTool[];
   streamable_http_endpoint: string;
@@ -129,6 +132,7 @@ export interface DashboardPromptGroupPrompt {
 export interface DashboardPromptGroup {
   name: string;
   description?: string;
+  security_option: GroupSecurityOption;
   prompt_count: number;
   prompts: DashboardPromptGroupPrompt[];
   streamable_http_endpoint: string;
@@ -205,18 +209,37 @@ export interface DashboardRegisterServerInput {
   args?: string[];
   env?: Record<string, string>;
   session_mode?: "stateless" | "stateful";
+  /** Present in GET /dashboard/servers/:name/config when upstream OAuth metadata exists; not sent on create. */
+  oauth_redirect_uri?: string;
+  oauth_client_id?: string;
+  oauth_client_secret?: string;
+  oauth_scopes?: string[];
 }
 
 export interface DashboardCreateToolGroupInput {
   name: string;
   description?: string;
   tools: string[];
+  security_option?: GroupSecurityOption;
 }
 
 export interface DashboardCreatePromptGroupInput {
   name: string;
   description?: string;
   prompts: string[];
+  security_option?: GroupSecurityOption;
+}
+
+export interface DashboardUpdateToolGroupInput {
+  description?: string;
+  tools: string[];
+  security_option?: GroupSecurityOption;
+}
+
+export interface DashboardUpdatePromptGroupInput {
+  description?: string;
+  prompts: string[];
+  security_option?: GroupSecurityOption;
 }
 
 export interface DashboardOAuthAuthorizationRequired {
@@ -268,6 +291,15 @@ export interface DashboardAgentAppsResponse {
 export interface DashboardCreateAgentAppInput {
   name: string;
   description?: string;
+  tool_group_names?: string[];
+  prompt_group_names?: string[];
+}
+
+/** Body for PATCH /dashboard/agent-apps/:id (all fields optional). */
+export interface DashboardPatchAgentAppInput {
+  name?: string;
+  description?: string;
+  status?: string;
   tool_group_names?: string[];
   prompt_group_names?: string[];
 }

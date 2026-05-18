@@ -21,6 +21,10 @@ func authorizeProxyServerAccess(ctx context.Context, serverName string) error {
 		return nil
 	}
 
+	if mcpgatewayctx.OpenGroupMCP(ctx) {
+		return nil
+	}
+
 	if aa, ok := agentappauth.PrincipalFromContext(ctx); ok {
 		if tg, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok {
 			if aa.AllowsToolGroup(tg) {

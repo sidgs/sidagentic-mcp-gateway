@@ -10,12 +10,20 @@ import (
 	"github.com/mcpjungle/mcpjungle/internal/model"
 	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
 	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"gorm.io/datatypes"
 )
 
 type dashboardPromptGroupCreateRequest struct {
-	Name        string   `json:"name"`
-	Description string   `json:"description"`
-	Prompts     []string `json:"prompts"`
+	Name             string   `json:"name"`
+	Description      string   `json:"description"`
+	Prompts          []string `json:"prompts"`
+	SecurityOption   string   `json:"security_option,omitempty"`
+}
+
+type dashboardPromptGroupUpdateRequest struct {
+	Description    string   `json:"description"`
+	Prompts      []string `json:"prompts"`
+	SecurityOption string   `json:"security_option,omitempty"`
 }
 
 type dashboardPromptGroupPrompt struct {
@@ -28,6 +36,7 @@ type dashboardPromptGroupPrompt struct {
 type dashboardPromptGroup struct {
 	Name                   string                      `json:"name"`
 	Description            string                      `json:"description,omitempty"`
+	SecurityOption         string                      `json:"security_option"`
 	PromptCount            int                         `json:"prompt_count"`
 	Prompts                []dashboardPromptGroupPrompt `json:"prompts"`
 	StreamableHTTPEndpoint string                      `json:"streamable_http_endpoint"`
@@ -108,8 +117,9 @@ func (s *Server) dashboardCreatePromptGroupHandler() gin.HandlerFunc {
 		}
 
 		group := &model.PromptGroup{
-			Name:            input.Name,
-			Description:     input.Description,
+			Name:             input.Name,
+			Description:      input.Description,
+			SecurityOption:   input.SecurityOption,
 			IncludedPrompts: included,
 		}
 		if err := s.promptGroupService.CreatePromptGroup(c.Request.Context(), group); err != nil {
@@ -123,6 +133,57 @@ func (s *Server) dashboardCreatePromptGroupHandler() gin.HandlerFunc {
 			return
 		}
 		c.JSON(http.StatusCreated, resp)
+	}
+}
+
+func (s *Server) dashboardUpdatePromptGroupHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Param("name")
+		if name == "" {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "group name is required"})
+			return
+		}
+
+		var input dashboardPromptGroupUpdateRequest
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+
+		included, err := json.Marshal(input.Prompts)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid prompts payload"})
+			return
+		}
+		emptyArr, err := json.Marshal([]string{})
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode empty server lists"})
+			return
+		}
+
+		group := &model.PromptGroup{
+			Description:      input.Description,
+			SecurityOption:   input.SecurityOption,
+			IncludedPrompts:  datatypes.JSON(included),
+			IncludedServers:  datatypes.JSON(emptyArr),
+			ExcludedPrompts:  datatypes.JSON(emptyArr),
+		}
+		if _, err := s.promptGroupService.UpdatePromptGroup(c.Request.Context(), name, group); err != nil {
+			handleServiceError(c, err)
+			return
+		}
+
+		updated, err := s.promptGroupService.GetPromptGroup(c.Request.Context(), name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		resp, err := s.buildDashboardPromptGroup(c, *updated)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
 	}
 }
 
@@ -171,6 +232,7 @@ func (s *Server) buildDashboardPromptGroup(c *gin.Context, group model.PromptGro
 	return dashboardPromptGroup{
 		Name:                   group.Name,
 		Description:            group.Description,
+		SecurityOption:         types.NormalizeGroupSecurityOption(group.SecurityOption),
 		PromptCount:            len(prompts),
 		Prompts:                prompts,
 		StreamableHTTPEndpoint: ep.StreamableHTTPEndpoint,

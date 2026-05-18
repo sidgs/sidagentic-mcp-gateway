@@ -7,6 +7,8 @@ type PromptGroup struct {
 	IncludedServers []string `json:"included_servers,omitempty"`
 	ExcludedPrompts []string `json:"excluded_prompts,omitempty"`
 	Description     string   `json:"description"`
+
+	SecurityOption string `json:"security_option,omitempty"`
 }
 
 // CreatePromptGroupResponse returns transport endpoints for a newly created prompt group.

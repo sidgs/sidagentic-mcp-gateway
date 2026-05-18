@@ -154,3 +154,55 @@ func (s *Server) dashboardSetPromptEnabledHandler() gin.HandlerFunc {
 		c.JSON(http.StatusOK, gin.H{"name": entity, "enabled": input.Enabled})
 	}
 }
+
+func (s *Server) dashboardGetServerConfigHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		input, err := s.mcpService.DashboardServerConfig(c.Request.Context(), c.Param("name"))
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, input)
+	}
+}
+
+func (s *Server) dashboardUpdateServerHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Param("name")
+		var input types.RegisterServerInput
+		if err := c.ShouldBindJSON(&input); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		ctx := c.Request.Context()
+		existing, err := s.mcpService.GetMcpServer(ctx, name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		if err := mergeRegisterInputForUpdate(name, &input, existing); err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		serverModel, err := createServerModelFromInput(&input)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		if err := s.mcpService.UpdateDashboardMcpServer(ctx, name, serverModel); err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		updated, err := s.mcpService.GetMcpServer(ctx, name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, dashboardRegisterServerResponse{
+			Name:        updated.Name,
+			Transport:   string(updated.Transport),
+			Enabled:     updated.Enabled,
+			Description: updated.Description,
+		})
+	}
+}

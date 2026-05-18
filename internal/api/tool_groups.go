@@ -43,8 +43,9 @@ func (s *Server) listToolGroupsHandler() gin.HandlerFunc {
 		resp := make([]*types.ToolGroup, len(groups))
 		for i, g := range groups {
 			resp[i] = &types.ToolGroup{
-				Name:        g.Name,
-				Description: g.Description,
+				Name:            g.Name,
+				Description:     g.Description,
+				SecurityOption: types.NormalizeGroupSecurityOption(g.SecurityOption),
 			}
 
 			gTools, err := g.GetTools()
@@ -98,8 +99,9 @@ func (s *Server) getToolGroupHandler() gin.HandlerFunc {
 
 		resp := &types.GetToolGroupResponse{
 			ToolGroup: &types.ToolGroup{
-				Name:        group.Name,
-				Description: group.Description,
+				Name:            group.Name,
+				Description:     group.Description,
+				SecurityOption: types.NormalizeGroupSecurityOption(group.SecurityOption),
 			},
 			ToolGroupEndpoints: s.getToolGroupEndpoints(c, group.Name),
 		}
@@ -207,12 +209,14 @@ func (s *Server) updateToolGroupHandler() gin.HandlerFunc {
 		resp := &types.UpdateToolGroupResponse{
 			Name: name,
 			Old: &types.ToolGroup{
-				Name:        originalConf.Name,
-				Description: originalConf.Description,
+				Name:            originalConf.Name,
+				Description:     originalConf.Description,
+				SecurityOption: types.NormalizeGroupSecurityOption(originalConf.SecurityOption),
 			},
 			New: &types.ToolGroup{
-				Name:        input.Name,
-				Description: input.Description,
+				Name:            input.Name,
+				Description:     input.Description,
+				SecurityOption: types.NormalizeGroupSecurityOption(input.SecurityOption),
 			},
 		}
 

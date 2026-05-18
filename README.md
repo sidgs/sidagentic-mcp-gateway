@@ -663,6 +663,10 @@ Once a group is created, mcpgateway returns a unique endpoint for it.
 
 You can then configure your MCP client to use this group-specific endpoint instead of the main gateway endpoint.
 
+### Security on group MCP URLs
+
+Each **tool group** and **prompt group** has a `security_option` field: `open`, `api_key`, `basic` (default), or `bearer`. It controls how clients authenticate to that group's MCP routes (`/v0/groups/{name}/…` and `/v0/prompt-groups/{name}/…`) in **all** server modes, including development. The global `/mcp` endpoint is unchanged. Use `open` only when the network path is already trusted.
+
 ### Creating a Tool Group
 You can create a new tool group by providing a JSON configuration file to the `create group` command.
 

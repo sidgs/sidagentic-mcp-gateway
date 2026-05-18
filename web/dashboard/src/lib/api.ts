@@ -1,11 +1,17 @@
 import type {
+  DashboardAgentApp,
   DashboardAgentAppsResponse,
   DashboardAuthStatusResponse,
   DashboardCreateAgentAppInput,
   DashboardCreateAgentAppResponse,
+  DashboardPatchAgentAppInput,
   DashboardCreatePromptGroupInput,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
+  DashboardToolGroup,
+  DashboardPromptGroup,
+  DashboardUpdateToolGroupInput,
+  DashboardUpdatePromptGroupInput,
   DashboardOAuthSessionResponse,
   DashboardOverviewResponse,
   DashboardPromptsResponse,
@@ -111,6 +117,14 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  getServerConfig: (name: string) =>
+    requestJSON<DashboardRegisterServerInput>(`/dashboard/servers/${encodeURIComponent(name)}/config`),
+  updateServer: (name: string, body: DashboardRegisterServerInput) =>
+    requestJSON<DashboardRegisterServerResponse>(`/dashboard/servers/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   getOAuthSession: (sessionID: string) =>
     requestJSON<DashboardOAuthSessionResponse>(
       `/dashboard/oauth/session/${encodeURIComponent(sessionID)}`
@@ -121,6 +135,12 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  updateToolGroup: (name: string, body: DashboardUpdateToolGroupInput) =>
+    requestJSON<DashboardToolGroup>(`/dashboard/tool-groups/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
   deleteToolGroup: (name: string) =>
     requestJSON(`/dashboard/tool-groups/${encodeURIComponent(name)}`, {
       method: "DELETE",
@@ -128,6 +148,12 @@ export const api = {
   createPromptGroup: (body: DashboardCreatePromptGroupInput) =>
     requestJSON("/dashboard/prompt-groups", {
       method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  updatePromptGroup: (name: string, body: DashboardUpdatePromptGroupInput) =>
+    requestJSON<DashboardPromptGroup>(`/dashboard/prompt-groups/${encodeURIComponent(name)}`, {
+      method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
@@ -165,8 +191,8 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
-  patchAgentApp: (id: number, body: Record<string, unknown>) =>
-    requestJSON(`/dashboard/agent-apps/${id}`, {
+  patchAgentApp: (id: number, body: DashboardPatchAgentAppInput) =>
+    requestJSON<DashboardAgentApp>(`/dashboard/agent-apps/${id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

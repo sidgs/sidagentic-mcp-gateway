@@ -120,6 +120,52 @@ func TestDashboardServerSummariesDoNotExposeSecrets(t *testing.T) {
 	require.Contains(t, body, "\"header_keys\":[\"X-Team\"]")
 }
 
+func TestDashboardServerConfigAndUpdate(t *testing.T) {
+	env := setupE2EServer(t, model.ModeDev)
+
+	registerResp := env.do(t, http.MethodPost, "/dashboard/servers", map[string]any{
+		"name":        "editme",
+		"description": "before",
+		"transport":   "stdio",
+		"command":     "npx",
+		"args":        []string{"-y", "@modelcontextprotocol/server-everything", "stdio"},
+	}, "")
+	defer drain(registerResp)
+	require.Equal(t, http.StatusCreated, registerResp.StatusCode)
+
+	cfgResp := env.do(t, http.MethodGet, "/dashboard/servers/editme/config", nil, "")
+	defer drain(cfgResp)
+	require.Equal(t, http.StatusOK, cfgResp.StatusCode)
+	var cfg map[string]any
+	decodeJSON(t, cfgResp, &cfg)
+	require.Equal(t, "editme", cfg["name"])
+	require.Equal(t, "stdio", cfg["transport"])
+	require.Equal(t, "before", cfg["description"])
+	require.Equal(t, "npx", cfg["command"])
+
+	putResp := env.do(t, http.MethodPut, "/dashboard/servers/editme", map[string]any{
+		"name":         "editme",
+		"description":  "after update",
+		"transport":    "stdio",
+		"session_mode": "stateless",
+		"command":      "npx",
+		"args":         []string{"-y", "@modelcontextprotocol/server-everything", "stdio"},
+	}, "")
+	defer drain(putResp)
+	require.Equal(t, http.StatusOK, putResp.StatusCode)
+
+	listResp := env.do(t, http.MethodGet, "/dashboard/servers", nil, "")
+	defer drain(listResp)
+	require.Equal(t, http.StatusOK, listResp.StatusCode)
+	var list map[string]any
+	decodeJSON(t, listResp, &list)
+	servers := list["servers"].([]any)
+	require.Len(t, servers, 1)
+	server := servers[0].(map[string]any)
+	cs := server["config_summary"].(map[string]any)
+	require.Equal(t, "after update", cs["description"])
+}
+
 func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 

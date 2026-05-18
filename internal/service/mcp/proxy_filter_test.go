@@ -5,7 +5,9 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
+	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
 	"github.com/mcpjungle/mcpjungle/internal/model"
+	"github.com/mcpjungle/mcpjungle/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"gorm.io/datatypes"
 )
@@ -145,6 +147,22 @@ func TestMcpProxyToolFilter_EnterpriseMalformedToolNamesAreDenied(t *testing.T) 
 	})
 
 	assert.Equal(t, []string{"time__get_current_time"}, toolNames(got))
+}
+
+func TestMcpProxyToolFilter_EnterpriseOpenToolGroupAllowsTenantTools(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
+	ctx = tenant.WithContext(ctx, tenant.DefaultID)
+	ctx = mcpgatewayctx.WithToolGroupRoute(ctx, "mygroup")
+	ctx = mcpgatewayctx.WithOpenGroupMCP(ctx, true)
+
+	tools := []mcp.Tool{
+		{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
+		{Name: tenant.QualifyProxyName("other", "time__get_current_time")},
+	}
+	got := ProxyToolFilter(ctx, tools)
+	assert.Equal(t, []string{tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")}, toolNames(got))
 }
 
 func toolNames(tools []mcp.Tool) []string {

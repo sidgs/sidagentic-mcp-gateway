@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/mcpjungle/mcpjungle/internal/model"
@@ -353,6 +354,57 @@ func (s *Server) getServerConfigsHandler() gin.HandlerFunc {
 
 		c.JSON(http.StatusOK, servers)
 	}
+}
+
+// mergeRegisterInputForUpdate normalizes dashboard update payloads: the URL path is authoritative
+// for server identity; omitted secret/header/env blocks keep existing values; an empty bearer_token
+// keeps the stored token.
+func mergeRegisterInputForUpdate(urlName string, input *types.RegisterServerInput, existing *model.McpServer) error {
+	if strings.TrimSpace(input.Name) != "" && input.Name != urlName {
+		return fmt.Errorf("name in request body must match server in URL path")
+	}
+	input.Name = urlName
+
+	existingTransport := string(existing.Transport)
+	if input.Transport != "" && input.Transport != existingTransport {
+		return fmt.Errorf("cannot change transport type (current transport is %s)", existingTransport)
+	}
+	input.Transport = existingTransport
+
+	if input.SessionMode == "" {
+		input.SessionMode = string(existing.SessionMode)
+	}
+
+	switch existing.Transport {
+	case types.TransportStreamableHTTP:
+		conf, err := existing.GetStreamableHTTPConfig()
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(input.BearerToken) == "" {
+			input.BearerToken = conf.BearerToken
+		}
+		if input.Headers == nil {
+			input.Headers = conf.Headers
+		}
+	case types.TransportSSE:
+		conf, err := existing.GetSSEConfig()
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(input.BearerToken) == "" {
+			input.BearerToken = conf.BearerToken
+		}
+	case types.TransportStdio:
+		conf, err := existing.GetStdioConfig()
+		if err != nil {
+			return err
+		}
+		if input.Env == nil {
+			input.Env = conf.Env
+		}
+	}
+	return nil
 }
 
 func createServerModelFromInput(input *types.RegisterServerInput) (*model.McpServer, error) {

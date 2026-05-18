@@ -1,24 +1,43 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import Accordion from "@mui/material/Accordion";
+import AccordionDetails from "@mui/material/AccordionDetails";
+import AccordionSummary from "@mui/material/AccordionSummary";
 import Alert from "@mui/material/Alert";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Checkbox from "@mui/material/Checkbox";
+import Chip from "@mui/material/Chip";
 import CircularProgress from "@mui/material/CircularProgress";
 import Dialog from "@mui/material/Dialog";
 import DialogActions from "@mui/material/DialogActions";
 import DialogContent from "@mui/material/DialogContent";
 import DialogTitle from "@mui/material/DialogTitle";
 import FormControl from "@mui/material/FormControl";
+import FormHelperText from "@mui/material/FormHelperText";
 import IconButton from "@mui/material/IconButton";
 import InputLabel from "@mui/material/InputLabel";
+import ListItemText from "@mui/material/ListItemText";
 import MenuItem from "@mui/material/MenuItem";
+import OutlinedInput from "@mui/material/OutlinedInput";
 import Paper from "@mui/material/Paper";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
+import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { api } from "@/lib/api";
 import { DashboardAuthRequiredError, redirectToGatewayLogin } from "@/lib/auth";
-import { appSectionToHash, getSectionFromHashOrDefault, parseAppSectionFromHash } from "@/lib/hashRoute";
+import {
+  appAgentAppDetailHash,
+  appSectionToHash,
+  parseAppSectionFromHash,
+  parseHashRoute,
+  promptDetailHash,
+  promptGroupDetailHash,
+  serverDetailHash,
+  toolDetailHash,
+  toolGroupDetailHash,
+} from "@/lib/hashRoute";
 import type {
   AppSection,
   DashboardAgentApp,
@@ -26,9 +45,13 @@ import type {
   DashboardAgentAppsResponse,
   DashboardAuthStatusResponse,
   DashboardCreateAgentAppInput,
+  DashboardPatchAgentAppInput,
   DashboardCreatePromptGroupInput,
   DashboardCreateToolGroupInput,
+  DashboardUpdatePromptGroupInput,
+  DashboardUpdateToolGroupInput,
   DashboardDiagnosticsResponse,
+  GroupSecurityOption,
   DashboardOAuthAuthorizationRequired,
   DashboardOverviewResponse,
   DashboardPrompt,
@@ -36,6 +59,7 @@ import type {
   DashboardPromptGroup,
   DashboardPromptGroupsResponse,
   DashboardRegisterServerInput,
+  DashboardRegisterServerResponse,
   DashboardResource,
   DashboardResourcesResponse,
   DashboardServer,
@@ -53,6 +77,34 @@ import { SectionCard } from "@/components/SectionCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { monospaceFontFamily } from "@/theme";
 
+/** Bash single-quoted string literal (escapes embedded `'`). */
+function bashSingleQuoted(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/** Example curl for agent-app OAuth token (client_credentials); secret is a placeholder. */
+function agentAppOAuthTokenCurlCommand(oauthTokenURL: string, clientId: string): string {
+  return [
+    `curl -sS -X POST ${bashSingleQuoted(oauthTokenURL)} \\`,
+    `  -H ${bashSingleQuoted("Content-Type: application/x-www-form-urlencoded")} \\`,
+    `  --data-urlencode ${bashSingleQuoted("grant_type=client_credentials")} \\`,
+    `  --data-urlencode ${bashSingleQuoted(`client_id=${clientId}`)} \\`,
+    `  --data-urlencode ${bashSingleQuoted("client_secret=YOUR_CLIENT_SECRET")}`,
+  ].join("\n");
+}
+
+const GROUP_SECURITY_OPTIONS: { value: GroupSecurityOption; label: string }[] = [
+  { value: "open", label: "Open (no auth)" },
+  { value: "api_key", label: "API key (client id in X-API-Key)" },
+  { value: "basic", label: "Basic auth" },
+  { value: "bearer", label: "Bearer (agent-app JWT)" },
+];
+
+function groupSecurityLabel(value: string): string {
+  const row = GROUP_SECURITY_OPTIONS.find((o) => o.value === value);
+  return row?.label ?? value;
+}
+
 function TrashIcon() {
   return (
     <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 16 16" width="18">
@@ -64,6 +116,20 @@ function TrashIcon() {
         strokeWidth="1.5"
       />
       <path d="M6.5 6.5v3.5M9.5 6.5v3.5" stroke="currentColor" strokeLinecap="round" strokeWidth="1.5" />
+    </svg>
+  );
+}
+
+function PencilIcon() {
+  return (
+    <svg aria-hidden="true" fill="none" height="18" viewBox="0 0 16 16" width="18">
+      <path
+        d="M10.5 2.5 13.5 5.5M2 14l3-.75 8.75-8.75a1.4 1.4 0 0 0-2-2L3.25 11.25 2 14Z"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="1.35"
+      />
     </svg>
   );
 }
@@ -115,12 +181,14 @@ interface RegisterOAuthState {
 interface ToolGroupFormState {
   name: string;
   description: string;
+  securityOption: GroupSecurityOption;
   selectedTools: string[];
 }
 
 interface PromptGroupFormState {
   name: string;
   description: string;
+  securityOption: GroupSecurityOption;
   selectedPrompts: string[];
 }
 
@@ -192,15 +260,29 @@ function shortVersion(version?: string) {
   return version.length > 16 ? version.slice(0, 16) : version;
 }
 
-function splitCommaList(raw: string): string[] {
-  return raw
-    .split(",")
-    .map((s) => s.trim())
-    .filter((part) => part.length > 0);
+function mergeSortedUniqueNames(available: string[], selected: string[]): string[] {
+  return [...new Set([...available, ...selected])].sort((a, b) => a.localeCompare(b));
 }
 
 function transportLabel(value?: string) {
   return value ? value.split("_").join(" ") : "unknown";
+}
+
+function serverConnectionTone(status: DashboardServer["status"]): "good" | "warn" | "bad" | "muted" {
+  switch (status) {
+    case "connected":
+      return "good";
+    case "reachable":
+      return "warn";
+    case "failed":
+      return "bad";
+    default:
+      return "muted";
+  }
+}
+
+function serverConnectionLabel(status: DashboardServer["status"]): string {
+  return status.split("_").join(" ");
 }
 
 function toolDescription(tool: DashboardTool) {
@@ -405,27 +487,6 @@ function parsePromptArgumentFields(argumentsValue?: Array<Record<string, unknown
   return fields;
 }
 
-function ChevronIcon({ expanded }: { expanded: boolean }) {
-  return (
-    <svg
-      aria-hidden="true"
-      className={`row-chevron ${expanded ? "is-expanded" : ""}`}
-      fill="none"
-      height="16"
-      viewBox="0 0 16 16"
-      width="16"
-    >
-      <path
-        d="m5.5 3.75 4.25 4.25-4.25 4.25"
-        stroke="currentColor"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        strokeWidth="1.5"
-      />
-    </svg>
-  );
-}
-
 function createEmptyPair(): KeyValueRow {
   return { key: "", value: "" };
 }
@@ -442,6 +503,31 @@ function createInitialRegisterForm(): RegisterServerFormState {
     url: "",
     bearer_token: "",
     header_rows: [createEmptyPair()],
+  };
+}
+
+function registerFormFromConfig(input: DashboardRegisterServerInput): RegisterServerFormState {
+  const envEntries = input.env ? Object.entries(input.env) : [];
+  const env_rows =
+    envEntries.length > 0
+      ? envEntries.map(([key, value]) => ({ key, value: String(value) }))
+      : [createEmptyPair()];
+  const headerEntries = input.headers ? Object.entries(input.headers) : [];
+  const header_rows =
+    headerEntries.length > 0
+      ? headerEntries.map(([key, value]) => ({ key, value: String(value) }))
+      : [createEmptyPair()];
+  return {
+    name: input.name,
+    description: input.description ?? "",
+    transport: input.transport,
+    session_mode: input.session_mode ?? "stateless",
+    command: input.command ?? "",
+    args_text: (input.args ?? []).join("\n"),
+    env_rows,
+    url: input.url ?? "",
+    bearer_token: input.bearer_token ?? "",
+    header_rows,
   };
 }
 
@@ -512,6 +598,7 @@ function createInitialToolGroupForm(): ToolGroupFormState {
   return {
     name: "",
     description: "",
+    securityOption: "basic",
     selectedTools: [],
   };
 }
@@ -520,12 +607,13 @@ function createInitialPromptGroupForm(): PromptGroupFormState {
   return {
     name: "",
     description: "",
+    securityOption: "basic",
     selectedPrompts: [],
   };
 }
 
 export default function App() {
-  const [section, setSection] = useState<AppSection>(() => getSectionFromHashOrDefault("home"));
+  const [section, setSection] = useState<AppSection>(() => parseHashRoute().section ?? "home");
   const [authSession, setAuthSession] = useState<DashboardAuthStatusResponse | null>(null);
 
   const selectSection = useCallback((next: AppSection) => {
@@ -555,30 +643,54 @@ export default function App() {
   const [toolGroupToolServerFilter, setToolGroupToolServerFilter] = useState("all");
   const [promptGroupPromptFilter, setPromptGroupPromptFilter] = useState("");
   const [promptGroupPromptServerFilter, setPromptGroupPromptServerFilter] = useState("all");
-  const [expandedServer, setExpandedServer] = useState<string | null>(null);
-  const [expandedTool, setExpandedTool] = useState<string | null>(null);
-  const [expandedToolGroup, setExpandedToolGroup] = useState<string | null>(null);
-  const [expandedPromptGroup, setExpandedPromptGroup] = useState<string | null>(null);
-  const [expandedPrompt, setExpandedPrompt] = useState<string | null>(null);
+  const [expandedServer, setExpandedServer] = useState<string | null>(() => {
+    const r = parseHashRoute();
+    return r.section === "servers" ? r.serverName : null;
+  });
+  const [expandedTool, setExpandedTool] = useState<string | null>(() => {
+    const r = parseHashRoute();
+    return r.section === "tools" ? r.toolCanonicalName : null;
+  });
+  const [expandedToolGroup, setExpandedToolGroup] = useState<string | null>(() => {
+    const r = parseHashRoute();
+    return r.section === "tool_groups" ? r.toolGroupName : null;
+  });
+  const [expandedPromptGroup, setExpandedPromptGroup] = useState<string | null>(() => {
+    const r = parseHashRoute();
+    return r.section === "prompt_groups" ? r.promptGroupName : null;
+  });
+  const [expandedPrompt, setExpandedPrompt] = useState<string | null>(() => {
+    const r = parseHashRoute();
+    return r.section === "prompts" ? r.promptCanonicalName : null;
+  });
   const [registerOpen, setRegisterOpen] = useState(false);
+  const [registerServerEditingName, setRegisterServerEditingName] = useState<string | null>(null);
+  const [registerConfigLoading, setRegisterConfigLoading] = useState(false);
   const [registerForm, setRegisterForm] = useState<RegisterServerFormState>(createInitialRegisterForm());
   const [registerError, setRegisterError] = useState("");
   const [registerOAuth, setRegisterOAuth] = useState<RegisterOAuthState | null>(null);
   const [toolGroupOpen, setToolGroupOpen] = useState(false);
+  const [toolGroupEditingName, setToolGroupEditingName] = useState<string | null>(null);
   const [toolGroupForm, setToolGroupForm] = useState<ToolGroupFormState>(createInitialToolGroupForm());
   const [toolGroupError, setToolGroupError] = useState("");
   const [promptGroupOpen, setPromptGroupOpen] = useState(false);
+  const [promptGroupEditingName, setPromptGroupEditingName] = useState<string | null>(null);
   const [promptGroupForm, setPromptGroupForm] = useState<PromptGroupFormState>(createInitialPromptGroupForm());
   const [promptGroupError, setPromptGroupError] = useState("");
   const [agentAppDialogOpen, setAgentAppDialogOpen] = useState(false);
+  const [agentAppEditingId, setAgentAppEditingId] = useState<number | null>(null);
   const [agentAppName, setAgentAppName] = useState("");
   const [agentAppDescription, setAgentAppDescription] = useState("");
-  const [agentAppToolGroups, setAgentAppToolGroups] = useState("");
-  const [agentAppPromptGroups, setAgentAppPromptGroups] = useState("");
+  const [agentAppToolGroups, setAgentAppToolGroups] = useState<string[]>([]);
+  const [agentAppPromptGroups, setAgentAppPromptGroups] = useState<string[]>([]);
   const [agentAppCreateError, setAgentAppCreateError] = useState("");
   const [agentAppSecretReveal, setAgentAppSecretReveal] = useState<{ title: string; secret: string } | null>(
     null,
   );
+  const [agentAppDetailId, setAgentAppDetailId] = useState<number | null>(() => {
+    const r = parseHashRoute();
+    return r.section === "agent_apps" ? r.agentAppId : null;
+  });
   const [busyKeys, setBusyKeys] = useState<Record<string, boolean>>({});
 
   /** Ensure canonical `#/section` when hash is missing or invalid (bookmarkable URLs). */
@@ -590,22 +702,40 @@ export default function App() {
     const next = `${pathname}${search}${appSectionToHash("home")}`;
     window.history.replaceState(null, "", next);
     setSection("home");
+    setAgentAppDetailId(null);
+    setExpandedServer(null);
+    setExpandedToolGroup(null);
+    setExpandedPromptGroup(null);
+    setExpandedTool(null);
+    setExpandedPrompt(null);
   }, []);
 
   /** Back/forward and manual hash edits → active section */
   useEffect(() => {
     function onHashChange() {
-      const next = parseAppSectionFromHash();
-      if (next === null) {
+      const r = parseHashRoute();
+      if (r.section === null) {
         return;
       }
-      if (authSession?.oidc_enabled && !authSession.authenticated && next !== "home") {
+      if (authSession?.oidc_enabled && !authSession.authenticated && r.section !== "home") {
         const { pathname, search } = window.location;
         window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("home")}`);
         setSection("home");
+        setAgentAppDetailId(null);
+        setExpandedServer(null);
+        setExpandedToolGroup(null);
+        setExpandedPromptGroup(null);
+        setExpandedTool(null);
+        setExpandedPrompt(null);
         return;
       }
-      setSection(next);
+      setSection(r.section);
+      setAgentAppDetailId(r.section === "agent_apps" ? r.agentAppId : null);
+      setExpandedServer(r.section === "servers" ? r.serverName : null);
+      setExpandedToolGroup(r.section === "tool_groups" ? r.toolGroupName : null);
+      setExpandedPromptGroup(r.section === "prompt_groups" ? r.promptGroupName : null);
+      setExpandedTool(r.section === "tools" ? r.toolCanonicalName : null);
+      setExpandedPrompt(r.section === "prompts" ? r.promptCanonicalName : null);
     }
     window.addEventListener("hashchange", onHashChange);
     return () => window.removeEventListener("hashchange", onHashChange);
@@ -656,18 +786,72 @@ export default function App() {
       diagnostics,
       agentApps,
     });
-    setExpandedTool((current) =>
-      current && tools.tools.some((tool) => tool.canonical_name === current) ? current : null,
-    );
-    setExpandedToolGroup((current) =>
-      current && toolGroups.tool_groups.some((group) => group.name === current) ? current : null,
-    );
-    setExpandedPromptGroup((current) =>
-      current && promptGroups.prompt_groups.some((group) => group.name === current) ? current : null,
-    );
-    setExpandedPrompt((current) =>
-      current && prompts.prompts.some((prompt) => prompt.canonical_name === current) ? current : null,
-    );
+    setExpandedServer((current) => {
+      if (current === null) {
+        return null;
+      }
+      if (servers.servers.some((s) => s.name === current)) {
+        return current;
+      }
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("servers")}`);
+      return null;
+    });
+    setExpandedTool((current) => {
+      if (current === null) {
+        return null;
+      }
+      if (tools.tools.some((tool) => tool.canonical_name === current)) {
+        return current;
+      }
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("tools")}`);
+      return null;
+    });
+    setExpandedToolGroup((current) => {
+      if (current === null) {
+        return null;
+      }
+      if (toolGroups.tool_groups.some((group) => group.name === current)) {
+        return current;
+      }
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("tool_groups")}`);
+      return null;
+    });
+    setExpandedPromptGroup((current) => {
+      if (current === null) {
+        return null;
+      }
+      if (promptGroups.prompt_groups.some((group) => group.name === current)) {
+        return current;
+      }
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("prompt_groups")}`);
+      return null;
+    });
+    setExpandedPrompt((current) => {
+      if (current === null) {
+        return null;
+      }
+      if (prompts.prompts.some((prompt) => prompt.canonical_name === current)) {
+        return current;
+      }
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("prompts")}`);
+      return null;
+    });
+    setAgentAppDetailId((current) => {
+      if (current === null) {
+        return null;
+      }
+      if (agentApps.apps.some((a) => a.id === current)) {
+        return current;
+      }
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("agent_apps")}`);
+      return null;
+    });
   }
 
   /** Probe auth (public when OIDC is on); load dashboard data only when allowed. */
@@ -693,6 +877,12 @@ export default function App() {
         const { pathname, search } = window.location;
         window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("home")}`);
         setSection("home");
+        setAgentAppDetailId(null);
+        setExpandedServer(null);
+        setExpandedToolGroup(null);
+        setExpandedPromptGroup(null);
+        setExpandedTool(null);
+        setExpandedPrompt(null);
       }
       setLoadState("ready");
     } catch (error) {
@@ -821,6 +1011,80 @@ export default function App() {
     );
   }, [data.prompts?.prompts, promptFilter]);
 
+  const agentAppToolGroupSelectOptions = useMemo(
+    () =>
+      [...(data.toolGroups?.tool_groups ?? [])]
+        .map((g) => g.name)
+        .sort((a, b) => a.localeCompare(b)),
+    [data.toolGroups?.tool_groups],
+  );
+
+  const agentAppPromptGroupSelectOptions = useMemo(
+    () =>
+      [...(data.promptGroups?.prompt_groups ?? [])]
+        .map((g) => g.name)
+        .sort((a, b) => a.localeCompare(b)),
+    [data.promptGroups?.prompt_groups],
+  );
+
+  const agentAppToolGroupMenuNames = useMemo(
+    () => mergeSortedUniqueNames(agentAppToolGroupSelectOptions, agentAppToolGroups),
+    [agentAppToolGroupSelectOptions, agentAppToolGroups],
+  );
+
+  const agentAppPromptGroupMenuNames = useMemo(
+    () => mergeSortedUniqueNames(agentAppPromptGroupSelectOptions, agentAppPromptGroups),
+    [agentAppPromptGroupSelectOptions, agentAppPromptGroups],
+  );
+
+  const selectedAgentApp = useMemo(() => {
+    const apps = data.agentApps?.apps;
+    if (!apps?.length || agentAppDetailId === null) {
+      return null;
+    }
+    return apps.find((a) => a.id === agentAppDetailId) ?? null;
+  }, [data.agentApps?.apps, agentAppDetailId]);
+
+  const selectedServer = useMemo(() => {
+    const list = data.servers?.servers;
+    if (!list?.length || expandedServer === null) {
+      return null;
+    }
+    return list.find((s) => s.name === expandedServer) ?? null;
+  }, [data.servers?.servers, expandedServer]);
+
+  const selectedToolGroup = useMemo(() => {
+    const groups = data.toolGroups?.tool_groups;
+    if (!groups?.length || expandedToolGroup === null) {
+      return null;
+    }
+    return groups.find((g) => g.name === expandedToolGroup) ?? null;
+  }, [data.toolGroups?.tool_groups, expandedToolGroup]);
+
+  const selectedPromptGroup = useMemo(() => {
+    const groups = data.promptGroups?.prompt_groups;
+    if (!groups?.length || expandedPromptGroup === null) {
+      return null;
+    }
+    return groups.find((g) => g.name === expandedPromptGroup) ?? null;
+  }, [data.promptGroups?.prompt_groups, expandedPromptGroup]);
+
+  const selectedTool = useMemo(() => {
+    const tools = data.tools?.tools;
+    if (!tools?.length || expandedTool === null) {
+      return null;
+    }
+    return tools.find((t) => t.canonical_name === expandedTool) ?? null;
+  }, [data.tools?.tools, expandedTool]);
+
+  const selectedPrompt = useMemo(() => {
+    const prompts = data.prompts?.prompts;
+    if (!prompts?.length || expandedPrompt === null) {
+      return null;
+    }
+    return prompts.find((p) => p.canonical_name === expandedPrompt) ?? null;
+  }, [data.prompts?.prompts, expandedPrompt]);
+
   const overview = data.overview;
   const diagnostics = data.diagnostics;
   const agentApps = data.agentApps;
@@ -898,6 +1162,8 @@ export default function App() {
 
   function openRegisterModal() {
     setRegisterForm(createInitialRegisterForm());
+    setRegisterServerEditingName(null);
+    setRegisterConfigLoading(false);
     setRegisterError("");
     setRegisterOAuth(null);
     setRegisterOpen(true);
@@ -905,9 +1171,33 @@ export default function App() {
 
   function closeRegisterModal() {
     setRegisterOpen(false);
+    setRegisterServerEditingName(null);
+    setRegisterConfigLoading(false);
     setRegisterError("");
     setRegisterOAuth(null);
     setRegisterForm(createInitialRegisterForm());
+  }
+
+  async function openEditServerModal(serverName: string) {
+    setRegisterError("");
+    setRegisterOAuth(null);
+    setRegisterServerEditingName(serverName);
+    setRegisterOpen(true);
+    setRegisterConfigLoading(true);
+    setRegisterForm(createInitialRegisterForm());
+    try {
+      const config = await api.getServerConfig(serverName);
+      setRegisterForm(registerFormFromConfig(config));
+    } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to load server configuration";
+      setFeedback({ tone: "error", message });
+      closeRegisterModal();
+    } finally {
+      setRegisterConfigLoading(false);
+    }
   }
 
   function resetRegisterOAuthStep(message = "") {
@@ -916,7 +1206,22 @@ export default function App() {
   }
 
   function openToolGroupModal() {
+    setToolGroupEditingName(null);
     setToolGroupForm(createInitialToolGroupForm());
+    setToolGroupError("");
+    setToolGroupToolFilter("");
+    setToolGroupToolServerFilter("all");
+    setToolGroupOpen(true);
+  }
+
+  function openToolGroupModalForEdit(group: DashboardToolGroup) {
+    setToolGroupEditingName(group.name);
+    setToolGroupForm({
+      name: group.name,
+      description: group.description ?? "",
+      securityOption: group.security_option,
+      selectedTools: group.tools.map((t) => t.canonical_name),
+    });
     setToolGroupError("");
     setToolGroupToolFilter("");
     setToolGroupToolServerFilter("all");
@@ -925,6 +1230,7 @@ export default function App() {
 
   function closeToolGroupModal() {
     setToolGroupOpen(false);
+    setToolGroupEditingName(null);
     setToolGroupForm(createInitialToolGroupForm());
     setToolGroupError("");
   }
@@ -946,7 +1252,22 @@ export default function App() {
   }
 
   function openPromptGroupModal() {
+    setPromptGroupEditingName(null);
     setPromptGroupForm(createInitialPromptGroupForm());
+    setPromptGroupError("");
+    setPromptGroupPromptFilter("");
+    setPromptGroupPromptServerFilter("all");
+    setPromptGroupOpen(true);
+  }
+
+  function openPromptGroupModalForEdit(group: DashboardPromptGroup) {
+    setPromptGroupEditingName(group.name);
+    setPromptGroupForm({
+      name: group.name,
+      description: group.description ?? "",
+      securityOption: group.security_option,
+      selectedPrompts: group.prompts.map((p) => p.canonical_name),
+    });
     setPromptGroupError("");
     setPromptGroupPromptFilter("");
     setPromptGroupPromptServerFilter("all");
@@ -955,6 +1276,7 @@ export default function App() {
 
   function closePromptGroupModal() {
     setPromptGroupOpen(false);
+    setPromptGroupEditingName(null);
     setPromptGroupForm(createInitialPromptGroupForm());
     setPromptGroupError("");
   }
@@ -986,7 +1308,15 @@ export default function App() {
     try {
       setFeedback(null);
       setBusy("register-server", true);
-      const response = await api.registerServer(buildRegisterPayload(registerForm));
+      const editing = registerServerEditingName;
+      if (editing) {
+        await api.updateServer(editing, buildRegisterPayload(registerForm));
+        await loadDashboardData(true);
+        setFeedback({ tone: "success", message: `Server ${registerForm.name.trim()} updated.` });
+        closeRegisterModal();
+        return;
+      }
+      const response: DashboardRegisterServerResponse = await api.registerServer(buildRegisterPayload(registerForm));
       if (response.authorization_required) {
         setRegisterOAuth({
           authorization: response.authorization_required,
@@ -1124,6 +1454,8 @@ export default function App() {
     );
     if (expandedServer === server.name) {
       setExpandedServer(null);
+      const { pathname, search } = window.location;
+      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("servers")}`);
     }
   }
 
@@ -1150,7 +1482,8 @@ export default function App() {
   }
 
   async function submitToolGroup() {
-    const name = toolGroupForm.name.trim();
+    const editing = toolGroupEditingName;
+    const name = editing ?? toolGroupForm.name.trim();
     if (!name) {
       setToolGroupError("Group name is required.");
       return;
@@ -1159,25 +1492,37 @@ export default function App() {
       setToolGroupError("Select at least one tool.");
       return;
     }
-    if ((data.toolGroups?.tool_groups ?? []).some((group) => group.name === name)) {
+    if (!editing && (data.toolGroups?.tool_groups ?? []).some((group) => group.name === name)) {
       setToolGroupError("A tool group with that name already exists.");
       return;
     }
 
     setToolGroupError("");
     setFeedback(null);
-    setBusy("tool-group-create", true);
+    const busyKey = editing ? "tool-group-save" : "tool-group-create";
+    setBusy(busyKey, true);
     try {
-      const payload: DashboardCreateToolGroupInput = {
-        name,
-        description: toolGroupForm.description.trim(),
-        tools: toolGroupForm.selectedTools,
-      };
-      await api.createToolGroup(payload);
-      await loadDashboardData(true);
-      setFeedback({ tone: "success", message: `Tool group ${name} created.` });
+      if (editing) {
+        await api.updateToolGroup(editing, {
+          description: toolGroupForm.description.trim(),
+          tools: toolGroupForm.selectedTools,
+          security_option: toolGroupForm.securityOption,
+        });
+        await loadDashboardData(true);
+        setFeedback({ tone: "success", message: `Tool group ${editing} updated.` });
+      } else {
+        const payload: DashboardCreateToolGroupInput = {
+          name,
+          description: toolGroupForm.description.trim(),
+          tools: toolGroupForm.selectedTools,
+          security_option: toolGroupForm.securityOption,
+        };
+        await api.createToolGroup(payload);
+        await loadDashboardData(true);
+        setFeedback({ tone: "success", message: `Tool group ${name} created.` });
+      }
       closeToolGroupModal();
-      selectSection("tool_groups");
+      window.location.hash = editing ? toolGroupDetailHash(editing) : toolGroupDetailHash(name);
     } catch (error) {
       if (maybeRedirectDashboardAuth(error)) {
         return;
@@ -1186,12 +1531,13 @@ export default function App() {
       setToolGroupError(message);
       setFeedback({ tone: "error", message });
     } finally {
-      setBusy("tool-group-create", false);
+      setBusy(busyKey, false);
     }
   }
 
   async function submitPromptGroup() {
-    const name = promptGroupForm.name.trim();
+    const editing = promptGroupEditingName;
+    const name = editing ?? promptGroupForm.name.trim();
     if (!name) {
       setPromptGroupError("Group name is required.");
       return;
@@ -1200,25 +1546,37 @@ export default function App() {
       setPromptGroupError("Select at least one prompt.");
       return;
     }
-    if ((data.promptGroups?.prompt_groups ?? []).some((group) => group.name === name)) {
+    if (!editing && (data.promptGroups?.prompt_groups ?? []).some((group) => group.name === name)) {
       setPromptGroupError("A prompt group with that name already exists.");
       return;
     }
 
     setPromptGroupError("");
     setFeedback(null);
-    setBusy("prompt-group-create", true);
+    const busyKey = editing ? "prompt-group-save" : "prompt-group-create";
+    setBusy(busyKey, true);
     try {
-      const payload: DashboardCreatePromptGroupInput = {
-        name,
-        description: promptGroupForm.description.trim(),
-        prompts: promptGroupForm.selectedPrompts,
-      };
-      await api.createPromptGroup(payload);
-      await loadDashboardData(true);
-      setFeedback({ tone: "success", message: `Prompt group ${name} created.` });
+      if (editing) {
+        await api.updatePromptGroup(editing, {
+          description: promptGroupForm.description.trim(),
+          prompts: promptGroupForm.selectedPrompts,
+          security_option: promptGroupForm.securityOption,
+        });
+        await loadDashboardData(true);
+        setFeedback({ tone: "success", message: `Prompt group ${editing} updated.` });
+      } else {
+        const payload: DashboardCreatePromptGroupInput = {
+          name,
+          description: promptGroupForm.description.trim(),
+          prompts: promptGroupForm.selectedPrompts,
+          security_option: promptGroupForm.securityOption,
+        };
+        await api.createPromptGroup(payload);
+        await loadDashboardData(true);
+        setFeedback({ tone: "success", message: `Prompt group ${name} created.` });
+      }
       closePromptGroupModal();
-      selectSection("prompt_groups");
+      window.location.hash = editing ? promptGroupDetailHash(editing) : promptGroupDetailHash(name);
     } catch (error) {
       if (maybeRedirectDashboardAuth(error)) {
         return;
@@ -1227,7 +1585,7 @@ export default function App() {
       setPromptGroupError(message);
       setFeedback({ tone: "error", message });
     } finally {
-      setBusy("prompt-group-create", false);
+      setBusy(busyKey, false);
     }
   }
 
@@ -1243,9 +1601,6 @@ export default function App() {
       },
       `${group.name} deleted.`,
     );
-    if (expandedToolGroup === group.name) {
-      setExpandedToolGroup(null);
-    }
   }
 
   async function deletePromptGroup(group: DashboardPromptGroup) {
@@ -1260,16 +1615,24 @@ export default function App() {
       },
       `${group.name} deleted.`,
     );
-    if (expandedPromptGroup === group.name) {
-      setExpandedPromptGroup(null);
-    }
   }
 
   function openAgentAppModal() {
+    setAgentAppEditingId(null);
     setAgentAppName("");
     setAgentAppDescription("");
-    setAgentAppToolGroups("");
-    setAgentAppPromptGroups("");
+    setAgentAppToolGroups([]);
+    setAgentAppPromptGroups([]);
+    setAgentAppCreateError("");
+    setAgentAppDialogOpen(true);
+  }
+
+  function openAgentAppModalForEdit(app: DashboardAgentApp) {
+    setAgentAppEditingId(app.id);
+    setAgentAppName(app.name);
+    setAgentAppDescription(app.description ?? "");
+    setAgentAppToolGroups([...(app.tool_group_names ?? [])]);
+    setAgentAppPromptGroups([...(app.prompt_group_names ?? [])]);
     setAgentAppCreateError("");
     setAgentAppDialogOpen(true);
   }
@@ -1277,13 +1640,14 @@ export default function App() {
   function closeAgentAppModal() {
     setAgentAppDialogOpen(false);
     setAgentAppCreateError("");
+    setAgentAppEditingId(null);
     setAgentAppName("");
     setAgentAppDescription("");
-    setAgentAppToolGroups("");
-    setAgentAppPromptGroups("");
+    setAgentAppToolGroups([]);
+    setAgentAppPromptGroups([]);
   }
 
-  async function submitAgentAppCreate() {
+  async function submitAgentAppModal() {
     const name = agentAppName.trim();
     if (!name) {
       setAgentAppCreateError("Name is required.");
@@ -1291,13 +1655,28 @@ export default function App() {
     }
     setAgentAppCreateError("");
     setFeedback(null);
-    setBusy("agent-app-create", true);
+    const editingId = agentAppEditingId;
+    const busyKey = editingId !== null ? `agent-app-edit:${editingId}` : "agent-app-create";
+    setBusy(busyKey, true);
     try {
+      if (editingId !== null) {
+        const patch: DashboardPatchAgentAppInput = {
+          name,
+          description: agentAppDescription.trim(),
+          tool_group_names: agentAppToolGroups,
+          prompt_group_names: agentAppPromptGroups,
+        };
+        await api.patchAgentApp(editingId, patch);
+        closeAgentAppModal();
+        await loadDashboardData(true);
+        setFeedback({ tone: "success", message: `${name} updated.` });
+        return;
+      }
       const payload: DashboardCreateAgentAppInput = {
         name,
         description: agentAppDescription.trim() || undefined,
-        tool_group_names: splitCommaList(agentAppToolGroups),
-        prompt_group_names: splitCommaList(agentAppPromptGroups),
+        tool_group_names: agentAppToolGroups,
+        prompt_group_names: agentAppPromptGroups,
       };
       const res = await api.createAgentApp(payload);
       setAgentAppSecretReveal({
@@ -1306,6 +1685,7 @@ export default function App() {
       });
       closeAgentAppModal();
       await loadDashboardData(true);
+      window.location.hash = appAgentAppDetailHash(res.app.id);
       setFeedback({
         tone: "success",
         message: `${res.app.name} created. Copy the client secret from the dialog — it will not be shown again.`,
@@ -1318,7 +1698,7 @@ export default function App() {
       setAgentAppCreateError(message);
       setFeedback({ tone: "error", message });
     } finally {
-      setBusy("agent-app-create", false);
+      setBusy(busyKey, false);
     }
   }
 
@@ -1438,6 +1818,830 @@ export default function App() {
           ))}
         </Stack>
       </Box>
+    );
+  }
+
+  function renderToolGroupDetailPanel(group: DashboardToolGroup) {
+    return (
+      <>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end", flexWrap: "wrap", mb: 2 }}>
+          <IconButton
+            aria-label="Edit tool group"
+            disabled={isBusy("tool-group-save") || isBusy("tool-group-create")}
+            onClick={(e) => {
+              e.stopPropagation();
+              openToolGroupModalForEdit(group);
+            }}
+            title="Edit tool group"
+            size="small"
+          >
+            <PencilIcon />
+          </IconButton>
+          <IconButton
+            aria-label="Delete tool group"
+            color="error"
+            disabled={isBusy(`tool-group-delete:${group.name}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void deleteToolGroup(group);
+            }}
+            title="Delete tool group"
+            size="small"
+          >
+            <TrashIcon />
+          </IconButton>
+        </Stack>
+        <div className="tool-detail-panel">
+          <div className="tool-detail-header">
+            <p className="panel-label">Tool group details</p>
+          </div>
+          <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>MCP security</dt>
+              <dd>
+                {groupSecurityLabel(group.security_option)}{" "}
+                <code className="identifier-code">({group.security_option})</code>
+              </dd>
+            </div>
+          </dl>
+          {group.description ? (
+            <dl className="tool-detail-meta">
+              <div className="tool-detail-description">
+                <dt>Description</dt>
+                <dd>{group.description}</dd>
+              </div>
+            </dl>
+          ) : null}
+          <div className="tool-schema-section">
+            <div className="tool-schema-header">
+              <h4>MCP endpoints</h4>
+            </div>
+            <div className="tool-group-endpoints">
+              <div className="tool-group-endpoint-row">
+                <span className="tool-group-endpoint-label">Streamable HTTP</span>
+                <div className="tool-group-endpoint-value">
+                  <code className="detail-target-code" title={group.streamable_http_endpoint}>
+                    {group.streamable_http_endpoint}
+                  </code>
+                  <CopyButton
+                    ariaLabel="Copy Streamable HTTP endpoint"
+                    title="Copy Streamable HTTP endpoint"
+                    value={group.streamable_http_endpoint}
+                  />
+                </div>
+              </div>
+              <div className="tool-group-endpoint-row">
+                <span className="tool-group-endpoint-label">SSE</span>
+                <div className="tool-group-endpoint-stack">
+                  <div className="tool-group-endpoint-value">
+                    <code className="detail-target-code" title={group.sse_endpoint}>
+                      {group.sse_endpoint}
+                    </code>
+                    <CopyButton ariaLabel="Copy SSE endpoint" title="Copy SSE endpoint" value={group.sse_endpoint} />
+                  </div>
+                  <div className="tool-group-endpoint-value">
+                    <code className="detail-target-code" title={group.sse_message_endpoint}>
+                      {group.sse_message_endpoint}
+                    </code>
+                    <CopyButton
+                      ariaLabel="Copy SSE message endpoint"
+                      title="Copy SSE message endpoint"
+                      value={group.sse_message_endpoint}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="tool-schema-section">
+            <div className="tool-schema-header">
+              <h4>Included tools</h4>
+            </div>
+            {group.tools.length > 0 ? (
+              <div className="schema-field-list">
+                {group.tools.map((tool) => (
+                  <article className="schema-field-card" key={tool.canonical_name}>
+                    <div className="schema-field-head">
+                      <code>{tool.canonical_name}</code>
+                      <span className="schema-type-pill">
+                        <code>{tool.server}</code>
+                      </span>
+                    </div>
+                    <dl className="schema-field-meta">
+                      {tool.description ? (
+                        <div>
+                          <dt>Description</dt>
+                          <dd>{tool.description}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-inline">No tools in this group.</p>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderPromptGroupDetailPanel(group: DashboardPromptGroup) {
+    return (
+      <>
+        <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end", flexWrap: "wrap", mb: 2 }}>
+          <IconButton
+            aria-label="Edit prompt group"
+            disabled={isBusy("prompt-group-save") || isBusy("prompt-group-create")}
+            onClick={(e) => {
+              e.stopPropagation();
+              openPromptGroupModalForEdit(group);
+            }}
+            title="Edit prompt group"
+            size="small"
+          >
+            <PencilIcon />
+          </IconButton>
+          <IconButton
+            aria-label="Delete prompt group"
+            color="error"
+            disabled={isBusy(`prompt-group-delete:${group.name}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void deletePromptGroup(group);
+            }}
+            title="Delete prompt group"
+            size="small"
+          >
+            <TrashIcon />
+          </IconButton>
+        </Stack>
+        <div className="tool-detail-panel">
+          <div className="tool-detail-header">
+            <p className="panel-label">Prompt group details</p>
+          </div>
+          <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>MCP security</dt>
+              <dd>
+                {groupSecurityLabel(group.security_option)}{" "}
+                <code className="identifier-code">({group.security_option})</code>
+              </dd>
+            </div>
+          </dl>
+          {group.description ? (
+            <dl className="tool-detail-meta">
+              <div className="tool-detail-description">
+                <dt>Description</dt>
+                <dd>{group.description}</dd>
+              </div>
+            </dl>
+          ) : null}
+          <div className="tool-schema-section">
+            <div className="tool-schema-header">
+              <h4>MCP endpoints</h4>
+            </div>
+            <div className="tool-group-endpoints">
+              <div className="tool-group-endpoint-row">
+                <span className="tool-group-endpoint-label">Streamable HTTP</span>
+                <div className="tool-group-endpoint-value">
+                  <code className="detail-target-code" title={group.streamable_http_endpoint}>
+                    {group.streamable_http_endpoint}
+                  </code>
+                  <CopyButton
+                    ariaLabel="Copy Streamable HTTP endpoint"
+                    title="Copy Streamable HTTP endpoint"
+                    value={group.streamable_http_endpoint}
+                  />
+                </div>
+              </div>
+              <div className="tool-group-endpoint-row">
+                <span className="tool-group-endpoint-label">SSE</span>
+                <div className="tool-group-endpoint-stack">
+                  <div className="tool-group-endpoint-value">
+                    <code className="detail-target-code" title={group.sse_endpoint}>
+                      {group.sse_endpoint}
+                    </code>
+                    <CopyButton ariaLabel="Copy SSE endpoint" title="Copy SSE endpoint" value={group.sse_endpoint} />
+                  </div>
+                  <div className="tool-group-endpoint-value">
+                    <code className="detail-target-code" title={group.sse_message_endpoint}>
+                      {group.sse_message_endpoint}
+                    </code>
+                    <CopyButton
+                      ariaLabel="Copy SSE message endpoint"
+                      title="Copy SSE message endpoint"
+                      value={group.sse_message_endpoint}
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div className="tool-schema-section">
+            <div className="tool-schema-header">
+              <h4>Included prompts</h4>
+            </div>
+            {group.prompts.length > 0 ? (
+              <div className="schema-field-list">
+                {group.prompts.map((prompt) => (
+                  <article className="schema-field-card" key={prompt.canonical_name}>
+                    <div className="schema-field-head">
+                      <code>{prompt.canonical_name}</code>
+                      <span className="schema-type-pill">
+                        <code>{prompt.server}</code>
+                      </span>
+                    </div>
+                    <dl className="schema-field-meta">
+                      {prompt.description ? (
+                        <div>
+                          <dt>Description</dt>
+                          <dd>{prompt.description}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-inline">No prompts in this group.</p>
+            )}
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderServerDetailPanel(server: DashboardServer) {
+    return (
+      <>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", justifyContent: "flex-end", mb: 2 }}>
+          <CopyButton ariaLabel="Copy server name" title="Copy server name" value={server.name} />
+          <Button variant="outlined" size="small" onClick={() => void openEditServerModal(server.name)}>
+            Edit
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={isBusy(`server-toggle:${server.name}`)}
+            onClick={() => void toggleServerEnabled(server)}
+          >
+            {isBusy(`server-toggle:${server.name}`)
+              ? "Saving..."
+              : server.enabled
+                ? "Disable"
+                : "Enable"}
+          </Button>
+          <IconButton
+            aria-label="Delete server"
+            color="error"
+            disabled={isBusy(`server-delete:${server.name}`)}
+            onClick={() => void deleteServer(server)}
+            title="Delete server"
+            size="small"
+          >
+            <TrashIcon />
+          </IconButton>
+        </Stack>
+        <div className="tool-detail-panel">
+          <div className="tool-detail-header">
+            <p className="panel-label">Server details</p>
+          </div>
+          {!server.enabled ? (
+            <Typography color="text.secondary" variant="body2" sx={{ mb: 2 }}>
+              This server is registered but currently not exposed to MCP clients.
+            </Typography>
+          ) : null}
+          <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>Transport</dt>
+              <dd>
+                <code>{transportLabel(server.transport)}</code>
+              </dd>
+            </div>
+            <div className="tool-detail-description">
+              <dt>Connection</dt>
+              <dd>
+                <div className="tool-state-line">
+                  <StatusBadge
+                    text={serverConnectionLabel(server.status)}
+                    tone={serverConnectionTone(server.status)}
+                  />
+                </div>
+                <Typography variant="body2" color="text.secondary" sx={{ mt: 0.75 }}>
+                  {server.connection_summary}
+                </Typography>
+              </dd>
+            </div>
+            <div className="tool-detail-description">
+              <dt>Catalog</dt>
+              <dd>
+                {server.tool_count} tools · {server.prompt_count} prompts · {server.resource_count} resources
+              </dd>
+            </div>
+            {server.last_discovered_at ? (
+              <div className="tool-detail-description">
+                <dt>Last discovered</dt>
+                <dd>
+                  <code>{server.last_discovered_at}</code>
+                </dd>
+              </div>
+            ) : null}
+            {server.updated_at ? (
+              <div className="tool-detail-description">
+                <dt>Updated</dt>
+                <dd>
+                  <code>{server.updated_at}</code>
+                </dd>
+              </div>
+            ) : null}
+            {server.config_summary.description ? (
+              <div className="tool-detail-description">
+                <dt>Description</dt>
+                <dd>{server.config_summary.description}</dd>
+              </div>
+            ) : null}
+          </dl>
+
+          <div className="server-detail" style={{ marginTop: "1rem" }}>
+            <dl>
+              <div>
+                <dt>Target</dt>
+                <dd>
+                  <div className="detail-copy-row">
+                    <code className="detail-target-code">
+                      {server.config_summary.target ?? server.config_summary.command ?? "Unknown"}
+                    </code>
+                    {server.config_summary.target || server.config_summary.command ? (
+                      <CopyButton
+                        ariaLabel="Copy target"
+                        title="Copy target"
+                        value={server.config_summary.target ?? server.config_summary.command ?? ""}
+                      />
+                    ) : null}
+                  </div>
+                </dd>
+              </div>
+              <div>
+                <dt>Session mode</dt>
+                <dd>
+                  <code>{server.config_summary.session_mode ?? "Unknown"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Header keys</dt>
+                <dd>
+                  <code>{server.config_summary.header_keys?.join(", ") || "None"}</code>
+                </dd>
+              </div>
+              <div>
+                <dt>Env keys</dt>
+                <dd>
+                  <code>{server.config_summary.env_keys?.join(", ") || "None"}</code>
+                </dd>
+              </div>
+            </dl>
+          </div>
+        </div>
+      </>
+    );
+  }
+
+  function renderToolDetailPanel(tool: DashboardTool) {
+    const fields = parseToolSchemaFields(tool.input_schema);
+    return (
+      <>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", justifyContent: "flex-end", mb: 2 }}>
+          <CopyButton
+            ariaLabel="Copy canonical name"
+            title="Copy canonical name"
+            value={tool.canonical_name}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={isBusy(`tool-toggle:${tool.canonical_name}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void toggleToolEnabled(tool);
+            }}
+          >
+            {isBusy(`tool-toggle:${tool.canonical_name}`)
+              ? "Saving..."
+              : tool.enabled
+                ? "Disable"
+                : "Enable"}
+          </Button>
+        </Stack>
+        <div className="tool-detail-panel">
+          <div className="tool-detail-header">
+            <p className="panel-label">Tool details</p>
+          </div>
+
+          <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>Server</dt>
+              <dd>
+                <code>{tool.server}</code>
+              </dd>
+            </div>
+            <div className="tool-detail-description">
+              <dt>Canonical name</dt>
+              <dd>
+                <code className="identifier-code">{tool.canonical_name}</code>
+              </dd>
+            </div>
+            <div className="tool-detail-description">
+              <dt>Status</dt>
+              <dd>
+                <div className="tool-state-line">
+                  <StatusBadge
+                    text={tool.enabled ? "Enabled" : "Disabled"}
+                    tone={tool.enabled ? "good" : "muted"}
+                  />
+                  {!tool.server_enabled ? <StatusBadge text="Server disabled" tone="warn" /> : null}
+                </div>
+              </dd>
+            </div>
+          </dl>
+
+          <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>Description</dt>
+              <dd>{toolDescription(tool)}</dd>
+            </div>
+          </dl>
+
+          <div className="tool-schema-section">
+            <div className="tool-schema-header">
+              <h4>Input fields</h4>
+            </div>
+            {fields.length > 0 ? (
+              <div className="schema-field-list">
+                {fields.map((field) => (
+                  <article className="schema-field-card" key={field.path}>
+                    <div className="schema-field-head">
+                      <code>{field.path}</code>
+                      <span className="schema-type-pill">
+                        <code>{field.type}</code>
+                      </span>
+                    </div>
+                    <dl className="schema-field-meta">
+                      <div>
+                        <dt>Required</dt>
+                        <dd>{field.required ? "yes" : "no"}</dd>
+                      </div>
+                      {field.description ? (
+                        <div>
+                          <dt>Description</dt>
+                          <dd>{field.description}</dd>
+                        </div>
+                      ) : null}
+                      {field.enumValues?.length ? (
+                        <div>
+                          <dt>Enum</dt>
+                          <dd>
+                            <code>{field.enumValues.join(", ")}</code>
+                          </dd>
+                        </div>
+                      ) : null}
+                      {field.defaultValue ? (
+                        <div>
+                          <dt>Default</dt>
+                          <dd>
+                            <code>{field.defaultValue}</code>
+                          </dd>
+                        </div>
+                      ) : null}
+                      {field.note ? (
+                        <div>
+                          <dt>Notes</dt>
+                          <dd>{field.note}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-inline">No structured input fields were provided.</p>
+            )}
+          </div>
+
+          <details className="raw-schema-disclosure">
+            <summary>Raw schema</summary>
+            <div className="raw-schema-code-wrap">
+              <CopyButton
+                ariaLabel="Copy raw schema"
+                title="Copy raw schema"
+                value={prettyJSON(tool.input_schema)}
+              />
+              <pre className="schema-code">
+                <code>{prettyJSON(tool.input_schema)}</code>
+              </pre>
+            </div>
+          </details>
+        </div>
+      </>
+    );
+  }
+
+  function renderPromptDetailPanel(prompt: DashboardPrompt) {
+    const fields = parsePromptArgumentFields(prompt.arguments);
+    return (
+      <>
+        <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", justifyContent: "flex-end", mb: 2 }}>
+          <CopyButton
+            ariaLabel="Copy canonical name"
+            title="Copy canonical name"
+            value={prompt.canonical_name}
+          />
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={isBusy(`prompt-toggle:${prompt.canonical_name}`)}
+            onClick={(e) => {
+              e.stopPropagation();
+              void togglePromptEnabled(prompt);
+            }}
+          >
+            {isBusy(`prompt-toggle:${prompt.canonical_name}`)
+              ? "Saving..."
+              : prompt.enabled
+                ? "Disable"
+                : "Enable"}
+          </Button>
+        </Stack>
+        <div className="tool-detail-panel">
+          <div className="tool-detail-header">
+            <p className="panel-label">Prompt details</p>
+          </div>
+
+          <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>Server</dt>
+              <dd>
+                <code>{prompt.server}</code>
+              </dd>
+            </div>
+            <div className="tool-detail-description">
+              <dt>Canonical name</dt>
+              <dd>
+                <code className="identifier-code">{prompt.canonical_name}</code>
+              </dd>
+            </div>
+            <div className="tool-detail-description">
+              <dt>Status</dt>
+              <dd>
+                <div className="tool-state-line">
+                  <StatusBadge
+                    text={prompt.enabled ? "Enabled" : "Disabled"}
+                    tone={prompt.enabled ? "good" : "muted"}
+                  />
+                  {!prompt.server_enabled ? <StatusBadge text="Server disabled" tone="warn" /> : null}
+                </div>
+              </dd>
+            </div>
+          </dl>
+
+          <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>Description</dt>
+              <dd>{promptDescription(prompt)}</dd>
+            </div>
+          </dl>
+
+          <div className="tool-schema-section">
+            <div className="tool-schema-header">
+              <h4>Arguments</h4>
+            </div>
+            {fields.length > 0 ? (
+              <div className="schema-field-list">
+                {fields.map((field) => (
+                  <article className="schema-field-card" key={field.path}>
+                    <div className="schema-field-head">
+                      <code>{field.path}</code>
+                      <span className="schema-type-pill">
+                        <code>{field.type}</code>
+                      </span>
+                    </div>
+                    <dl className="schema-field-meta">
+                      <div>
+                        <dt>Required</dt>
+                        <dd>{field.required ? "yes" : "no"}</dd>
+                      </div>
+                      {field.description ? (
+                        <div>
+                          <dt>Description</dt>
+                          <dd>{field.description}</dd>
+                        </div>
+                      ) : null}
+                      {field.enumValues?.length ? (
+                        <div>
+                          <dt>Enum</dt>
+                          <dd>
+                            <code>{field.enumValues.join(", ")}</code>
+                          </dd>
+                        </div>
+                      ) : null}
+                      {field.defaultValue ? (
+                        <div>
+                          <dt>Default</dt>
+                          <dd>
+                            <code>{field.defaultValue}</code>
+                          </dd>
+                        </div>
+                      ) : null}
+                      {field.note ? (
+                        <div>
+                          <dt>Notes</dt>
+                          <dd>{field.note}</dd>
+                        </div>
+                      ) : null}
+                    </dl>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="empty-inline">No arguments.</p>
+            )}
+          </div>
+
+          <details className="raw-schema-disclosure">
+            <summary>Raw arguments</summary>
+            <div className="raw-schema-actions">
+              <CopyButton
+                ariaLabel="Copy raw arguments"
+                title="Copy raw arguments"
+                value={prettyPromptArguments(prompt.arguments)}
+              />
+            </div>
+            <pre className="schema-code">
+              <code>{prettyPromptArguments(prompt.arguments)}</code>
+            </pre>
+          </details>
+        </div>
+      </>
+    );
+  }
+
+  function renderAgentAppDetailPanel(app: DashboardAgentApp) {
+    const oauthCurlExample = agentAppOAuthTokenCurlCommand(app.oauth_token_url, app.client_id);
+    return (
+      <>
+        <Stack
+          direction={{ xs: "column", sm: "row" }}
+          spacing={2}
+          sx={{ justifyContent: "space-between", alignItems: { sm: "flex-start" }, mb: 1 }}
+        >
+          <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
+            <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", mb: 0.5 }}>
+              <StatusBadge
+                tone={app.status === "enabled" ? "good" : "muted"}
+                text={app.status === "enabled" ? "enabled" : "disabled"}
+              />
+            </Stack>
+            {app.description ? (
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+                {app.description}
+              </Typography>
+            ) : null}
+          </Box>
+          <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: "wrap" }}>
+            <IconButton
+              aria-label={`Edit ${app.name}`}
+              color="primary"
+              size="small"
+              disabled={isBusy(`agent-app-edit:${app.id}`)}
+              onClick={(e) => {
+                e.stopPropagation();
+                openAgentAppModalForEdit(app);
+              }}
+              title="Edit agent app"
+            >
+              <PencilIcon />
+            </IconButton>
+            <Button
+              size="small"
+              variant="outlined"
+              disabled={isBusy(`agent-app-status:${app.id}`)}
+              onClick={(e) => {
+                e.stopPropagation();
+                void toggleAgentAppStatus(app);
+              }}
+            >
+              {app.status === "enabled" ? "Disable" : "Enable"}
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="warning"
+              disabled={isBusy(`agent-app-rotate:${app.id}`)}
+              onClick={(e) => {
+                e.stopPropagation();
+                void rotateAgentAppSecret(app);
+              }}
+            >
+              Rotate secret
+            </Button>
+            <IconButton
+              aria-label={`Delete ${app.name}`}
+              color="error"
+              size="small"
+              disabled={isBusy(`agent-app-delete:${app.id}`)}
+              onClick={(e) => {
+                e.stopPropagation();
+                void deleteAgentApp(app);
+              }}
+              title="Delete agent app"
+            >
+              <TrashIcon />
+            </IconButton>
+          </Stack>
+        </Stack>
+        <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.5 }}>
+          Client ID
+        </Typography>
+        <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1, flexWrap: "wrap" }}>
+          <Typography
+            component="code"
+            variant="body2"
+            sx={{ wordBreak: "break-all", fontFamily: monospaceFontFamily }}
+          >
+            {app.client_id}
+          </Typography>
+          <CopyButton ariaLabel="Copy client ID" title="Copy client ID" value={app.client_id} />
+        </Stack>
+        <Typography variant="caption" color="text.secondary">
+          Tool groups: {app.tool_group_names?.length ? app.tool_group_names.join(", ") : "—"} · Prompt groups:{" "}
+          {app.prompt_group_names?.length ? app.prompt_group_names.join(", ") : "—"}
+        </Typography>
+
+        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: "divider" }}>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>
+            OAuth token URL
+          </Typography>
+          <div className="tool-group-endpoint-row">
+            <div className="tool-group-endpoint-value">
+              <code className="detail-target-code" title={app.oauth_token_url}>
+                {app.oauth_token_url}
+              </code>
+              <CopyButton ariaLabel="Copy OAuth token URL" title="Copy OAuth token URL" value={app.oauth_token_url} />
+            </div>
+          </div>
+          <Accordion
+            variant="outlined"
+            disableGutters
+            sx={{
+              mt: 1.5,
+              borderRadius: 2,
+              "&:before": { display: "none" },
+              boxShadow: "none",
+            }}
+          >
+            <AccordionSummary expandIcon={<ExpandMoreIcon fontSize="small" />}>
+              <Typography variant="subtitle2">Get a Bearer token (curl)</Typography>
+            </AccordionSummary>
+            <AccordionDetails sx={{ pt: 0 }}>
+              <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
+                Replace <code>YOUR_CLIENT_SECRET</code> with the secret from when you created or last rotated this app.
+                The response JSON includes <code>access_token</code>, <code>token_type</code> (Bearer), and{" "}
+                <code>expires_in</code> (seconds).
+              </Typography>
+              <Paper variant="outlined" sx={{ p: 1.5, borderRadius: 2, bgcolor: "grey.50" }}>
+                <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: "flex-start" }}>
+                  <Typography
+                    component="pre"
+                    sx={{
+                      flex: 1,
+                      m: 0,
+                      overflow: "auto",
+                      fontSize: "0.75rem",
+                      lineHeight: 1.5,
+                      fontFamily: monospaceFontFamily,
+                      whiteSpace: "pre-wrap",
+                      wordBreak: "break-all",
+                    }}
+                  >
+                    {oauthCurlExample}
+                  </Typography>
+                  <CopyButton ariaLabel="Copy curl command" title="Copy curl command" value={oauthCurlExample} />
+                </Stack>
+              </Paper>
+              <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 1.5 }}>
+                You can also POST JSON with <code>grant_type</code>, <code>client_id</code>, and{" "}
+                <code>client_secret</code> fields and <code>Content-Type: application/json</code>.
+              </Typography>
+            </AccordionDetails>
+          </Accordion>
+        </Box>
+
+        {renderAgentAppGroupEndpoints("Tool group MCP URLs", app.tool_group_endpoints)}
+        {renderAgentAppGroupEndpoints("Prompt group MCP URLs", app.prompt_group_endpoints)}
+      </>
     );
   }
 
@@ -1649,895 +2853,714 @@ export default function App() {
                   </section>
                 ) : null}
 
-                <SectionCard
-                  title="Servers"
-                  subtitle="Registered MCP servers"
-                  action={
-                    <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}>
-                      <TextField
-                        size="small"
-                        placeholder="Search servers"
-                        value={serverFilter}
-                        onChange={(event) => setServerFilter(event.target.value)}
-                        sx={{ minWidth: { sm: 220 } }}
-                      />
-                      <Button variant="contained" onClick={openRegisterModal}>
-                        + Add Server
-                      </Button>
-                    </Stack>
-                  }
-                >
-                  {data.servers.empty_state && filteredServers.length === 0 ? (
-                    <EmptyStateCard emptyState={data.servers.empty_state} />
-                  ) : (
-                    <div className="server-list compact-server-list">
-                      {filteredServers.map((server) => {
-                        const expanded = expandedServer === server.name;
-                        return (
-                          <article
-                            className={`server-row compact-server-row ${
-                              server.enabled ? "" : "server-row-disabled"
-                            }`}
-                            key={server.name}
-                          >
-                            <div className="server-row-head compact-server-head">
-                              <div className="server-row-layout">
-                                <button
-                                  className="server-expand-button"
-                                  onClick={() => setExpandedServer(expanded ? null : server.name)}
-                                  type="button"
-                                >
-                                  <div className="server-head-main">
-                                    <h3>{server.name}</h3>
-                                    <p>{server.connection_summary}</p>
-                                  </div>
-                                </button>
-                                <div className="server-row-meta compact-server-meta">
-                                  <div className="server-meta-cell">
-                                    <code>{transportLabel(server.transport)}</code>
-                                  </div>
-                                  <div className="server-meta-cell">
-                                    <StatusBadge
-                                      text={server.enabled ? "Enabled" : "Disabled"}
-                                      tone={server.enabled ? "good" : "muted"}
-                                    />
-                                  </div>
-                                  <div className="server-meta-cell server-tool-count">
-                                    <strong>{server.tool_count} tools</strong>
-                                  </div>
-                                  <div className="server-meta-cell">
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      disabled={isBusy(`server-toggle:${server.name}`)}
-                                      onClick={() => void toggleServerEnabled(server)}
-                                    >
-                                      {isBusy(`server-toggle:${server.name}`)
-                                        ? "Saving..."
-                                        : server.enabled
-                                          ? "Disable"
-                                          : "Enable"}
-                                    </Button>
-                                  </div>
-                                  <div className="server-meta-cell">
-                                    <IconButton
-                                      aria-label="Delete server"
-                                      color="error"
-                                      disabled={isBusy(`server-delete:${server.name}`)}
-                                      onClick={() => void deleteServer(server)}
-                                      title="Delete server"
-                                      size="small"
-                                    >
-                                      <TrashIcon />
-                                    </IconButton>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            {expanded ? (
-                              <div className="server-detail">
-                                {!server.enabled ? (
-                                  <p className="detail-note">
-                                    This server is registered but currently not exposed to MCP clients.
-                                  </p>
-                                ) : null}
-                                <dl>
-                                  <div>
-                                    <dt>Target</dt>
-                                    <dd>
-                                      <div className="detail-copy-row">
-                                        <code className="detail-target-code">
-                                          {server.config_summary.target ??
-                                            server.config_summary.command ??
-                                            "Unknown"}
-                                        </code>
-                                        {server.config_summary.target ||
-                                        server.config_summary.command ? (
-                                          <CopyButton
-                                            ariaLabel="Copy target"
-                                            title="Copy target"
-                                            value={
-                                              server.config_summary.target ??
-                                              server.config_summary.command ??
-                                              ""
-                                            }
-                                          />
-                                        ) : null}
-                                      </div>
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt>Session mode</dt>
-                                    <dd>
-                                      <code>{server.config_summary.session_mode ?? "Unknown"}</code>
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt>Header keys</dt>
-                                    <dd>
-                                      <code>{server.config_summary.header_keys?.join(", ") || "None"}</code>
-                                    </dd>
-                                  </div>
-                                  <div>
-                                    <dt>Env keys</dt>
-                                    <dd>
-                                      <code>{server.config_summary.env_keys?.join(", ") || "None"}</code>
-                                    </dd>
-                                  </div>
-                                </dl>
-                              </div>
-                            ) : null}
-                          </article>
-                        );
-                      })}
-                    </div>
-                  )}
-                </SectionCard>
+                {expandedServer !== null ? (
+                  <SectionCard
+                    title={selectedServer?.name ?? expandedServer}
+                    subtitle="Registered MCP servers"
+                    action={
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}>
+                        <Button
+                          variant="outlined"
+                          onClick={() => {
+                            window.location.hash = appSectionToHash("servers");
+                          }}
+                        >
+                          ← All servers
+                        </Button>
+                        <Button variant="contained" onClick={openRegisterModal}>
+                          + Add Server
+                        </Button>
+                      </Stack>
+                    }
+                  >
+                    {selectedServer ? (
+                      renderServerDetailPanel(selectedServer)
+                    ) : (
+                      <Stack spacing={2} sx={{ py: 2 }}>
+                        <Typography color="text.secondary" variant="body2">
+                          This server does not exist or was removed. Bookmarked URLs stay valid only while the server is
+                          registered.
+                        </Typography>
+                        <Button
+                          variant="contained"
+                          onClick={() => {
+                            window.location.hash = appSectionToHash("servers");
+                          }}
+                        >
+                          Back to all servers
+                        </Button>
+                      </Stack>
+                    )}
+                  </SectionCard>
+                ) : (
+                  <SectionCard
+                    title="Servers"
+                    subtitle="Registered MCP servers"
+                    action={
+                      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}>
+                        <TextField
+                          size="small"
+                          placeholder="Search servers"
+                          value={serverFilter}
+                          onChange={(event) => setServerFilter(event.target.value)}
+                          sx={{ minWidth: { sm: 220 } }}
+                        />
+                        <Button variant="contained" onClick={openRegisterModal}>
+                          + Add Server
+                        </Button>
+                      </Stack>
+                    }
+                  >
+                    {data.servers.empty_state && filteredServers.length === 0 ? (
+                      <EmptyStateCard emptyState={data.servers.empty_state} />
+                    ) : (
+                      <Box
+                        sx={{
+                          display: "grid",
+                          gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                          gap: 1.5,
+                        }}
+                      >
+                        {filteredServers.map((server) => {
+                          const muted = !server.enabled;
+                          return (
+                            <Paper
+                              key={server.name}
+                              role="link"
+                              tabIndex={0}
+                              aria-label={`Open server ${server.name}`}
+                              onClick={() => {
+                                window.location.hash = serverDetailHash(server.name);
+                              }}
+                              onKeyDown={(e) => {
+                                if (e.key === "Enter" || e.key === " ") {
+                                  e.preventDefault();
+                                  window.location.hash = serverDetailHash(server.name);
+                                }
+                              }}
+                              elevation={0}
+                              variant="outlined"
+                              sx={{
+                                p: 1.5,
+                                borderRadius: 2,
+                                cursor: "pointer",
+                                borderColor: "divider",
+                                opacity: muted ? 0.82 : 1,
+                                transition: "border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease",
+                                "&:hover": {
+                                  borderColor: "primary.light",
+                                  bgcolor: "action.hover",
+                                  boxShadow: 1,
+                                },
+                                "&:focus-visible": {
+                                  outline: "2px solid",
+                                  outlineColor: "primary.main",
+                                  outlineOffset: 2,
+                                },
+                              }}
+                            >
+                              <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                                {server.name}
+                              </Typography>
+                              <Typography
+                                variant="caption"
+                                color="text.secondary"
+                                sx={{ display: "block", mb: 1, wordBreak: "break-word" }}
+                              >
+                                {server.connection_summary}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                                <code>{transportLabel(server.transport)}</code>
+                              </Typography>
+                              <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5, mb: 1 }}>
+                                <StatusBadge
+                                  text={server.enabled ? "Enabled" : "Disabled"}
+                                  tone={server.enabled ? "good" : "muted"}
+                                />
+                                <StatusBadge
+                                  text={serverConnectionLabel(server.status)}
+                                  tone={serverConnectionTone(server.status)}
+                                />
+                              </Stack>
+                              <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                                {server.tool_count} tools · {server.prompt_count} prompts · {server.resource_count}{" "}
+                                resources
+                              </Typography>
+                              <Typography variant="caption" color="primary" sx={{ display: "block", mt: 1 }}>
+                                View details →
+                              </Typography>
+                            </Paper>
+                          );
+                        })}
+                      </Box>
+                    )}
+                  </SectionCard>
+                )}
               </>
             ) : null}
 
             {section === "tools" && data.tools ? (
-              <SectionCard
-                title="Tools"
-                subtitle="Discovered tools across registered servers"
-                action={
-                  <div className="toolbar-cluster">
-                    <input
-                      className="table-filter compact-filter"
-                      onChange={(event) => setToolFilter(event.target.value)}
-                      placeholder="Search tools"
-                      value={toolFilter}
-                    />
-                    <select
-                      className="table-filter compact-filter compact-select"
-                      onChange={(event) => setToolServerFilter(event.target.value)}
-                      value={toolServerFilter}
+              expandedTool !== null ? (
+                <SectionCard
+                  title={selectedTool?.name ?? expandedTool ?? "Tool"}
+                  subtitle="Discovered tools across registered servers"
+                  action={
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        window.location.hash = appSectionToHash("tools");
+                      }}
                     >
-                      <option value="all">All servers</option>
-                      {uniqueToolServers.map((server) => (
-                        <option key={server} value={server}>
-                          {server}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
-                }
-              >
-                {data.tools.empty_state && filteredTools.length === 0 ? (
-                  <EmptyStateCard emptyState={data.tools.empty_state} />
-                ) : (
-                  <div className="tools-table-wrap">
-                    <table className="data-table compact-table tools-table">
-                      <thead>
-                        <tr>
-                          <th aria-hidden="true" className="expand-column"></th>
-                          <th>Tool</th>
-                          <th>Canonical name</th>
-                          <th>Server</th>
-                          <th>Description</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredTools.map((tool) => {
-                          const muted = !tool.enabled || !tool.server_enabled;
-                          const expanded = expandedTool === tool.canonical_name;
-                          const fields = parseToolSchemaFields(tool.input_schema);
-                          return (
-                            <Fragment key={tool.canonical_name}>
-                              <tr
-                                aria-expanded={expanded}
-                                className={`${expanded ? "is-selected" : ""} ${muted ? "is-muted" : ""} tool-summary-row`}
-                                onClick={() =>
-                                  setExpandedTool(expanded ? null : tool.canonical_name)
-                                }
-                              >
-                                <td className="expand-column">
-                                  <ChevronIcon expanded={expanded} />
-                                </td>
-                                <td>
-                                  <div className="table-primary">{tool.name}</div>
-                                </td>
-                                <td>
-                                  <code className="identifier-code" title={tool.canonical_name}>
-                                    {tool.canonical_name}
-                                  </code>
-                                </td>
-                                <td>{tool.server}</td>
-                                <td>
-                                  <div className="clamped-description" title={toolDescription(tool)}>
-                                    {toolDescription(tool)}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div className="tool-state-line">
-                                    <StatusBadge
-                                      text={tool.enabled ? "Enabled" : "Disabled"}
-                                      tone={tool.enabled ? "good" : "muted"}
-                                    />
-                                    {!tool.server_enabled ? (
-                                      <StatusBadge text="Server disabled" tone="warn" />
-                                    ) : null}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div
-                                    className="row-actions"
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    <CopyButton
-                                      ariaLabel="Copy canonical name"
-                                      title="Copy canonical name"
-                                      value={tool.canonical_name}
-                                    />
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      disabled={isBusy(`tool-toggle:${tool.canonical_name}`)}
-                                      onClick={() => void toggleToolEnabled(tool)}
-                                    >
-                                      {isBusy(`tool-toggle:${tool.canonical_name}`)
-                                        ? "Saving..."
-                                        : tool.enabled
-                                          ? "Disable"
-                                          : "Enable"}
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                              {expanded ? (
-                                <tr className="tool-expanded-row">
-                                  <td className="tool-expanded-cell" colSpan={7}>
-                                    <div className="tool-detail-panel">
-                                      <div className="tool-detail-header">
-                                        <p className="panel-label">Tool details</p>
-                                      </div>
-
-                                      <dl className="tool-detail-meta">
-                                        <div className="tool-detail-description">
-                                          <dt>Description</dt>
-                                          <dd>{toolDescription(tool)}</dd>
-                                        </div>
-                                      </dl>
-
-                                      <div className="tool-schema-section">
-                                        <div className="tool-schema-header">
-                                          <h4>Input fields</h4>
-                                        </div>
-                                        {fields.length > 0 ? (
-                                          <div className="schema-field-list">
-                                            {fields.map((field) => (
-                                              <article className="schema-field-card" key={field.path}>
-                                                <div className="schema-field-head">
-                                                  <code>{field.path}</code>
-                                                  <span className="schema-type-pill">
-                                                    <code>{field.type}</code>
-                                                  </span>
-                                                </div>
-                                                <dl className="schema-field-meta">
-                                                  <div>
-                                                    <dt>Required</dt>
-                                                    <dd>{field.required ? "yes" : "no"}</dd>
-                                                  </div>
-                                                  {field.description ? (
-                                                    <div>
-                                                      <dt>Description</dt>
-                                                      <dd>{field.description}</dd>
-                                                    </div>
-                                                  ) : null}
-                                                  {field.enumValues?.length ? (
-                                                    <div>
-                                                      <dt>Enum</dt>
-                                                      <dd>
-                                                        <code>{field.enumValues.join(", ")}</code>
-                                                      </dd>
-                                                    </div>
-                                                  ) : null}
-                                                  {field.defaultValue ? (
-                                                    <div>
-                                                      <dt>Default</dt>
-                                                      <dd>
-                                                        <code>{field.defaultValue}</code>
-                                                      </dd>
-                                                    </div>
-                                                  ) : null}
-                                                  {field.note ? (
-                                                    <div>
-                                                      <dt>Notes</dt>
-                                                      <dd>{field.note}</dd>
-                                                    </div>
-                                                  ) : null}
-                                                </dl>
-                                              </article>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="empty-inline">No structured input fields were provided.</p>
-                                        )}
-                                      </div>
-
-                                      <details className="raw-schema-disclosure">
-                                        <summary>Raw schema</summary>
-                                        <div className="raw-schema-code-wrap">
-                                          <CopyButton
-                                            ariaLabel="Copy raw schema"
-                                            title="Copy raw schema"
-                                            value={prettyJSON(tool.input_schema)}
-                                          />
-                                          <pre className="schema-code">
-                                          <code>{prettyJSON(tool.input_schema)}</code>
-                                          </pre>
-                                        </div>
-                                      </details>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ) : null}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </SectionCard>
+                      ← All tools
+                    </Button>
+                  }
+                >
+                  {selectedTool ? (
+                    renderToolDetailPanel(selectedTool)
+                  ) : (
+                    <Stack spacing={2} sx={{ py: 2 }}>
+                      <Typography color="text.secondary" variant="body2">
+                        This tool does not exist or was removed. Bookmarked URLs stay valid only while the tool is
+                        present in the catalog.
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("tools");
+                        }}
+                      >
+                        Back to all tools
+                      </Button>
+                    </Stack>
+                  )}
+                </SectionCard>
+              ) : (
+                <SectionCard
+                  title="Tools"
+                  subtitle="Discovered tools across registered servers"
+                  action={
+                    <div className="toolbar-cluster">
+                      <input
+                        className="table-filter compact-filter"
+                        onChange={(event) => setToolFilter(event.target.value)}
+                        placeholder="Search tools"
+                        value={toolFilter}
+                      />
+                      <select
+                        className="table-filter compact-filter compact-select"
+                        onChange={(event) => setToolServerFilter(event.target.value)}
+                        value={toolServerFilter}
+                      >
+                        <option value="all">All servers</option>
+                        {uniqueToolServers.map((server) => (
+                          <option key={server} value={server}>
+                            {server}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  }
+                >
+                  {data.tools.empty_state && filteredTools.length === 0 ? (
+                    <EmptyStateCard emptyState={data.tools.empty_state} />
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                        gap: 1.5,
+                      }}
+                    >
+                      {filteredTools.map((tool) => {
+                        const muted = !tool.enabled || !tool.server_enabled;
+                        return (
+                          <Paper
+                            key={tool.canonical_name}
+                            role="link"
+                            tabIndex={0}
+                            aria-label={`Open tool ${tool.name}`}
+                            onClick={() => {
+                              window.location.hash = toolDetailHash(tool.canonical_name);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                window.location.hash = toolDetailHash(tool.canonical_name);
+                              }
+                            }}
+                            elevation={0}
+                            variant="outlined"
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2,
+                              cursor: "pointer",
+                              borderColor: "divider",
+                              opacity: muted ? 0.82 : 1,
+                              transition: "border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease",
+                              "&:hover": {
+                                borderColor: "primary.light",
+                                bgcolor: "action.hover",
+                                boxShadow: 1,
+                              },
+                              "&:focus-visible": {
+                                outline: "2px solid",
+                                outlineColor: "primary.main",
+                                outlineOffset: 2,
+                              },
+                            }}
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                              {tool.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1, wordBreak: "break-all" }}>
+                              <code>{tool.canonical_name}</code>
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                              <code>{tool.server}</code>
+                            </Typography>
+                            <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5, mb: 1 }}>
+                              <StatusBadge
+                                text={tool.enabled ? "Enabled" : "Disabled"}
+                                tone={tool.enabled ? "good" : "muted"}
+                              />
+                              {!tool.server_enabled ? <StatusBadge text="Server off" tone="warn" /> : null}
+                            </Stack>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {toolDescription(tool)}
+                            </Typography>
+                            <Typography variant="caption" color="primary" sx={{ display: "block", mt: 1 }}>
+                              View details →
+                            </Typography>
+                          </Paper>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </SectionCard>
+              )
             ) : null}
 
             {section === "tool_groups" && data.toolGroups ? (
-              <SectionCard
-                title="Configured tool groups"
-                subtitle=""
-                action={
-                  <Button variant="contained" onClick={openToolGroupModal}>
-                    + Add Tool Group
-                  </Button>
-                }
-              >
-                {data.toolGroups.empty_state && data.toolGroups.tool_groups.length === 0 ? (
-                  <EmptyStateCard emptyState={data.toolGroups.empty_state} />
-                ) : (
-                  <div className="tools-table-wrap">
-                    <table className="data-table compact-table prompts-table">
-                      <thead>
-                        <tr>
-                          <th aria-hidden="true" className="expand-column"></th>
-                          <th>Group</th>
-                          <th>Tools</th>
-                          <th>Description</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.toolGroups.tool_groups.map((group) => {
-                          const expanded = expandedToolGroup === group.name;
-                          return (
-                            <Fragment key={group.name}>
-                              <tr
-                                aria-expanded={expanded}
-                                className={`${expanded ? "is-selected" : ""} tool-summary-row`}
-                                onClick={() => setExpandedToolGroup(expanded ? null : group.name)}
-                              >
-                                <td className="expand-column">
-                                  <ChevronIcon expanded={expanded} />
-                                </td>
-                                <td>
-                                  <div className="table-primary">{group.name}</div>
-                                </td>
-                                <td>
-                                  <strong>{group.tool_count}</strong>
-                                </td>
-                                <td>
-                                  <div className="clamped-description" title={group.description || "No description"}>
-                                    {group.description || "No description"}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div className="row-actions" onClick={(event) => event.stopPropagation()}>
-                                    <IconButton
-                                      aria-label="Delete tool group"
-                                      color="error"
-                                      disabled={isBusy(`tool-group-delete:${group.name}`)}
-                                      onClick={() => void deleteToolGroup(group)}
-                                      title="Delete tool group"
-                                      size="small"
-                                    >
-                                      <TrashIcon />
-                                    </IconButton>
-                                  </div>
-                                </td>
-                              </tr>
-                              {expanded ? (
-                                <tr className="tool-expanded-row">
-                                  <td className="tool-expanded-cell" colSpan={5}>
-                                    <div className="tool-detail-panel">
-                                      <div className="tool-detail-header">
-                                        <p className="panel-label">Tool group details</p>
-                                      </div>
-                                      {group.description ? (
-                                        <dl className="tool-detail-meta">
-                                          <div className="tool-detail-description">
-                                            <dt>Description</dt>
-                                            <dd>{group.description}</dd>
-                                          </div>
-                                        </dl>
-                                      ) : null}
-                                      <div className="tool-schema-section">
-                                        <div className="tool-schema-header">
-                                          <h4>MCP endpoints</h4>
-                                        </div>
-                                        <div className="tool-group-endpoints">
-                                          <div className="tool-group-endpoint-row">
-                                            <span className="tool-group-endpoint-label">Streamable HTTP</span>
-                                            <div className="tool-group-endpoint-value">
-                                              <code className="detail-target-code" title={group.streamable_http_endpoint}>
-                                                {group.streamable_http_endpoint}
-                                              </code>
-                                              <CopyButton
-                                                ariaLabel="Copy Streamable HTTP endpoint"
-                                                title="Copy Streamable HTTP endpoint"
-                                                value={group.streamable_http_endpoint}
-                                              />
-                                            </div>
-                                          </div>
-                                          <div className="tool-group-endpoint-row">
-                                            <span className="tool-group-endpoint-label">SSE</span>
-                                            <div className="tool-group-endpoint-stack">
-                                              <div className="tool-group-endpoint-value">
-                                                <code className="detail-target-code" title={group.sse_endpoint}>
-                                                  {group.sse_endpoint}
-                                                </code>
-                                                <CopyButton
-                                                  ariaLabel="Copy SSE endpoint"
-                                                  title="Copy SSE endpoint"
-                                                  value={group.sse_endpoint}
-                                                />
-                                              </div>
-                                              <div className="tool-group-endpoint-value">
-                                                <code className="detail-target-code" title={group.sse_message_endpoint}>
-                                                  {group.sse_message_endpoint}
-                                                </code>
-                                                <CopyButton
-                                                  ariaLabel="Copy SSE message endpoint"
-                                                  title="Copy SSE message endpoint"
-                                                  value={group.sse_message_endpoint}
-                                                />
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <div className="tool-schema-section">
-                                        <div className="tool-schema-header">
-                                          <h4>Included tools</h4>
-                                        </div>
-                                        {group.tools.length > 0 ? (
-                                          <div className="schema-field-list">
-                                            {group.tools.map((tool) => (
-                                              <article className="schema-field-card" key={tool.canonical_name}>
-                                                <div className="schema-field-head">
-                                                  <code>{tool.canonical_name}</code>
-                                                  <span className="schema-type-pill">
-                                                    <code>{tool.server}</code>
-                                                  </span>
-                                                </div>
-                                                <dl className="schema-field-meta">
-                                                  {tool.description ? (
-                                                    <div>
-                                                      <dt>Description</dt>
-                                                      <dd>{tool.description}</dd>
-                                                    </div>
-                                                  ) : null}
-                                                </dl>
-                                              </article>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="empty-inline">No tools in this group.</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ) : null}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </SectionCard>
+              expandedToolGroup !== null ? (
+                <SectionCard
+                  title={selectedToolGroup?.name ?? expandedToolGroup}
+                  subtitle=""
+                  action={
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("tool_groups");
+                        }}
+                      >
+                        ← All tool groups
+                      </Button>
+                      <Button variant="contained" onClick={openToolGroupModal}>
+                        + Add Tool Group
+                      </Button>
+                    </Stack>
+                  }
+                >
+                  {selectedToolGroup ? (
+                    renderToolGroupDetailPanel(selectedToolGroup)
+                  ) : (
+                    <Stack spacing={2} sx={{ py: 2 }}>
+                      <Typography color="text.secondary" variant="body2">
+                        This tool group does not exist or was deleted.
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("tool_groups");
+                        }}
+                      >
+                        Back to all tool groups
+                      </Button>
+                    </Stack>
+                  )}
+                </SectionCard>
+              ) : (
+                <SectionCard
+                  title="Configured tool groups"
+                  subtitle=""
+                  action={
+                    <Button variant="contained" onClick={openToolGroupModal}>
+                      + Add Tool Group
+                    </Button>
+                  }
+                >
+                  {data.toolGroups.empty_state && data.toolGroups.tool_groups.length === 0 ? (
+                    <EmptyStateCard emptyState={data.toolGroups.empty_state} />
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                        gap: 1.5,
+                      }}
+                    >
+                      {data.toolGroups.tool_groups.map((group) => (
+                        <Paper
+                          key={group.name}
+                          role="link"
+                          tabIndex={0}
+                          aria-label={`Open tool group ${group.name}`}
+                          onClick={() => {
+                            window.location.hash = toolGroupDetailHash(group.name);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              window.location.hash = toolGroupDetailHash(group.name);
+                            }
+                          }}
+                          elevation={0}
+                          variant="outlined"
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            cursor: "pointer",
+                            borderColor: "divider",
+                            transition: "border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease",
+                            "&:hover": {
+                              borderColor: "primary.light",
+                              bgcolor: "action.hover",
+                              boxShadow: 1,
+                            },
+                            "&:focus-visible": {
+                              outline: "2px solid",
+                              outlineColor: "primary.main",
+                              outlineOffset: 2,
+                            },
+                          }}
+                        >
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start", mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}>
+                              {group.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              component="span"
+                              sx={{ fontWeight: 600, color: "text.secondary", flexShrink: 0 }}
+                            >
+                              {group.tool_count} tools
+                            </Typography>
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                            <code title={groupSecurityLabel(group.security_option)}>{group.security_option}</code>
+                          </Typography>
+                          {group.description ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {group.description}
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">
+                              No description
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="primary" sx={{ display: "block", mt: 1 }}>
+                            View details →
+                          </Typography>
+                        </Paper>
+                      ))}
+                    </Box>
+                  )}
+                </SectionCard>
+              )
             ) : null}
 
             {section === "prompt_groups" && data.promptGroups ? (
-              <SectionCard
-                title="Configured prompt groups"
-                subtitle=""
-                action={
-                  <Button variant="contained" onClick={openPromptGroupModal}>
-                    + Add Prompt Group
-                  </Button>
-                }
-              >
-                {data.promptGroups.empty_state && data.promptGroups.prompt_groups.length === 0 ? (
-                  <EmptyStateCard emptyState={data.promptGroups.empty_state} />
-                ) : (
-                  <div className="tools-table-wrap">
-                    <table className="data-table compact-table prompts-table">
-                      <thead>
-                        <tr>
-                          <th aria-hidden="true" className="expand-column"></th>
-                          <th>Group</th>
-                          <th>Prompts</th>
-                          <th>Description</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.promptGroups.prompt_groups.map((group) => {
-                          const expanded = expandedPromptGroup === group.name;
-                          return (
-                            <Fragment key={group.name}>
-                              <tr
-                                aria-expanded={expanded}
-                                className={`${expanded ? "is-selected" : ""} tool-summary-row`}
-                                onClick={() => setExpandedPromptGroup(expanded ? null : group.name)}
-                              >
-                                <td className="expand-column">
-                                  <ChevronIcon expanded={expanded} />
-                                </td>
-                                <td>
-                                  <div className="table-primary">{group.name}</div>
-                                </td>
-                                <td>
-                                  <strong>{group.prompt_count}</strong>
-                                </td>
-                                <td>
-                                  <div className="clamped-description" title={group.description || "No description"}>
-                                    {group.description || "No description"}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div className="row-actions" onClick={(event) => event.stopPropagation()}>
-                                    <IconButton
-                                      aria-label="Delete prompt group"
-                                      color="error"
-                                      disabled={isBusy(`prompt-group-delete:${group.name}`)}
-                                      onClick={() => void deletePromptGroup(group)}
-                                      title="Delete prompt group"
-                                      size="small"
-                                    >
-                                      <TrashIcon />
-                                    </IconButton>
-                                  </div>
-                                </td>
-                              </tr>
-                              {expanded ? (
-                                <tr className="tool-expanded-row">
-                                  <td className="tool-expanded-cell" colSpan={5}>
-                                    <div className="tool-detail-panel">
-                                      <div className="tool-detail-header">
-                                        <p className="panel-label">Prompt group details</p>
-                                      </div>
-                                      {group.description ? (
-                                        <dl className="tool-detail-meta">
-                                          <div className="tool-detail-description">
-                                            <dt>Description</dt>
-                                            <dd>{group.description}</dd>
-                                          </div>
-                                        </dl>
-                                      ) : null}
-                                      <div className="tool-schema-section">
-                                        <div className="tool-schema-header">
-                                          <h4>MCP endpoints</h4>
-                                        </div>
-                                        <div className="tool-group-endpoints">
-                                          <div className="tool-group-endpoint-row">
-                                            <span className="tool-group-endpoint-label">Streamable HTTP</span>
-                                            <div className="tool-group-endpoint-value">
-                                              <code
-                                                className="detail-target-code"
-                                                title={group.streamable_http_endpoint}
-                                              >
-                                                {group.streamable_http_endpoint}
-                                              </code>
-                                              <CopyButton
-                                                ariaLabel="Copy Streamable HTTP endpoint"
-                                                title="Copy Streamable HTTP endpoint"
-                                                value={group.streamable_http_endpoint}
-                                              />
-                                            </div>
-                                          </div>
-                                          <div className="tool-group-endpoint-row">
-                                            <span className="tool-group-endpoint-label">SSE</span>
-                                            <div className="tool-group-endpoint-stack">
-                                              <div className="tool-group-endpoint-value">
-                                                <code className="detail-target-code" title={group.sse_endpoint}>
-                                                  {group.sse_endpoint}
-                                                </code>
-                                                <CopyButton
-                                                  ariaLabel="Copy SSE endpoint"
-                                                  title="Copy SSE endpoint"
-                                                  value={group.sse_endpoint}
-                                                />
-                                              </div>
-                                              <div className="tool-group-endpoint-value">
-                                                <code
-                                                  className="detail-target-code"
-                                                  title={group.sse_message_endpoint}
-                                                >
-                                                  {group.sse_message_endpoint}
-                                                </code>
-                                                <CopyButton
-                                                  ariaLabel="Copy SSE message endpoint"
-                                                  title="Copy SSE message endpoint"
-                                                  value={group.sse_message_endpoint}
-                                                />
-                                              </div>
-                                            </div>
-                                          </div>
-                                        </div>
-                                      </div>
-
-                                      <div className="tool-schema-section">
-                                        <div className="tool-schema-header">
-                                          <h4>Included prompts</h4>
-                                        </div>
-                                        {group.prompts.length > 0 ? (
-                                          <div className="schema-field-list">
-                                            {group.prompts.map((prompt) => (
-                                              <article className="schema-field-card" key={prompt.canonical_name}>
-                                                <div className="schema-field-head">
-                                                  <code>{prompt.canonical_name}</code>
-                                                  <span className="schema-type-pill">
-                                                    <code>{prompt.server}</code>
-                                                  </span>
-                                                </div>
-                                                <dl className="schema-field-meta">
-                                                  {prompt.description ? (
-                                                    <div>
-                                                      <dt>Description</dt>
-                                                      <dd>{prompt.description}</dd>
-                                                    </div>
-                                                  ) : null}
-                                                </dl>
-                                              </article>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="empty-inline">No prompts in this group.</p>
-                                        )}
-                                      </div>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ) : null}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </SectionCard>
+              expandedPromptGroup !== null ? (
+                <SectionCard
+                  title={selectedPromptGroup?.name ?? expandedPromptGroup}
+                  subtitle=""
+                  action={
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("prompt_groups");
+                        }}
+                      >
+                        ← All prompt groups
+                      </Button>
+                      <Button variant="contained" onClick={openPromptGroupModal}>
+                        + Add Prompt Group
+                      </Button>
+                    </Stack>
+                  }
+                >
+                  {selectedPromptGroup ? (
+                    renderPromptGroupDetailPanel(selectedPromptGroup)
+                  ) : (
+                    <Stack spacing={2} sx={{ py: 2 }}>
+                      <Typography color="text.secondary" variant="body2">
+                        This prompt group does not exist or was deleted.
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("prompt_groups");
+                        }}
+                      >
+                        Back to all prompt groups
+                      </Button>
+                    </Stack>
+                  )}
+                </SectionCard>
+              ) : (
+                <SectionCard
+                  title="Configured prompt groups"
+                  subtitle=""
+                  action={
+                    <Button variant="contained" onClick={openPromptGroupModal}>
+                      + Add Prompt Group
+                    </Button>
+                  }
+                >
+                  {data.promptGroups.empty_state && data.promptGroups.prompt_groups.length === 0 ? (
+                    <EmptyStateCard emptyState={data.promptGroups.empty_state} />
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                        gap: 1.5,
+                      }}
+                    >
+                      {data.promptGroups.prompt_groups.map((group) => (
+                        <Paper
+                          key={group.name}
+                          role="link"
+                          tabIndex={0}
+                          aria-label={`Open prompt group ${group.name}`}
+                          onClick={() => {
+                            window.location.hash = promptGroupDetailHash(group.name);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              window.location.hash = promptGroupDetailHash(group.name);
+                            }
+                          }}
+                          elevation={0}
+                          variant="outlined"
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            cursor: "pointer",
+                            borderColor: "divider",
+                            transition: "border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease",
+                            "&:hover": {
+                              borderColor: "primary.light",
+                              bgcolor: "action.hover",
+                              boxShadow: 1,
+                            },
+                            "&:focus-visible": {
+                              outline: "2px solid",
+                              outlineColor: "primary.main",
+                              outlineOffset: 2,
+                            },
+                          }}
+                        >
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start", mb: 1 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}>
+                              {group.name}
+                            </Typography>
+                            <Typography
+                              variant="caption"
+                              component="span"
+                              sx={{ fontWeight: 600, color: "text.secondary", flexShrink: 0 }}
+                            >
+                              {group.prompt_count} prompts
+                            </Typography>
+                          </Stack>
+                          <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                            <code title={groupSecurityLabel(group.security_option)}>{group.security_option}</code>
+                          </Typography>
+                          {group.description ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {group.description}
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">
+                              No description
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="primary" sx={{ display: "block", mt: 1 }}>
+                            View details →
+                          </Typography>
+                        </Paper>
+                      ))}
+                    </Box>
+                  )}
+                </SectionCard>
+              )
             ) : null}
 
             {section === "prompts" && data.prompts ? (
-              <SectionCard
-                title="Prompts"
-                subtitle="Discovered prompt templates"
-                action={
-                  <div className="toolbar-cluster">
-                    <input
-                      className="table-filter compact-filter"
-                      onChange={(event) => setPromptFilter(event.target.value)}
-                      placeholder="Search prompts"
-                      value={promptFilter}
-                    />
-                  </div>
-                }
-              >
-                {data.prompts.empty_state && filteredPrompts.length === 0 ? (
-                  <EmptyStateCard emptyState={data.prompts.empty_state} />
-                ) : (
-                  <div className="tools-table-wrap">
-                    <table className="data-table compact-table prompts-table">
-                      <thead>
-                        <tr>
-                          <th aria-hidden="true" className="expand-column"></th>
-                          <th>Prompt</th>
-                          <th>Canonical name</th>
-                          <th>Server</th>
-                          <th>Description</th>
-                          <th>Status</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {filteredPrompts.map((prompt) => {
-                          const muted = !prompt.enabled || !prompt.server_enabled;
-                          const expanded = expandedPrompt === prompt.canonical_name;
-                          const fields = parsePromptArgumentFields(prompt.arguments);
-                          return (
-                            <Fragment key={prompt.canonical_name}>
-                              <tr
-                                aria-expanded={expanded}
-                                className={`${expanded ? "is-selected" : ""} ${muted ? "is-muted" : ""} tool-summary-row`}
-                                onClick={() =>
-                                  setExpandedPrompt(expanded ? null : prompt.canonical_name)
-                                }
-                              >
-                                <td className="expand-column">
-                                  <ChevronIcon expanded={expanded} />
-                                </td>
-                                <td>
-                                  <div className="table-primary">{prompt.name}</div>
-                                </td>
-                                <td>
-                                  <code className="identifier-code" title={prompt.canonical_name}>
-                                    {prompt.canonical_name}
-                                  </code>
-                                </td>
-                                <td>{prompt.server}</td>
-                                <td>
-                                  <div className="clamped-description" title={promptDescription(prompt)}>
-                                    {promptDescription(prompt)}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div className="tool-state-line">
-                                    <StatusBadge
-                                      text={prompt.enabled ? "Enabled" : "Disabled"}
-                                      tone={prompt.enabled ? "good" : "muted"}
-                                    />
-                                    {!prompt.server_enabled ? (
-                                      <StatusBadge text="Server disabled" tone="warn" />
-                                    ) : null}
-                                  </div>
-                                </td>
-                                <td>
-                                  <div
-                                    className="row-actions"
-                                    onClick={(event) => event.stopPropagation()}
-                                  >
-                                    <CopyButton
-                                      ariaLabel="Copy canonical name"
-                                      title="Copy canonical name"
-                                      value={prompt.canonical_name}
-                                    />
-                                    <Button
-                                      variant="outlined"
-                                      size="small"
-                                      disabled={isBusy(`prompt-toggle:${prompt.canonical_name}`)}
-                                      onClick={() => void togglePromptEnabled(prompt)}
-                                    >
-                                      {isBusy(`prompt-toggle:${prompt.canonical_name}`)
-                                        ? "Saving..."
-                                        : prompt.enabled
-                                          ? "Disable"
-                                          : "Enable"}
-                                    </Button>
-                                  </div>
-                                </td>
-                              </tr>
-                              {expanded ? (
-                                <tr className="tool-expanded-row">
-                                  <td className="tool-expanded-cell" colSpan={7}>
-                                    <div className="tool-detail-panel">
-                                      <div className="tool-detail-header">
-                                        <p className="panel-label">Prompt details</p>
-                                      </div>
-
-                                      <dl className="tool-detail-meta">
-                                        <div className="tool-detail-description">
-                                          <dt>Description</dt>
-                                          <dd>{promptDescription(prompt)}</dd>
-                                        </div>
-                                      </dl>
-
-                                      <div className="tool-schema-section">
-                                        <div className="tool-schema-header">
-                                          <h4>Arguments</h4>
-                                        </div>
-                                        {fields.length > 0 ? (
-                                          <div className="schema-field-list">
-                                            {fields.map((field) => (
-                                              <article className="schema-field-card" key={field.path}>
-                                                <div className="schema-field-head">
-                                                  <code>{field.path}</code>
-                                                  <span className="schema-type-pill">
-                                                    <code>{field.type}</code>
-                                                  </span>
-                                                </div>
-                                                <dl className="schema-field-meta">
-                                                  <div>
-                                                    <dt>Required</dt>
-                                                    <dd>{field.required ? "yes" : "no"}</dd>
-                                                  </div>
-                                                  {field.description ? (
-                                                    <div>
-                                                      <dt>Description</dt>
-                                                      <dd>{field.description}</dd>
-                                                    </div>
-                                                  ) : null}
-                                                  {field.enumValues?.length ? (
-                                                    <div>
-                                                      <dt>Enum</dt>
-                                                      <dd>
-                                                        <code>{field.enumValues.join(", ")}</code>
-                                                      </dd>
-                                                    </div>
-                                                  ) : null}
-                                                  {field.defaultValue ? (
-                                                    <div>
-                                                      <dt>Default</dt>
-                                                      <dd>
-                                                        <code>{field.defaultValue}</code>
-                                                      </dd>
-                                                    </div>
-                                                  ) : null}
-                                                  {field.note ? (
-                                                    <div>
-                                                      <dt>Notes</dt>
-                                                      <dd>{field.note}</dd>
-                                                    </div>
-                                                  ) : null}
-                                                </dl>
-                                              </article>
-                                            ))}
-                                          </div>
-                                        ) : (
-                                          <p className="empty-inline">No arguments.</p>
-                                        )}
-                                      </div>
-
-                                      <details className="raw-schema-disclosure">
-                                        <summary>Raw arguments</summary>
-                                        <div className="raw-schema-actions">
-                                          <CopyButton
-                                            ariaLabel="Copy raw arguments"
-                                            title="Copy raw arguments"
-                                            value={prettyPromptArguments(prompt.arguments)}
-                                          />
-                                        </div>
-                                        <pre className="schema-code">
-                                          <code>{prettyPromptArguments(prompt.arguments)}</code>
-                                        </pre>
-                                      </details>
-                                    </div>
-                                  </td>
-                                </tr>
-                              ) : null}
-                            </Fragment>
-                          );
-                        })}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </SectionCard>
+              expandedPrompt !== null ? (
+                <SectionCard
+                  title={selectedPrompt?.name ?? expandedPrompt ?? "Prompt"}
+                  subtitle="Discovered prompt templates"
+                  action={
+                    <Button
+                      variant="outlined"
+                      onClick={() => {
+                        window.location.hash = appSectionToHash("prompts");
+                      }}
+                    >
+                      ← All prompts
+                    </Button>
+                  }
+                >
+                  {selectedPrompt ? (
+                    renderPromptDetailPanel(selectedPrompt)
+                  ) : (
+                    <Stack spacing={2} sx={{ py: 2 }}>
+                      <Typography color="text.secondary" variant="body2">
+                        This prompt does not exist or was removed. Bookmarked URLs stay valid only while the prompt is
+                        in the catalog.
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("prompts");
+                        }}
+                      >
+                        Back to all prompts
+                      </Button>
+                    </Stack>
+                  )}
+                </SectionCard>
+              ) : (
+                <SectionCard
+                  title="Prompts"
+                  subtitle="Discovered prompt templates"
+                  action={
+                    <div className="toolbar-cluster">
+                      <input
+                        className="table-filter compact-filter"
+                        onChange={(event) => setPromptFilter(event.target.value)}
+                        placeholder="Search prompts"
+                        value={promptFilter}
+                      />
+                    </div>
+                  }
+                >
+                  {data.prompts.empty_state && filteredPrompts.length === 0 ? (
+                    <EmptyStateCard emptyState={data.prompts.empty_state} />
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                        gap: 1.5,
+                      }}
+                    >
+                      {filteredPrompts.map((prompt) => {
+                        const muted = !prompt.enabled || !prompt.server_enabled;
+                        return (
+                          <Paper
+                            key={prompt.canonical_name}
+                            role="link"
+                            tabIndex={0}
+                            aria-label={`Open prompt ${prompt.name}`}
+                            onClick={() => {
+                              window.location.hash = promptDetailHash(prompt.canonical_name);
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" || e.key === " ") {
+                                e.preventDefault();
+                                window.location.hash = promptDetailHash(prompt.canonical_name);
+                              }
+                            }}
+                            elevation={0}
+                            variant="outlined"
+                            sx={{
+                              p: 1.5,
+                              borderRadius: 2,
+                              cursor: "pointer",
+                              borderColor: "divider",
+                              opacity: muted ? 0.82 : 1,
+                              transition: "border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease",
+                              "&:hover": {
+                                borderColor: "primary.light",
+                                bgcolor: "action.hover",
+                                boxShadow: 1,
+                              },
+                              "&:focus-visible": {
+                                outline: "2px solid",
+                                outlineColor: "primary.main",
+                                outlineOffset: 2,
+                              },
+                            }}
+                          >
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, mb: 0.5 }}>
+                              {prompt.name}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1, wordBreak: "break-all" }}>
+                              <code>{prompt.canonical_name}</code>
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 1 }}>
+                              <code>{prompt.server}</code>
+                            </Typography>
+                            <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5, mb: 1 }}>
+                              <StatusBadge
+                                text={prompt.enabled ? "Enabled" : "Disabled"}
+                                tone={prompt.enabled ? "good" : "muted"}
+                              />
+                              {!prompt.server_enabled ? <StatusBadge text="Server off" tone="warn" /> : null}
+                            </Stack>
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {promptDescription(prompt)}
+                            </Typography>
+                            <Typography variant="caption" color="primary" sx={{ display: "block", mt: 1 }}>
+                              View details →
+                            </Typography>
+                          </Paper>
+                        );
+                      })}
+                    </Box>
+                  )}
+                </SectionCard>
+              )
             ) : null}
 
             {section === "resources" && data.resources ? (
@@ -2585,118 +3608,136 @@ export default function App() {
             ) : null}
 
             {section === "agent_apps" && data.agentApps ? (
-              <SectionCard
-                title="Agent apps"
-                subtitle="Each app has a client ID and secret. Use Bearer JWT or HTTP Basic, then connect only via the MCP URLs for attached groups (under your gateway HTTP prefix)."
-                action={
-                  <Button variant="contained" onClick={openAgentAppModal}>
-                    + Create agent app
-                  </Button>
-                }
-              >
-                {data.agentApps.apps.length === 0 ? (
-                  <Typography color="text.secondary" variant="body2">
-                    No agent apps yet. Create one to mint tokens scoped to specific tool and prompt groups.
-                  </Typography>
-                ) : (
-                  <Stack spacing={2.5}>
-                    {data.agentApps.apps.map((app) => (
-                      <Paper key={app.id} variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
-                        <Stack
-                          direction={{ xs: "column", sm: "row" }}
-                          spacing={2}
-                          sx={{ justifyContent: "space-between", alignItems: { sm: "flex-start" } }}
+              agentAppDetailId !== null ? (
+                <SectionCard
+                  title={selectedAgentApp?.name ?? `Agent app #${agentAppDetailId}`}
+                  action={
+                    <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap" }}>
+                      <Button
+                        variant="outlined"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("agent_apps");
+                        }}
+                      >
+                        ← All apps
+                      </Button>
+                      <Button variant="contained" onClick={openAgentAppModal}>
+                        + Create agent app
+                      </Button>
+                    </Stack>
+                  }
+                >
+                  {selectedAgentApp ? (
+                    renderAgentAppDetailPanel(selectedAgentApp)
+                  ) : (
+                    <Stack spacing={2} sx={{ py: 2 }}>
+                      <Typography color="text.secondary" variant="body2">
+                        This agent app does not exist or was deleted. Bookmarked URLs are only valid while the app is
+                        present.
+                      </Typography>
+                      <Button
+                        variant="contained"
+                        onClick={() => {
+                          window.location.hash = appSectionToHash("agent_apps");
+                        }}
+                      >
+                        Back to all apps
+                      </Button>
+                    </Stack>
+                  )}
+                </SectionCard>
+              ) : (
+                <SectionCard
+                  title="Agent apps"
+                  action={
+                    <Button variant="contained" onClick={openAgentAppModal}>
+                      + Create agent app
+                    </Button>
+                  }
+                >
+                  {data.agentApps.apps.length === 0 ? (
+                    <Typography color="text.secondary" variant="body2">
+                      No agent apps yet. Create one to mint tokens scoped to specific tool and prompt groups.
+                    </Typography>
+                  ) : (
+                    <Box
+                      sx={{
+                        display: "grid",
+                        gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+                        gap: 1.5,
+                      }}
+                    >
+                      {data.agentApps.apps.map((app) => (
+                        <Paper
+                          key={app.id}
+                          role="link"
+                          tabIndex={0}
+                          aria-label={`Open ${app.name}`}
+                          onClick={() => {
+                            window.location.hash = appAgentAppDetailHash(app.id);
+                          }}
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter" || e.key === " ") {
+                              e.preventDefault();
+                              window.location.hash = appAgentAppDetailHash(app.id);
+                            }
+                          }}
+                          elevation={0}
+                          variant="outlined"
+                          sx={{
+                            p: 1.5,
+                            borderRadius: 2,
+                            cursor: "pointer",
+                            borderColor: "divider",
+                            transition: "border-color 120ms ease, background-color 120ms ease, box-shadow 120ms ease",
+                            "&:hover": {
+                              borderColor: "primary.light",
+                              bgcolor: "action.hover",
+                              boxShadow: 1,
+                            },
+                            "&:focus-visible": {
+                              outline: "2px solid",
+                              outlineColor: "primary.main",
+                              outlineOffset: 2,
+                            },
+                          }}
                         >
-                          <Box sx={{ flex: "1 1 auto", minWidth: 0 }}>
-                            <Stack direction="row" spacing={1} sx={{ alignItems: "center", flexWrap: "wrap", mb: 0.5 }}>
-                              <Typography variant="subtitle1" sx={{ fontWeight: 700 }}>
-                                {app.name}
-                              </Typography>
-                              <StatusBadge
-                                tone={app.status === "enabled" ? "good" : "muted"}
-                                text={app.status === "enabled" ? "enabled" : "disabled"}
-                              />
-                            </Stack>
-                            {app.description ? (
-                              <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-                                {app.description}
-                              </Typography>
-                            ) : null}
-                            <Typography variant="caption" color="text.secondary" component="div" sx={{ mb: 0.5 }}>
-                              Client ID
+                          <Stack direction="row" spacing={1} sx={{ alignItems: "flex-start", mb: 0.5 }}>
+                            <Typography variant="subtitle2" sx={{ fontWeight: 700, flex: 1, minWidth: 0 }}>
+                              {app.name}
                             </Typography>
-                            <Stack direction="row" spacing={1} sx={{ alignItems: "center", mb: 1, flexWrap: "wrap" }}>
-                              <Typography
-                                component="code"
-                                variant="body2"
-                                sx={{ wordBreak: "break-all", fontFamily: monospaceFontFamily }}
-                              >
-                                {app.client_id}
-                              </Typography>
-                              <CopyButton ariaLabel="Copy client ID" title="Copy client ID" value={app.client_id} />
-                            </Stack>
-                            <Typography variant="caption" color="text.secondary">
-                              Tool groups:{" "}
-                              {app.tool_group_names?.length ? app.tool_group_names.join(", ") : "—"} · Prompt groups:{" "}
-                              {app.prompt_group_names?.length ? app.prompt_group_names.join(", ") : "—"}
-                            </Typography>
-                          </Box>
-                          <Stack direction="row" spacing={1} sx={{ flexShrink: 0, flexWrap: "wrap" }}>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              disabled={isBusy(`agent-app-status:${app.id}`)}
-                              onClick={() => void toggleAgentAppStatus(app)}
-                            >
-                              {app.status === "enabled" ? "Disable" : "Enable"}
-                            </Button>
-                            <Button
-                              size="small"
-                              variant="outlined"
-                              color="warning"
-                              disabled={isBusy(`agent-app-rotate:${app.id}`)}
-                              onClick={() => void rotateAgentAppSecret(app)}
-                            >
-                              Rotate secret
-                            </Button>
-                            <IconButton
-                              aria-label={`Delete ${app.name}`}
-                              color="error"
-                              size="small"
-                              disabled={isBusy(`agent-app-delete:${app.id}`)}
-                              onClick={() => void deleteAgentApp(app)}
-                              title="Delete agent app"
-                            >
-                              <TrashIcon />
-                            </IconButton>
+                            <StatusBadge
+                              tone={app.status === "enabled" ? "good" : "muted"}
+                              text={app.status === "enabled" ? "enabled" : "disabled"}
+                            />
                           </Stack>
-                        </Stack>
-
-                        <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: "divider" }}>
-                          <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                            OAuth token URL
+                          {app.description ? (
+                            <Typography
+                              variant="caption"
+                              color="text.secondary"
+                              sx={{
+                                display: "-webkit-box",
+                                WebkitLineClamp: 3,
+                                WebkitBoxOrient: "vertical",
+                                overflow: "hidden",
+                              }}
+                            >
+                              {app.description}
+                            </Typography>
+                          ) : (
+                            <Typography variant="caption" color="text.disabled">
+                              No description
+                            </Typography>
+                          )}
+                          <Typography variant="caption" color="primary" sx={{ display: "block", mt: 1 }}>
+                            View details →
                           </Typography>
-                          <div className="tool-group-endpoint-row">
-                            <div className="tool-group-endpoint-value">
-                              <code className="detail-target-code" title={app.oauth_token_url}>
-                                {app.oauth_token_url}
-                              </code>
-                              <CopyButton
-                                ariaLabel="Copy OAuth token URL"
-                                title="Copy OAuth token URL"
-                                value={app.oauth_token_url}
-                              />
-                            </div>
-                          </div>
-                        </Box>
-
-                        {renderAgentAppGroupEndpoints("Tool group MCP URLs", app.tool_group_endpoints)}
-                        {renderAgentAppGroupEndpoints("Prompt group MCP URLs", app.prompt_group_endpoints)}
-                      </Paper>
-                    ))}
-                  </Stack>
-                )}
-              </SectionCard>
+                        </Paper>
+                      ))}
+                    </Box>
+                  )}
+                </SectionCard>
+              )
             ) : null}
 
             {section === "diagnostics" && diagnostics ? (
@@ -2832,7 +3873,7 @@ export default function App() {
                   Tool Groups
                 </Typography>
                 <Typography variant="h5" sx={{ mt: 0.5 }}>
-                  Add Tool Group
+                  {toolGroupEditingName ? "Edit Tool Group" : "Add Tool Group"}
                 </Typography>
               </Box>
               <Button variant="outlined" size="small" onClick={closeToolGroupModal}>
@@ -2849,6 +3890,8 @@ export default function App() {
                 fullWidth
                 size="small"
                 value={toolGroupForm.name}
+                disabled={toolGroupEditingName !== null}
+                helperText={toolGroupEditingName ? "Group name cannot be changed." : undefined}
                 onChange={(event) => setToolGroupForm((current) => ({ ...current, name: event.target.value }))}
               />
               <TextField
@@ -2861,6 +3904,26 @@ export default function App() {
                   setToolGroupForm((current) => ({ ...current, description: event.target.value }))
                 }
               />
+              <FormControl size="small" fullWidth>
+                <InputLabel id="tg-mcp-security-label">MCP security</InputLabel>
+                <Select
+                  labelId="tg-mcp-security-label"
+                  label="MCP security"
+                  value={toolGroupForm.securityOption}
+                  onChange={(event) =>
+                    setToolGroupForm((current) => ({
+                      ...current,
+                      securityOption: event.target.value as GroupSecurityOption,
+                    }))
+                  }
+                >
+                  {GROUP_SECURITY_OPTIONS.map((o) => (
+                    <MenuItem key={o.value} value={o.value}>
+                      {o.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
               <div className="tool-group-builder">
                 <div className="tool-group-selector panel">
@@ -2957,10 +4020,14 @@ export default function App() {
             </Button>
             <Button
               variant="contained"
-              disabled={isBusy("tool-group-create")}
+              disabled={isBusy("tool-group-create") || isBusy("tool-group-save")}
               onClick={() => void submitToolGroup()}
             >
-              {isBusy("tool-group-create") ? "Saving..." : "+ Add Tool Group"}
+              {isBusy("tool-group-create") || isBusy("tool-group-save")
+                ? "Saving..."
+                : toolGroupEditingName
+                  ? "Save changes"
+                  : "+ Add Tool Group"}
             </Button>
           </DialogActions>
         </Dialog>
@@ -2977,7 +4044,7 @@ export default function App() {
                   Prompt Groups
                 </Typography>
                 <Typography variant="h5" sx={{ mt: 0.5 }}>
-                  Add Prompt Group
+                  {promptGroupEditingName ? "Edit Prompt Group" : "Add Prompt Group"}
                 </Typography>
               </Box>
               <Button variant="outlined" size="small" onClick={closePromptGroupModal}>
@@ -2994,6 +4061,8 @@ export default function App() {
                 fullWidth
                 size="small"
                 value={promptGroupForm.name}
+                disabled={promptGroupEditingName !== null}
+                helperText={promptGroupEditingName ? "Group name cannot be changed." : undefined}
                 onChange={(event) =>
                   setPromptGroupForm((current) => ({ ...current, name: event.target.value }))
                 }
@@ -3008,6 +4077,26 @@ export default function App() {
                   setPromptGroupForm((current) => ({ ...current, description: event.target.value }))
                 }
               />
+              <FormControl size="small" fullWidth>
+                <InputLabel id="pg-mcp-security-label">MCP security</InputLabel>
+                <Select
+                  labelId="pg-mcp-security-label"
+                  label="MCP security"
+                  value={promptGroupForm.securityOption}
+                  onChange={(event) =>
+                    setPromptGroupForm((current) => ({
+                      ...current,
+                      securityOption: event.target.value as GroupSecurityOption,
+                    }))
+                  }
+                >
+                  {GROUP_SECURITY_OPTIONS.map((o) => (
+                    <MenuItem key={o.value} value={o.value}>
+                      {o.label}
+                    </MenuItem>
+                  ))}
+                </Select>
+              </FormControl>
 
               <div className="tool-group-builder">
                 <div className="tool-group-selector panel">
@@ -3106,10 +4195,14 @@ export default function App() {
             </Button>
             <Button
               variant="contained"
-              disabled={isBusy("prompt-group-create")}
+              disabled={isBusy("prompt-group-create") || isBusy("prompt-group-save")}
               onClick={() => void submitPromptGroup()}
             >
-              {isBusy("prompt-group-create") ? "Saving..." : "+ Add Prompt Group"}
+              {isBusy("prompt-group-create") || isBusy("prompt-group-save")
+                ? "Saving..."
+                : promptGroupEditingName
+                  ? "Save changes"
+                  : "+ Add Prompt Group"}
             </Button>
           </DialogActions>
         </Dialog>
@@ -3123,10 +4216,14 @@ export default function App() {
             >
               <Box>
                 <Typography variant="caption" sx={{ letterSpacing: "0.12em", fontWeight: 600 }}>
-                  Add server
+                  {registerServerEditingName ? "Edit server" : "Add server"}
                 </Typography>
                 <Typography variant="h5" sx={{ mt: 0.5 }}>
-                  {registerOAuth ? "Complete OAuth authorization" : "Register an MCP server"}
+                  {registerOAuth
+                    ? "Complete OAuth authorization"
+                    : registerServerEditingName
+                      ? "Edit MCP server"
+                      : "Register an MCP server"}
                 </Typography>
               </Box>
               <Button variant="outlined" size="small" onClick={closeRegisterModal}>
@@ -3136,7 +4233,11 @@ export default function App() {
           </DialogTitle>
 
           <DialogContent dividers>
-            {registerOAuth ? (
+            {registerConfigLoading ? (
+              <Stack sx={{ alignItems: "center", justifyContent: "center", py: 6 }}>
+                <CircularProgress />
+              </Stack>
+            ) : registerOAuth ? (
               <Stack spacing={2} className="oauth-step">
                 <Typography>
                   This MCP server requires OAuth authorization. Continue in your browser to complete registration.
@@ -3172,6 +4273,7 @@ export default function App() {
                   fullWidth
                   size="small"
                   value={registerForm.name}
+                  disabled={registerServerEditingName !== null}
                   onChange={(event) => updateRegisterField("name", event.target.value)}
                 />
                 <TextField
@@ -3194,6 +4296,7 @@ export default function App() {
                       labelId="reg-transport"
                       label="Transport"
                       value={registerForm.transport}
+                      disabled={registerServerEditingName !== null}
                       onChange={(event) =>
                         updateRegisterField(
                           "transport",
@@ -3314,6 +4417,11 @@ export default function App() {
                       placeholder="Optional"
                       value={registerForm.bearer_token}
                       onChange={(event) => updateRegisterField("bearer_token", event.target.value)}
+                      helperText={
+                        registerServerEditingName !== null
+                          ? "Leave blank to keep the current bearer token."
+                          : undefined
+                      }
                     />
                     {registerForm.transport === "streamable_http" ? (
                       <Box>
@@ -3395,10 +4503,16 @@ export default function App() {
                 </Button>
                 <Button
                   variant="contained"
-                  disabled={isBusy("register-server")}
+                  disabled={isBusy("register-server") || registerConfigLoading}
                   onClick={() => void submitRegisterServer()}
                 >
-                  {isBusy("register-server") ? "Registering..." : "+ Add Server"}
+                  {isBusy("register-server")
+                    ? registerServerEditingName
+                      ? "Saving..."
+                      : "Registering..."
+                    : registerServerEditingName
+                      ? "Save changes"
+                      : "+ Add Server"}
                 </Button>
               </>
             )}
@@ -3406,7 +4520,7 @@ export default function App() {
         </Dialog>
 
         <Dialog open={agentAppDialogOpen} onClose={closeAgentAppModal} maxWidth="sm" fullWidth scroll="paper">
-          <DialogTitle>Create agent app</DialogTitle>
+          <DialogTitle>{agentAppEditingId !== null ? "Edit agent app" : "Create agent app"}</DialogTitle>
           <DialogContent dividers>
             <Stack spacing={2} sx={{ pt: 1 }}>
               <TextField
@@ -3426,24 +4540,82 @@ export default function App() {
                 value={agentAppDescription}
                 onChange={(e) => setAgentAppDescription(e.target.value)}
               />
-              <TextField
-                label="Tool groups"
+              <FormControl
                 fullWidth
                 size="small"
-                placeholder="group-a, group-b"
-                helperText="Comma-separated names; must match existing tool groups."
-                value={agentAppToolGroups}
-                onChange={(e) => setAgentAppToolGroups(e.target.value)}
-              />
-              <TextField
-                label="Prompt groups"
+                disabled={agentAppToolGroupSelectOptions.length === 0 && agentAppToolGroups.length === 0}
+              >
+                <InputLabel id="agent-app-tool-groups-label">Tool groups</InputLabel>
+                <Select
+                  labelId="agent-app-tool-groups-label"
+                  id="agent-app-tool-groups"
+                  multiple
+                  value={agentAppToolGroups}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAgentAppToolGroups(typeof v === "string" ? v.split(",") : v);
+                  }}
+                  input={<OutlinedInput label="Tool groups" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {(selected as string[]).map((value) => (
+                        <Chip key={value} label={value} size="small" />
+                      ))}
+                    </Box>
+                  )}
+                  MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360 } } } }}
+                >
+                  {agentAppToolGroupMenuNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      <Checkbox checked={agentAppToolGroups.includes(name)} size="small" />
+                      <ListItemText primary={name} />
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  {agentAppToolGroupSelectOptions.length === 0
+                    ? "No tool groups yet. Create one in the Tool groups section."
+                    : "Choose one or more tool groups. Attached MCP URLs are shown on the card after save."}
+                </FormHelperText>
+              </FormControl>
+              <FormControl
                 fullWidth
                 size="small"
-                placeholder="my-prompts"
-                helperText="Comma-separated names; must match existing prompt groups."
-                value={agentAppPromptGroups}
-                onChange={(e) => setAgentAppPromptGroups(e.target.value)}
-              />
+                disabled={agentAppPromptGroupSelectOptions.length === 0 && agentAppPromptGroups.length === 0}
+              >
+                <InputLabel id="agent-app-prompt-groups-label">Prompt groups</InputLabel>
+                <Select
+                  labelId="agent-app-prompt-groups-label"
+                  id="agent-app-prompt-groups"
+                  multiple
+                  value={agentAppPromptGroups}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAgentAppPromptGroups(typeof v === "string" ? v.split(",") : v);
+                  }}
+                  input={<OutlinedInput label="Prompt groups" />}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {(selected as string[]).map((value) => (
+                        <Chip key={value} label={value} size="small" />
+                      ))}
+                    </Box>
+                  )}
+                  MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360 } } } }}
+                >
+                  {agentAppPromptGroupMenuNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      <Checkbox checked={agentAppPromptGroups.includes(name)} size="small" />
+                      <ListItemText primary={name} />
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  {agentAppPromptGroupSelectOptions.length === 0
+                    ? "No prompt groups yet. Create one in the Prompt groups section."
+                    : "Choose one or more prompt groups."}
+                </FormHelperText>
+              </FormControl>
               {agentAppCreateError ? (
                 <Typography color="error" variant="body2">
                   {agentAppCreateError}
@@ -3457,10 +4629,20 @@ export default function App() {
             </Button>
             <Button
               variant="contained"
-              disabled={isBusy("agent-app-create")}
-              onClick={() => void submitAgentAppCreate()}
+              disabled={
+                agentAppEditingId !== null
+                  ? isBusy(`agent-app-edit:${agentAppEditingId}`)
+                  : isBusy("agent-app-create")
+              }
+              onClick={() => void submitAgentAppModal()}
             >
-              {isBusy("agent-app-create") ? "Creating..." : "Create"}
+              {agentAppEditingId !== null
+                ? isBusy(`agent-app-edit:${agentAppEditingId}`)
+                  ? "Saving..."
+                  : "Save changes"
+                : isBusy("agent-app-create")
+                  ? "Creating..."
+                  : "Create"}
             </Button>
           </DialogActions>
         </Dialog>

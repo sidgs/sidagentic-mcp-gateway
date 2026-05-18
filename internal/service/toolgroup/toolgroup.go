@@ -8,6 +8,7 @@ import (
 	"log"
 	"regexp"
 	"sort"
+	"strings"
 	"sync"
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
@@ -81,6 +82,10 @@ func (s *ToolGroupService) CreateToolGroup(ctx context.Context, group *model.Too
 		)
 	}
 	group.TenantID = tenant.MustFromContext(ctx)
+	group.SecurityOption = types.NormalizeGroupSecurityOption(group.SecurityOption)
+	if err := types.ValidateGroupSecurityOption(group.SecurityOption); err != nil {
+		return err
+	}
 
 	toolNames, err := group.ResolveEffectiveTools(ctx, s.mcpService)
 	if err != nil {
@@ -136,6 +141,14 @@ func (s *ToolGroupService) UpdateToolGroup(ctx context.Context, name string, upd
 		return nil, fmt.Errorf("failed to retrieve the tool group: %w", err)
 	}
 
+	if strings.TrimSpace(updatedGroup.SecurityOption) == "" {
+		updatedGroup.SecurityOption = oldGroup.SecurityOption
+	}
+	updatedGroup.SecurityOption = types.NormalizeGroupSecurityOption(updatedGroup.SecurityOption)
+	if err := types.ValidateGroupSecurityOption(updatedGroup.SecurityOption); err != nil {
+		return nil, err
+	}
+
 	oldToolNames, err := oldGroup.ResolveEffectiveTools(ctx, s.mcpService)
 	if err != nil {
 		return nil, fmt.Errorf("failed to resolve effective tools of original group: %w", err)
@@ -147,7 +160,9 @@ func (s *ToolGroupService) UpdateToolGroup(ctx context.Context, name string, upd
 
 	toolsAdded, toolsRemoved := util.DiffTools(oldToolNames, updatedToolNames)
 
-	if updatedGroup.Description == oldGroup.Description && len(toolsAdded) == 0 && len(toolsRemoved) == 0 {
+	if updatedGroup.Description == oldGroup.Description &&
+		updatedGroup.SecurityOption == types.NormalizeGroupSecurityOption(oldGroup.SecurityOption) &&
+		len(toolsAdded) == 0 && len(toolsRemoved) == 0 {
 		return oldGroup, nil
 	}
 
