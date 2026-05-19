@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/apierrors"
 )
 
 const dashboardOAuthResultRetention = 10 * time.Minute

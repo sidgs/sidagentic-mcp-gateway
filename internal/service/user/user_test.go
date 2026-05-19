@@ -5,10 +5,10 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func TestNewUserService(t *testing.T) {

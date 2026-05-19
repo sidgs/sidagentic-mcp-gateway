@@ -3,7 +3,7 @@ package types
 import "fmt"
 
 // McpServerTransport represents the transport protocol used by an MCP server.
-// All transport types supported by mcpjungle are defined in this file with this type.
+// All transport types supported by sami-mcp-gateway are defined in this file with this type.
 type McpServerTransport string
 
 const (
@@ -28,7 +28,7 @@ const (
 	SessionModeStateful SessionMode = "stateful"
 )
 
-// McpServer represents an MCP server registered in the MCPJungle registry.
+// McpServer represents an MCP server registered in the SAMI MCP Gateway registry.
 type McpServer struct {
 	Name        string `json:"name"`
 	Transport   string `json:"transport"`
@@ -44,10 +44,10 @@ type McpServer struct {
 	SessionMode string `json:"session_mode"`
 }
 
-// RegisterServerInput is the input structure for registering a new MCP server with mcpjungle.
+// RegisterServerInput is the input structure for registering a new MCP server with sami-mcp-gateway.
 // It is also the basis for the JSON configuration file used to register a new MCP server.
 type RegisterServerInput struct {
-	// Name (mandatory) is the unique name of an MCP server registered in mcpjungle
+	// Name (mandatory) is the unique name of an MCP server registered in sami-mcp-gateway
 	Name string `json:"name"`
 
 	// Transport (mandatory) is the transport protocol used by the MCP server.
@@ -81,7 +81,7 @@ type RegisterServerInput struct {
 	// Both the key and value must be of type string.
 	Env map[string]string `json:"env,omitempty"`
 
-	// SessionMode controls how mcpjungle manages connections to this MCP server.
+	// SessionMode controls how sami-mcp-gateway manages connections to this MCP server.
 	SessionMode string `json:"session_mode,omitempty"`
 
 	// OAuthRedirectURI is the redirect URI used if the upstream server requires OAuth.

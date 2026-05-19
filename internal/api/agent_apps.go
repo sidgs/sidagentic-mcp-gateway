@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func ownerScopeKeyFromUser(u *model.User) string {
@@ -52,7 +52,7 @@ func agentAppModelToPublic(a *model.AgentApp) (types.AgentAppPublic, error) {
 
 func (s *Server) agentAppOAuthTokenURL(c *gin.Context) string {
 	prefix := NormalizeHTTPPathPrefix(s.httpPathPrefix)
-	rawPath := prefix + V0ApiPathPrefix + "/agent-apps/oauth/token"
+	rawPath := prefix + "/agent-apps/oauth/token"
 	u := url.URL{
 		Scheme: s.publicSchemeForURLs(c),
 		Host:   c.Request.Host,

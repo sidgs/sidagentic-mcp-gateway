@@ -1,4 +1,4 @@
-// Package client provides HTTP client functionality for interacting with the MCPJungle API.
+// Package client provides HTTP client functionality for interacting with the SAMI MCP Gateway API.
 package client
 
 import (
@@ -11,12 +11,12 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mcpjungle/mcpjungle/internal/api"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/api"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 )
 
-// APIError is a machine-readable API error returned by the MCPJungle server.
+// APIError is a machine-readable API error returned by the SAMI MCP Gateway server.
 type APIError struct {
 	Message string
 	Code    string
@@ -26,7 +26,7 @@ func (e *APIError) Error() string {
 	return e.Message
 }
 
-// Client represents a client for interacting with the MCPJungle HTTP API
+// Client represents a client for interacting with the SAMI MCP Gateway HTTP API
 type Client struct {
 	baseURL     string
 	accessToken string
@@ -46,7 +46,7 @@ func NewClient(baseURL string, accessToken string, httpClient *http.Client) *Cli
 	}
 }
 
-// BaseURL returns the base URL of the MCPJungle server
+// BaseURL returns the base URL of the SAMI MCP Gateway server
 func (c *Client) BaseURL() string {
 	return c.baseURL
 }
@@ -95,7 +95,7 @@ func (c *Client) parseErrorResponse(resp *http.Response) error {
 	return fmt.Errorf("unexpected response with status: %d, body: %s", resp.StatusCode, string(body))
 }
 
-// GetServerMetadata fetches metadata about the MCPJungle server.
+// GetServerMetadata fetches metadata about the SAMI MCP Gateway server.
 func (c *Client) GetServerMetadata(ctx context.Context) (*types.ServerMetadata, error) {
 	u, err := url.JoinPath(c.baseURL, "metadata")
 	if err != nil {

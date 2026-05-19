@@ -6,15 +6,15 @@ import (
 	"os"
 	"strings"
 
-	"github.com/mcpjungle/mcpjungle/internal/configresolver"
-	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/configresolver"
+	"sami.io/mcpgateway/pkg/cliapp"
+	"sami.io/mcpgateway/pkg/types"
 	"github.com/spf13/cobra"
 )
 
 var createCmd = &cobra.Command{
 	Use:   "create",
-	Short: "Create entities in mcpjungle",
+	Short: "Create entities in sami-mcp-gateway",
 	Annotations: map[string]string{
 		"group": string(subCommandGroupAdvanced),
 		"order": "4",
@@ -31,8 +31,8 @@ var createUserCmd = &cobra.Command{
 		return cobra.ExactArgs(1)(cmd, args)
 	},
 	Short: "Create a new user (Enterprise mode)",
-	Long: "Create a new standard user in MCPJungle.\n" +
-		"A user can make authenticated requests to the MCPJungle API server and perform limited actions like:\n" +
+	Long: "Create a new standard user in SAMI MCP Gateway.\n" +
+		"A user can make authenticated requests to the SAMI MCP Gateway API server and perform limited actions like:\n" +
 		"- List and view MCP servers & tools\n" +
 		"- Check tool usage and invoke them\n\n" +
 		"This operation generates a unique access token for the user to use when making requests.\n" +
@@ -156,7 +156,7 @@ func runCreateUser(cmd *cobra.Command, args []string) error {
 	}
 
 	cmd.Printf("User '%s' created successfully\n", user.Username)
-	cmd.Println("The user should now run the following command to log into mcpjungle:")
+	cmd.Println("The user should now run the following command to log into sami-mcp-gateway:")
 	cmd.Println()
 	cmd.Printf("    %s login %s\n", cliapp.ExecutableName, resp.AccessToken)
 	cmd.Println()

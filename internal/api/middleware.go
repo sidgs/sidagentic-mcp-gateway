@@ -10,15 +10,29 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/internal/agentappauth"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
-	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
-	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/agentappauth"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/mcpgatewayctx"
+	"sami.io/mcpgateway/internal/service/agentapp"
+	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 )
+
+// tenantFromPathMiddleware resolves tenant from the :tenant_id URL segment (path wins over X-Tenant-ID).
+func (s *Server) tenantFromPathMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		tid := strings.TrimSpace(c.Param("tenant_id"))
+		if err := tenant.Validate(tid); err != nil {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.Set(tenant.GinKey, tid)
+		c.Request = c.Request.WithContext(tenant.WithContext(c.Request.Context(), tid))
+		c.Next()
+	}
+}
 
 // tenantMiddleware resolves the tenant from X-Tenant-ID or the server's default.
 func (s *Server) tenantMiddleware() gin.HandlerFunc {
@@ -51,7 +65,7 @@ func (s *Server) requireInitialized() gin.HandlerFunc {
 	}
 }
 
-// requireDashboardMode returns 404 if mcpjungle server is not running in development mode.
+// requireDashboardMode returns 404 if sami-mcp-gateway server is not running in development mode.
 // It is mainly used for frontend routes, since frontend is currently only allowed in dev mode.
 func (s *Server) requireDashboardMode() gin.HandlerFunc {
 	return func(c *gin.Context) {

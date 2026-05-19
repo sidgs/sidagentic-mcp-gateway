@@ -1,6 +1,6 @@
 ---
 title: "Starting the server"
-description: "Starting and initializing the mcpjungle server"
+description: "Starting and initializing the sami-mcp-gateway server"
 ---
 
 These commands operate on the Mcpjungle server process itself rather than on its registry contents. `start` launches the gateway, `init-server` prepares it for enterprise use, and `version` reports what is running.
@@ -10,7 +10,7 @@ These commands operate on the Mcpjungle server process itself rather than on its
 Starts the Mcpjungle HTTP server and MCP gateway.
 
 ```bash
-mcpjungle start [flags]
+sami-mcp-gateway start [flags]
 ```
 
 The server listens on port `8080` by default and exposes the MCP proxy at `/mcp`. On first run in development mode, it automatically initializes itself — no additional setup is needed.
@@ -36,25 +36,25 @@ For the complete list, defaults, and `_FILE` variants, see [Environment variable
 Start in development mode (default):
 
 ```bash
-mcpjungle start
+sami-mcp-gateway start
 ```
 
 Start on a custom port:
 
 ```bash
-mcpjungle start --port 9000
+sami-mcp-gateway start --port 9000
 ```
 
 Start in enterprise mode:
 
 ```bash
-mcpjungle start --enterprise
+sami-mcp-gateway start --enterprise
 ```
 
 Start with a Postgres database:
 
 ```bash
-DATABASE_URL="postgres://user:password@localhost:5432/mcpjungle" mcpjungle start
+DATABASE_URL="postgres://user:password@localhost:5432/sami-mcp-gateway" sami-mcp-gateway start
 ```
 
 ---
@@ -64,17 +64,17 @@ DATABASE_URL="postgres://user:password@localhost:5432/mcpjungle" mcpjungle start
 Initializes the Mcpjungle server when running in enterprise mode. Run it once, from your local machine, after the server has started.
 
 ```bash
-mcpjungle init-server [--registry <url>]
+sami-mcp-gateway init-server [--registry <url>]
 ```
 
-`init-server` creates the first admin user and stores the registry URL and token in `~/.mcpjungle.conf`, authenticating your CLI as admin.
+`init-server` creates the first admin user and stores the registry URL and token in `~/.sami-mcp-gateway.conf`, authenticating your CLI as admin.
 
 For the full enterprise bootstrap flow, see [Enterprise operations](/reference/cli-enterprise) and [Access and governance overview](/governance/overview).
 
 ### Example
 
 ```bash
-mcpjungle --registry http://your-server:8080 init-server
+sami-mcp-gateway --registry http://your-server:8080 init-server
 ```
 
 ---
@@ -84,7 +84,7 @@ mcpjungle --registry http://your-server:8080 init-server
 Prints version information for both the CLI binary and the connected server.
 
 ```bash
-mcpjungle version
+sami-mcp-gateway version
 ```
 
 ### Output

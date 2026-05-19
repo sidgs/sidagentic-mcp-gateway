@@ -1,4 +1,4 @@
-// Package types provides shared data structures used by both the mcpjungle server
+// Package types provides shared data structures used by both the sami-mcp-gateway server
 // and client components. These structures define the contract between the
 // server and client and should be used for data exchange.
 package types

@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/testhelpers"
 )
 
 func TestDeleteCommandStructure(t *testing.T) {
@@ -11,7 +11,7 @@ func TestDeleteCommandStructure(t *testing.T) {
 
 	// Test command properties
 	testhelpers.AssertEqual(t, "delete", deleteCmd.Use)
-	testhelpers.AssertEqual(t, "Delete entities from mcpjungle", deleteCmd.Short)
+	testhelpers.AssertEqual(t, "Delete entities from sami-mcp-gateway", deleteCmd.Short)
 
 	// Test command annotations
 	annotationTests := []testhelpers.CommandAnnotationTest{
@@ -39,7 +39,7 @@ func TestDeleteUserSubcommand(t *testing.T) {
 	// Test long description content
 	longDesc := deleteUserCmd.Long
 	expectedPhrases := []string{
-		"Delete a user from mcpjungle",
+		"Delete a user from sami-mcp-gateway",
 		"instantly revokes all access",
 	}
 
@@ -63,7 +63,7 @@ func TestDeleteToolGroupSubcommand(t *testing.T) {
 	// Test long description content
 	longDesc := deleteToolGroupCmd.Long
 	expectedPhrases := []string{
-		"Delete a tool group from mcpjungle",
+		"Delete a tool group from sami-mcp-gateway",
 		"endpoint is no longer available",
 		"MCP clients are relying on the endpoint",
 		"only deletes the group itself",
@@ -90,7 +90,7 @@ func TestDeletePromptGroupSubcommand(t *testing.T) {
 	// Test long description content
 	longDesc := deletePromptGroupCmd.Long
 	expectedPhrases := []string{
-		"Delete a prompt group from mcpjungle",
+		"Delete a prompt group from sami-mcp-gateway",
 		"/v0/prompt-groups/",
 	}
 

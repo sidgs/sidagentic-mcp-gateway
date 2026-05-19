@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/testhelpers"
 )
 
 func TestNewServerConfigService(t *testing.T) {

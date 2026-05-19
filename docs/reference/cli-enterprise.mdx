@@ -3,7 +3,7 @@ title: "Enterprise operations"
 description: "Reference for enterprise-mode CLI commands: initialization, login, MCP clients, users, and token rotation."
 ---
 
-Enterprise mode adds authentication and access control to mcpjungle. These commands are used to bootstrap an enterprise deployment and manage who or what can connect to it.
+Enterprise mode adds authentication and access control to sami-mcp-gateway. These commands are used to bootstrap an enterprise deployment and manage who or what can connect to it.
 
 Use the governance guides for the full operational model:
 
@@ -12,11 +12,11 @@ Use the governance guides for the full operational model:
 - [Config file reference](/reference/config-file)
 
 <Info>
-  Commands on this page require the server to be running in enterprise mode with `mcpjungle start --enterprise`.
+  Commands on this page require the server to be running in enterprise mode with `sami-mcp-gateway start --enterprise`.
 </Info>
 
 <Note>
-  Treat `mcpjungle <command> --help` as the authoritative source for current flags. This page keeps the important setup flow, examples, and config patterns.
+  Treat `sami-mcp-gateway <command> --help` as the authoritative source for current flags. This page keeps the important setup flow, examples, and config patterns.
 </Note>
 
 ## `init-server`
@@ -24,10 +24,10 @@ Use the governance guides for the full operational model:
 Initializes a fresh enterprise server.
 
 ```bash
-mcpjungle --registry http://your-server:8080 init-server
+sami-mcp-gateway --registry http://your-server:8080 init-server
 ```
 
-Run this once against a new enterprise deployment. It creates the first admin user, generates the admin access token, and stores the server URL and token in `~/.mcpjungle.conf`.
+Run this once against a new enterprise deployment. It creates the first admin user, generates the admin access token, and stores the server URL and token in `~/.sami-mcp-gateway.conf`.
 
 <Warning>
   This is a one-time bootstrap step. Store the generated admin credentials securely.
@@ -35,16 +35,16 @@ Run this once against a new enterprise deployment. It creates the first admin us
 
 ## `login`
 
-Stores an existing access token in `~/.mcpjungle.conf` so the CLI can authenticate future requests.
+Stores an existing access token in `~/.sami-mcp-gateway.conf` so the CLI can authenticate future requests.
 
 ```bash
-mcpjungle login <access-token>
+sami-mcp-gateway login <access-token>
 ```
 
 Example:
 
 ```bash
-mcpjungle login eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+sami-mcp-gateway login eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 ```
 
 This is what regular users run after an administrator creates their account and shares a token with them.
@@ -54,8 +54,8 @@ This is what regular users run after an administrator creates their account and 
 Creates an authenticated MCP client identity.
 
 ```bash
-mcpjungle create mcp-client <name> [flags]
-mcpjungle create mcp-client --conf <file>
+sami-mcp-gateway create mcp-client <name> [flags]
+sami-mcp-gateway create mcp-client --conf <file>
 ```
 
 Common flags:
@@ -75,11 +75,11 @@ Common flags:
 Examples:
 
 ```bash
-# Let mcpjungle generate the token
-mcpjungle create mcp-client claude-desktop --allow "github,jira"
+# Let sami-mcp-gateway generate the token
+sami-mcp-gateway create mcp-client claude-desktop --allow "github,jira"
 
 # Supply your own token
-mcpjungle create mcp-client my-agent \
+sami-mcp-gateway create mcp-client my-agent \
   --allow "github" \
   --access-token my-custom-token
 ```
@@ -124,13 +124,13 @@ For token supply options and placeholder handling, see [Config file reference](/
 Deletes an MCP client and immediately revokes its access to the mcp gateway.
 
 ```bash
-mcpjungle delete mcp-client <name>
+sami-mcp-gateway delete mcp-client <name>
 ```
 
 Example:
 
 ```bash
-mcpjungle delete mcp-client claude-desktop
+sami-mcp-gateway delete mcp-client claude-desktop
 ```
 
 ## `create user`
@@ -138,18 +138,18 @@ mcpjungle delete mcp-client claude-desktop
 Creates a standard user account for a human operator.
 
 ```bash
-mcpjungle create user <username> [flags]
-mcpjungle create user --conf <file>
+sami-mcp-gateway create user <username> [flags]
+sami-mcp-gateway create user --conf <file>
 ```
 
 Examples:
 
 ```bash
-# Let mcpjungle generate the token
-mcpjungle create user alice
+# Let sami-mcp-gateway generate the token
+sami-mcp-gateway create user alice
 
 # Supply your own token
-mcpjungle create user alice --access-token alice-custom-token
+sami-mcp-gateway create user alice --access-token alice-custom-token
 ```
 
 Config file example:
@@ -163,7 +163,7 @@ Config file example:
 }
 ```
 
-When user creation succeeds, the CLI prints the `mcpjungle login <token>` command that the user should run locally.
+When user creation succeeds, the CLI prints the `sami-mcp-gateway login <token>` command that the user should run locally.
 
 <Note>
   When creating a user from `--conf`, you must provide a custom token via `access_token` or `access_token_ref`.
@@ -173,16 +173,16 @@ For token supply options and placeholder handling, see [Config file reference](/
 
 ## `delete user`
 
-Deletes a user and revokes their access to mcpjungle immediately.
+Deletes a user and revokes their access to sami-mcp-gateway immediately.
 
 ```bash
-mcpjungle delete user <username>
+sami-mcp-gateway delete user <username>
 ```
 
 Example:
 
 ```bash
-mcpjungle delete user alice
+sami-mcp-gateway delete user alice
 ```
 
 ## Typical setup flow
@@ -190,32 +190,32 @@ mcpjungle delete user alice
 <Steps>
   <Step title="Start the server in enterprise mode">
     ```bash
-    mcpjungle start --enterprise
+    sami-mcp-gateway start --enterprise
     ```
   </Step>
 
   <Step title="Initialize the server once">
     ```bash
-    mcpjungle --registry http://your-server:8080 init-server
+    sami-mcp-gateway --registry http://your-server:8080 init-server
     ```
   </Step>
 
   <Step title="Register upstream MCP servers">
     ```bash
-    mcpjungle register --name github --url https://api.githubcopilot.com/mcp \
+    sami-mcp-gateway register --name github --url https://api.githubcopilot.com/mcp \
       --bearer-token ghp_your_token
     ```
   </Step>
 
   <Step title="Create MCP clients for agents and apps">
     ```bash
-    mcpjungle create mcp-client claude-desktop --allow "github"
+    sami-mcp-gateway create mcp-client claude-desktop --allow "github"
     ```
   </Step>
 
   <Step title="Create user accounts for operators">
     ```bash
-    mcpjungle create user alice
+    sami-mcp-gateway create user alice
     ```
   </Step>
 </Steps>

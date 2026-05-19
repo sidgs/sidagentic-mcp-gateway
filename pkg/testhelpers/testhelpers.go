@@ -1,5 +1,5 @@
 // Package testhelpers provides common testing utilities and assertion functions
-// for the MCPJungle project.
+// for the SAMI MCP Gateway project.
 package testhelpers
 
 import (
@@ -11,8 +11,8 @@ import (
 	"github.com/glebarez/sqlite"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
 

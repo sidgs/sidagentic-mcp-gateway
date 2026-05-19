@@ -35,7 +35,7 @@ RUN rm -rf internal/dashboardui/dist
 COPY --from=dashboard-builder /src/web/dashboard/dist ./internal/dashboardui/dist
 
 RUN CGO_ENABLED=0 go build -trimpath \
-	-ldflags="-s -w -X github.com/mcpjungle/mcpjungle/pkg/version.Version=${VERSION}" \
+	-ldflags="-s -w -X sami.io/mcpgateway/pkg/version.Version=${VERSION}" \
 	-o /sami-mcp-gateway .
 
 # Runtime: uv + uvx (stdio MCP servers); Node for npx. Not distroless — those tools need a shell and libs.

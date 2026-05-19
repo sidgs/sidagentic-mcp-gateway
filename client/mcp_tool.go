@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 // ListTools fetches the list of tools, optionally filtered by server name.

@@ -7,13 +7,13 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/version"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -362,7 +362,7 @@ func TestNewMCPServer_AdvertisesCurrentVersion(t *testing.T) {
 	testhelpers.AssertMCPServerInfo(
 		t,
 		s.newMCPServer("group-a"),
-		"MCPJungle proxy MCP server for tool group: group-a",
+		"SAMI MCP Gateway proxy MCP server for tool group: group-a",
 		version.GetVersion(),
 	)
 }
@@ -373,7 +373,7 @@ func TestNewSseMCPServer_AdvertisesCurrentVersion(t *testing.T) {
 	testhelpers.AssertMCPServerInfo(
 		t,
 		s.newSseMCPServer("group-a"),
-		"MCPJungle proxy MCP server for SSE transport for tool group: group-a",
+		"SAMI MCP Gateway proxy MCP server for SSE transport for tool group: group-a",
 		version.GetVersion(),
 	)
 }

@@ -8,8 +8,8 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 // ListPrompts retrieves all prompts or prompts filtered by server name

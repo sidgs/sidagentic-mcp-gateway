@@ -12,14 +12,14 @@ import (
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
-	"github.com/mcpjungle/mcpjungle/pkg/util"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
+	"sami.io/mcpgateway/pkg/util"
+	"sami.io/mcpgateway/pkg/version"
 	"gorm.io/gorm"
 )
 
@@ -287,7 +287,7 @@ func (s *PromptGroupService) GetPromptGroupSseMCPServer(tenantID, groupName stri
 
 func (s *PromptGroupService) newMCPServer(groupName string) *server.MCPServer {
 	return server.NewMCPServer(
-		fmt.Sprintf("MCPJungle proxy MCP server for prompt group: %s", groupName),
+		fmt.Sprintf("SAMI MCP Gateway proxy MCP server for prompt group: %s", groupName),
 		version.GetVersion(),
 		server.WithResourceCapabilities(false, false),
 		server.WithToolCapabilities(false),
@@ -297,7 +297,7 @@ func (s *PromptGroupService) newMCPServer(groupName string) *server.MCPServer {
 
 func (s *PromptGroupService) newSseMCPServer(groupName string) *server.MCPServer {
 	return server.NewMCPServer(
-		fmt.Sprintf("MCPJungle proxy MCP server for SSE transport for prompt group: %s", groupName),
+		fmt.Sprintf("SAMI MCP Gateway proxy MCP server for SSE transport for prompt group: %s", groupName),
 		version.GetVersion(),
 		server.WithResourceCapabilities(false, false),
 		server.WithToolCapabilities(false),

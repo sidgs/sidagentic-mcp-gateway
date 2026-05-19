@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/apierrors"
 )
 
 type contextKey struct{}

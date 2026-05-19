@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/cliapp"
+	"sami.io/mcpgateway/pkg/types"
 	"github.com/spf13/cobra"
 )
 

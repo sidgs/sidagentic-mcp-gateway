@@ -6,10 +6,10 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 )
 
-// CreateUser sends a request to create a new authenticated, human user in mcpjungle
+// CreateUser sends a request to create a new authenticated, human user in sami-mcp-gateway
 func (c *Client) CreateUser(user *types.CreateOrUpdateUserRequest) (*types.CreateOrUpdateUserResponse, error) {
 	u, _ := c.constructAPIEndpoint("/users")
 
@@ -41,7 +41,7 @@ func (c *Client) CreateUser(user *types.CreateOrUpdateUserRequest) (*types.Creat
 	return &createResp, nil
 }
 
-// DeleteUser sends a request to delete a user from mcpjungle
+// DeleteUser sends a request to delete a user from sami-mcp-gateway
 func (c *Client) DeleteUser(username string) error {
 	u, _ := c.constructAPIEndpoint("/users/" + username)
 
@@ -94,7 +94,7 @@ func (c *Client) UpdateUser(user *types.CreateOrUpdateUserRequest) (*types.Creat
 	return &updateResp, nil
 }
 
-// ListUsers sends a request to list all users in mcpjungle
+// ListUsers sends a request to list all users in sami-mcp-gateway
 func (c *Client) ListUsers() ([]*types.User, error) {
 	u, _ := c.constructAPIEndpoint("/users")
 

@@ -8,9 +8,9 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )

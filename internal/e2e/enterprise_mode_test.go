@@ -12,8 +12,8 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -69,7 +69,7 @@ func TestE2E_EnterpriseMode_McpProxy_RequiresGlobalKey(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
 	for _, token := range []string{"", env.userToken, env.adminToken} {
-		c, err := client.NewStreamableHttpClient(env.baseURL+"/mcp", transport.WithHTTPHeaders(map[string]string{
+		c, err := client.NewStreamableHttpClient(env.tenantMCPURL("/mcp"), transport.WithHTTPHeaders(map[string]string{
 			"Authorization": "Bearer " + token,
 		}))
 		require.NoError(t, err)
@@ -83,7 +83,7 @@ func TestE2E_EnterpriseMode_McpProxy_RequiresGlobalKey(t *testing.T) {
 		_ = c.Close()
 	}
 
-	c, err := client.NewStreamableHttpClient(env.baseURL+"/mcp", transport.WithHTTPHeaders(map[string]string{
+	c, err := client.NewStreamableHttpClient(env.tenantMCPURL("/mcp"), transport.WithHTTPHeaders(map[string]string{
 		"X-API-Key": e2eGlobalMCPAPIKey,
 	}))
 	require.NoError(t, err)
@@ -239,7 +239,7 @@ func TestE2E_EnterpriseMode_McpProxy_StripsInboundHeadersForUpstreamCalls(t *tes
 
 	qEcho := tenant.QualifyProxyName(tenant.DefaultID, "header-proxy__echo")
 	qPrompt := tenant.QualifyProxyName(tenant.DefaultID, "header-proxy__simple-prompt")
-	c, err := client.NewStreamableHttpClient(env.baseURL+"/mcp", transport.WithHTTPHeaders(map[string]string{
+	c, err := client.NewStreamableHttpClient(env.tenantMCPURL("/mcp"), transport.WithHTTPHeaders(map[string]string{
 		"X-API-Key":        e2eGlobalMCPAPIKey,
 		"X-Test-Forward": "downstream-custom-header",
 	}))

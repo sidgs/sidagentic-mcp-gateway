@@ -1,4 +1,4 @@
-// Package mcp provides MCP (Model Context Protocol) service functionality for the MCPJungle application.
+// Package mcp provides MCP (Model Context Protocol) service functionality for the SAMI MCP Gateway application.
 package mcp
 
 import (
@@ -7,7 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
+	"sami.io/mcpgateway/internal/telemetry"
 	"gorm.io/gorm"
 )
 
@@ -40,10 +40,10 @@ type MCPService struct {
 	mu            sync.RWMutex
 
 	// toolDeletionCallback is a callback that gets invoked when one or more tools is removed
-	// (deregistered or disabled) from mcpjungle.
+	// (deregistered or disabled) from sami-mcp-gateway.
 	toolDeletionCallback ToolDeletionCallback
 	// toolAdditionCallback is a callback that gets invoked when one or more tools is added
-	// (registered or (re)enabled) in mcpjungle.
+	// (registered or (re)enabled) in sami-mcp-gateway.
 	toolAdditionCallback ToolAdditionCallback
 
 	// promptDeletionCallback is invoked when prompts are removed from the global MCP proxy (deregister/disable).

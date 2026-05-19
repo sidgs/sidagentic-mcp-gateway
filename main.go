@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/mcpjungle/mcpjungle/cmd"
+	"sami.io/mcpgateway/cmd"
 )
 
 func main() {

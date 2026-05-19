@@ -25,7 +25,7 @@ const (
 	PromptCallOutcomeError PromptCallOutcome = "error"
 )
 
-// CustomMetrics defines the interface for recording custom metrics from mcpjungle.
+// CustomMetrics defines the interface for recording custom metrics from sami-mcp-gateway.
 // It provides convenience methods for recording metrics related to http server, mcp servers, tools, usage, etc.
 type CustomMetrics interface {
 	// RecordToolCall records a tool invocation, its latency, and its outcome (success or error).

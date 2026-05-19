@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func (s *Server) createToolGroupHandler() gin.HandlerFunc {
@@ -312,9 +312,10 @@ func (s *Server) toolGroupMCPServerCallHandler() gin.HandlerFunc {
 	}
 }
 
-// toolGroupProxyPathPrefix returns the root path for a tool group's MCP/SSE routes: [HTTP_PATH_PREFIX]/v0/groups/<name>.
-func (s *Server) toolGroupProxyPathPrefix(groupName string) string {
-	return s.v0SubgroupMountBasePath("groups", groupName)
+// toolGroupProxyPathPrefix returns the root path for a tool group's MCP/SSE routes: [HTTP_PATH_PREFIX]/{tenant}/v0/groups/<name>.
+func (s *Server) toolGroupProxyPathPrefix(c *gin.Context, groupName string) string {
+	tid := tenant.MustFromContext(c.Request.Context())
+	return s.v0SubgroupMountBasePath(tid, "groups", groupName)
 }
 // getGroupSseServer returns a server.SSEServer for a specific group, creating one if it doesn't already exist.
 func (s *Server) getGroupSseServer(c *gin.Context, groupName string) (*server.SSEServer, error) {
@@ -333,7 +334,8 @@ func (s *Server) getGroupSseServer(c *gin.Context, groupName string) (*server.SS
 	sseServer := server.NewSSEServer(
 		groupSseMcpServer,
 		server.WithDynamicBasePath(func(r *http.Request, sessionID string) string {
-			return s.toolGroupProxyPathPrefix(groupName)
+			tid := tenant.MustFromContext(r.Context())
+			return s.v0SubgroupMountBasePath(tid, "groups", groupName)
 		}),
 	)
 
@@ -382,7 +384,7 @@ func (s *Server) toolGroupSseMCPServerCallMessageHandler() gin.HandlerFunc {
 // It returns the streamable HTTP endpoint and the SSE endpoints
 func (s *Server) getToolGroupEndpoints(c *gin.Context, groupName string) *types.ToolGroupEndpoints {
 	scheme := s.publicSchemeForURLs(c)
-	basePath := s.toolGroupProxyPathPrefix(groupName)
+	basePath := s.toolGroupProxyPathPrefix(c, groupName)
 	endpointURL := &url.URL{
 		Scheme: scheme,
 		Host:   c.Request.Host,

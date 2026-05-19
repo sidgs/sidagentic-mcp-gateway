@@ -9,11 +9,11 @@ import (
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/migrations"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	mcpService "github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
+	"sami.io/mcpgateway/internal/migrations"
+	"sami.io/mcpgateway/internal/model"
+	mcpService "sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/tenant"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
@@ -30,13 +30,13 @@ func TestPromptsIntegration(t *testing.T) {
 
 	// Create MCP proxy server with prompt capabilities
 	mcpProxyServer := server.NewMCPServer(
-		"Test MCPJungle Proxy",
+		"Test SAMI MCP Gateway Proxy",
 		"0.0.1",
 		server.WithToolCapabilities(true),
 		server.WithPromptCapabilities(true),
 	)
 	sseMcpProxyServer := server.NewMCPServer(
-		"MCPJungle Proxy MCP Server for SSE transport",
+		"SAMI MCP Gateway Proxy MCP Server for SSE transport",
 		"0.0.1",
 		server.WithToolCapabilities(true),
 		server.WithPromptCapabilities(true),
@@ -131,13 +131,13 @@ func TestResourcesIntegration(t *testing.T) {
 	require.NoError(t, err)
 
 	mcpProxyServer := server.NewMCPServer(
-		"Test MCPJungle Proxy",
+		"Test SAMI MCP Gateway Proxy",
 		"0.0.1",
 		server.WithToolCapabilities(true),
 		server.WithPromptCapabilities(true),
 	)
 	sseMcpProxyServer := server.NewMCPServer(
-		"MCPJungle Proxy MCP Server for SSE transport",
+		"SAMI MCP Gateway Proxy MCP Server for SSE transport",
 		"0.0.1",
 		server.WithToolCapabilities(true),
 		server.WithPromptCapabilities(true),

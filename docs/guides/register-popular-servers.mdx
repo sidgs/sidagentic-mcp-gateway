@@ -13,7 +13,7 @@ Use direct CLI flags when a server only needs a name and URL. Use JSON config fi
 For any JSON example on this page, register it with:
 
 ```bash
-mcpjungle register -c ./<filename>.json
+sami-mcp-gateway register -c ./<filename>.json
 ```
 
 ## Hosted HTTP servers
@@ -23,7 +23,7 @@ mcpjungle register -c ./<filename>.json
 If the upstream server is public and does not require extra configuration, register it directly with CLI flags:
 
 ```bash
-mcpjungle register --name context7 --url https://mcp.context7.com/mcp
+sami-mcp-gateway register --name context7 --url https://mcp.context7.com/mcp
 ```
 
 This is the simplest pattern for hosted Streamable HTTP servers.
@@ -81,7 +81,7 @@ If the upstream server advertises OAuth, the CLI opens a browser, you approve ac
 Todoist is a good example of a hosted server where the fastest path is still a direct CLI command:
 
 ```bash
-mcpjungle register --name todoist --url https://ai.todoist.net/mcp
+sami-mcp-gateway register --name todoist --url https://ai.todoist.net/mcp
 ```
 
 Todoist enforces OAuth. Running this command starts the upstream OAuth flow in your browser, and Mcpjungle completes the registration after you approve access.

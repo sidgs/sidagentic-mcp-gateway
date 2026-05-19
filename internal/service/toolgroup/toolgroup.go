@@ -13,13 +13,13 @@ import (
 
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
-	"github.com/mcpjungle/mcpjungle/pkg/util"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
+	"sami.io/mcpgateway/pkg/util"
+	"sami.io/mcpgateway/pkg/version"
 	"gorm.io/gorm"
 )
 
@@ -306,7 +306,7 @@ func (s *ToolGroupService) GetToolGroupSseMCPServer(tenantID, groupName string) 
 
 func (s *ToolGroupService) newMCPServer(groupName string) *server.MCPServer {
 	return server.NewMCPServer(
-		fmt.Sprintf("MCPJungle proxy MCP server for tool group: %s", groupName),
+		fmt.Sprintf("SAMI MCP Gateway proxy MCP server for tool group: %s", groupName),
 		version.GetVersion(),
 		server.WithResourceCapabilities(false, false),
 		server.WithToolCapabilities(true),
@@ -317,7 +317,7 @@ func (s *ToolGroupService) newMCPServer(groupName string) *server.MCPServer {
 
 func (s *ToolGroupService) newSseMCPServer(groupName string) *server.MCPServer {
 	return server.NewMCPServer(
-		fmt.Sprintf("MCPJungle proxy MCP server for SSE transport for tool group: %s", groupName),
+		fmt.Sprintf("SAMI MCP Gateway proxy MCP server for SSE transport for tool group: %s", groupName),
 		version.GetVersion(),
 		server.WithResourceCapabilities(false, false),
 		server.WithToolCapabilities(true),

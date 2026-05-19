@@ -26,25 +26,25 @@ See [core concepts](/core-concepts#canonical-names) for more details on names.
 ### List available tools
 
 ```bash
-mcpjungle list tools
+sami-mcp-gateway list tools
 ```
 
 To scope the list to a specific server:
 
 ```bash
-mcpjungle list tools --server context7
+sami-mcp-gateway list tools --server context7
 ```
 
 To scope the list to a [Tool Group](/core-concepts#groups):
 
 ```bash
-mcpjungle list tools --group claude-tools
+sami-mcp-gateway list tools --group claude-tools
 ```
 
 ### Inspect tool usage
 
 ```bash
-mcpjungle usage deepwiki__read_wiki_structure
+sami-mcp-gateway usage deepwiki__read_wiki_structure
 ```
 
 This shows the tool schema and expected input shape.
@@ -55,13 +55,13 @@ Ideally, tools will be invoked by your MCP clients through the gateway.
 The CLI allows you to invoke tools directly for testing and debugging.
 
 ```bash
-mcpjungle invoke deepwiki__read_wiki_structure --input '{"repoName": "facebook/react"}'
+sami-mcp-gateway invoke deepwiki__read_wiki_structure --input '{"repoName": "facebook/react"}'
 ```
 
 You can also invoke through a Tool Group context:
 
 ```bash
-mcpjungle invoke filesystem__read_file --group claude-tools --input '{"path": "README.md"}'
+sami-mcp-gateway invoke filesystem__read_file --group claude-tools --input '{"path": "README.md"}'
 ```
 
 ## Prompts
@@ -77,8 +77,8 @@ Prompt names follow the same canonical pattern:
 ### List prompts
 
 ```bash
-mcpjungle list prompts
-mcpjungle list prompts --server huggingface
+sami-mcp-gateway list prompts
+sami-mcp-gateway list prompts --server huggingface
 ```
 
 ### Retrieve a prompt with arguments
@@ -87,7 +87,7 @@ As with tools, prompts will also be read by your MCP clients.
 Use the CLI to retrieve prompts directly for testing and debugging:
 
 ```bash
-mcpjungle get prompt "huggingface__Model Details" --arg model_id="openai/gpt-oss-120b"
+sami-mcp-gateway get prompt "huggingface__Model Details" --arg model_id="openai/gpt-oss-120b"
 ```
 
 Pass one `--arg key=value` flag per prompt argument.
@@ -107,15 +107,15 @@ All tools and prompts are enabled by default when a server is first registered.
 ### Disable or re-enable a single tool
 
 ```bash
-mcpjungle disable tool context7__get-library-docs
-mcpjungle enable tool context7__get-library-docs
+sami-mcp-gateway disable tool context7__get-library-docs
+sami-mcp-gateway enable tool context7__get-library-docs
 ```
 
 ### Disable or re-enable all tools from one server
 
 ```bash
-mcpjungle disable tool context7
-mcpjungle enable tool context7
+sami-mcp-gateway disable tool context7
+sami-mcp-gateway enable tool context7
 ```
 
 ### Disable or re-enable an entire server
@@ -123,18 +123,18 @@ mcpjungle enable tool context7
 Disabling a server disables all of its tools, prompts and resources in one step:
 
 ```bash
-mcpjungle disable server context7
-mcpjungle enable server context7
+sami-mcp-gateway disable server context7
+sami-mcp-gateway enable server context7
 ```
 
 ### Disable or re-enable prompts
 
 ```bash
-mcpjungle disable prompt "huggingface__Model Details"
-mcpjungle enable prompt "huggingface__Model Details"
+sami-mcp-gateway disable prompt "huggingface__Model Details"
+sami-mcp-gateway enable prompt "huggingface__Model Details"
 
-mcpjungle disable prompt context7
-mcpjungle enable prompt context7
+sami-mcp-gateway disable prompt context7
+sami-mcp-gateway enable prompt context7
 ```
 
 ## How disabled entities behave

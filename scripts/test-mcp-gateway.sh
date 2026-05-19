@@ -176,8 +176,8 @@ cleanup_temp_files() {
 }
 
 cleanup_runtime_state() {
-  rm -f "$ROOT_DIR/mcpjungle.db" "$ROOT_DIR/mcp.db"
-  rm -rf "$ROOT_DIR/mcpjungle_data"
+  rm -f "$ROOT_DIR/sami-mcp-gateway.db" "$ROOT_DIR/mcp.db"
+  rm -rf "$ROOT_DIR/mcp_gateway_data"
 }
 
 cleanup() {
@@ -188,7 +188,7 @@ cleanup() {
 
 reset_runtime_state() {
   cleanup_runtime_state
-  mkdir -p "$ROOT_DIR/mcpjungle_data"
+  mkdir -p "$ROOT_DIR/mcp_gateway_data"
 }
 
 start_local_server() {

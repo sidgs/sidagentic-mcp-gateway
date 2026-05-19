@@ -1,4 +1,4 @@
-// Package config provides configuration management functionality for the MCPJungle application.
+// Package config provides configuration management functionality for the SAMI MCP Gateway application.
 package config
 
 import (
@@ -8,14 +8,14 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const ClientConfigFileName = ".mcpjungle.conf"
+const ClientConfigFileName = ".sami-mcp-gateway.conf"
 
-// ClientConfig represents the MCPJungle client configuration stored in the user's home directory.
+// ClientConfig represents the SAMI MCP Gateway client configuration stored in the user's home directory.
 // It can contain configuration for both a standard user and an admin user.
 type ClientConfig struct {
-	// RegistryURL is the URL of the MCPJungle server.
+	// RegistryURL is the URL of the SAMI MCP Gateway server.
 	RegistryURL string `yaml:"registry_url"`
-	// AccessToken is the access token used for authentication with the MCPJungle server.
+	// AccessToken is the access token used for authentication with the SAMI MCP Gateway server.
 	AccessToken string `yaml:"access_token"`
 }
 

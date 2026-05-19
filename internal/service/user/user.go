@@ -1,4 +1,4 @@
-// Package user provides user service functionality for the MCPJungle application.
+// Package user provides user service functionality for the SAMI MCP Gateway application.
 package user
 
 import (
@@ -6,15 +6,15 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mcpjungle/mcpjungle/internal"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
 
-// UserService provides methods to manage users in the MCPJungle system.
+// UserService provides methods to manage users in the SAMI MCP Gateway system.
 type UserService struct {
 	db *gorm.DB
 }
@@ -23,7 +23,7 @@ func NewUserService(db *gorm.DB) *UserService {
 	return &UserService{db: db}
 }
 
-// CreateAdminUser creates an admin user in the MCPJungle system.
+// CreateAdminUser creates an admin user in the SAMI MCP Gateway system.
 func (u *UserService) CreateAdminUser(ctx context.Context) (*model.User, error) {
 	tid := tenant.MustFromContext(ctx)
 	token, err := internal.GenerateAccessToken()

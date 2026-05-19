@@ -1,6 +1,6 @@
 package types
 
-// APIErrorResponse is the JSON payload returned by MCPJungle HTTP endpoints
+// APIErrorResponse is the JSON payload returned by SAMI MCP Gateway HTTP endpoints
 // when a request fails.
 type APIErrorResponse struct {
 	// Error is a human-readable error message describing what went wrong. Mandatory.

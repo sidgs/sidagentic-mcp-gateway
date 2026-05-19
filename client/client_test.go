@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/apierrors"
 )
 
 func TestNewClient(t *testing.T) {

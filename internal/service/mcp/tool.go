@@ -10,11 +10,11 @@ import (
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
 
@@ -429,7 +429,7 @@ func (m *MCPService) notifyToolAddition(toolName string) {
 
 // convertToolCallResToAPIRes converts an MCP CallToolResult to types.ToolInvokeResult.
 // This function handles the conversion from the SDK types to the internal types
-// used by MCPJungle, with proper error handling and validation.
+// used by SAMI MCP Gateway, with proper error handling and validation.
 func (m *MCPService) convertToolCallResToAPIRes(resp *mcp.CallToolResult) (*types.ToolInvokeResult, error) {
 	// Convert content
 	contentList, err := m.convertToolCallRespContent(resp.Content)

@@ -7,9 +7,9 @@ import (
 	"testing"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/internal/service/user"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/service/user"
+	"sami.io/mcpgateway/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func TestUpdateUserHandler_NotFound(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/internal/model"
+	"sami.io/mcpgateway/internal/model"
 )
 
 func (s *Server) registerInitServerHandler() gin.HandlerFunc {

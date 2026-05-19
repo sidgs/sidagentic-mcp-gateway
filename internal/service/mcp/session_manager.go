@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/mark3labs/mcp-go/client"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
 
@@ -152,7 +152,7 @@ func (sm *SessionManager) InvalidateSessionForServer(tenantID, serverName string
 }
 
 // CloseAllSessions closes all managed sessions.
-// This should be called when the MCPJungle server is shutting down.
+// This should be called when the SAMI MCP Gateway server is shutting down.
 func (sm *SessionManager) CloseAllSessions() {
 	sm.mu.Lock()
 	defer sm.mu.Unlock()

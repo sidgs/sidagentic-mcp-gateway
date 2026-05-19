@@ -1,16 +1,16 @@
 ---
-title: "Run mcpjungle with Docker Compose"
-description: "Use Docker Compose to run mcpjungle locally or as a shared deployment."
+title: "Run sami-mcp-gateway with Docker Compose"
+description: "Use Docker Compose to run sami-mcp-gateway locally or as a shared deployment."
 ---
 
-Docker Compose is the recommended way to run mcpjungle for individuals running it locally.
+Docker Compose is the recommended way to run sami-mcp-gateway for individuals running it locally.
 
-Teams deploying mcpjungle to a remote server can also use Docker Compose with the production configuration, or choose a more customized deployment approach.
+Teams deploying sami-mcp-gateway to a remote server can also use Docker Compose with the production configuration, or choose a more customized deployment approach.
 
 The repository ships 2 docker compose files:
 
-- [docker-compose.yaml](https://github.com/mcpjungle/MCPJungle/blob/main/docker-compose.yaml) - optimized for local for individual users
-- [docker-compose.prod.yaml](https://github.com/mcpjungle/MCPJungle/blob/main/docker-compose.prod.yaml) - optimized for a shared deployment running in enterprise mode
+-  - optimized for local for individual users
+-  - optimized for a shared deployment running in enterprise mode
 
 ## Development mode
 
@@ -19,7 +19,7 @@ The repository ships 2 docker compose files:
 <Steps>
   <Step title="Download the compose file">
     ```bash
-    curl -O https://raw.githubusercontent.com/mcpjungle/MCPJungle/refs/heads/main/docker-compose.yaml
+    curl -O https://raw.githubusercontent.com/sami-mcp-gateway/SAMI MCP Gateway/refs/heads/main/docker-compose.yaml
     ```
   </Step>
   <Step title="Start the server">
@@ -40,7 +40,7 @@ The repository ships 2 docker compose files:
 If Mcpjungle is running inside Docker on macOS or Windows, the container cannot reach `127.0.0.1` on your host. Use `host.docker.internal` instead when registering MCP servers that run on your host machine:
 
 ```bash
-mcpjungle register --name calculator --url http://host.docker.internal:5000/mcp
+sami-mcp-gateway register --name calculator --url http://host.docker.internal:5000/mcp
 ```
 </Note>
 
@@ -49,11 +49,11 @@ If you plan to run the `filesystem` stdio MCP server from inside the container, 
 </Note>
 
 <Note>
-You can also run the mcpjungle image as a standalone container instead of using the Compose files provided by the repository.
+You can also run the sami-mcp-gateway image as a standalone container instead of using the Compose files provided by the repository.
 
 Keep in mind that if you do not connect Mcpjungle to a PostgreSQL database, it will create a local SQLite file inside the container.
 
-If the container is deleted, that SQLite file is deleted with it and mcpjungle's data is lost.
+If the container is deleted, that SQLite file is deleted with it and sami-mcp-gateway's data is lost.
 
 Running Mcpjungle as a standalone container without an external database is only recommended for testing and proofs of concept.
 </Note>
@@ -65,7 +65,7 @@ Running Mcpjungle as a standalone container without an external database is only
 <Steps>
   <Step title="Download the compose file">
     ```bash
-    curl -O https://raw.githubusercontent.com/mcpjungle/MCPJungle/refs/heads/main/docker-compose.prod.yaml
+    curl -O https://raw.githubusercontent.com/sami-mcp-gateway/SAMI MCP Gateway/refs/heads/main/docker-compose.prod.yaml
     ```
   </Step>
   <Step title="Start the server">
@@ -77,7 +77,7 @@ Running Mcpjungle as a standalone container without an external database is only
     After the first boot, run `init-server` from your client machine to create the admin user and store its access token:
 
     ```bash
-    mcpjungle init-server
+    sami-mcp-gateway init-server
     ```
 
     See the [production deployment guide](/deployment/production) for the full initialization and operating model.
@@ -90,8 +90,8 @@ Mcpjungle publishes two Docker image variants:
 
 | Image tag | Base | Includes | Size |
 |-----------|------|----------|------|
-| `latest` | `distroless/base` | `mcpjungle` binary only | Minimal |
-| `latest-stdio` | `uv` (Debian) | `mcpjungle` + `npx` + `uvx` | Larger |
+| `latest` | `distroless/base` | `sami-mcp-gateway` binary only | Minimal |
+| `latest-stdio` | `uv` (Debian) | `sami-mcp-gateway` + `npx` + `uvx` | Larger |
 
 - `docker-compose.yaml` defaults to `latest-stdio` — suitable for local use with stdio-based MCP servers like `filesystem`, `time`, and `github`.
 - `docker-compose.prod.yaml` defaults to `latest` — the minimal image recommended for production.
@@ -103,7 +103,7 @@ MCPJUNGLE_IMAGE_TAG=latest-stdio docker compose -f docker-compose.prod.yaml up -
 ```
 
 <Note>
-  If your stdio servers rely on dependencies other than `npx` or `uvx`, you need to build a custom Docker image that includes those dependencies alongside the `mcpjungle` binary.
+  If your stdio servers rely on dependencies other than `npx` or `uvx`, you need to build a custom Docker image that includes those dependencies alongside the `sami-mcp-gateway` binary.
 </Note>
 
 ## Graceful shutdown
@@ -120,17 +120,17 @@ For a single container, `docker stop` is sufficient because it sends `SIGTERM` b
 
 ## Run CLI commands inside a container
 
-The standard image does not include a shell. Use `docker exec` or `kubectl exec` to invoke the `mcpjungle` binary directly:
+The standard image does not include a shell. Use `docker exec` or `kubectl exec` to invoke the `sami-mcp-gateway` binary directly:
 
 <Tabs>
   <Tab title="Docker">
     ```bash
-    docker exec -it <container_name> /mcpjungle
+    docker exec -it <container_name> /sami-mcp-gateway
     ```
   </Tab>
   <Tab title="Kubernetes">
     ```bash
-    kubectl -n <namespace> exec -it po/<pod_name> -- /mcpjungle
+    kubectl -n <namespace> exec -it po/<pod_name> -- /sami-mcp-gateway
     ```
   </Tab>
 </Tabs>
@@ -138,5 +138,5 @@ The standard image does not include a shell. Use `docker exec` or `kubectl exec`
 For example, to list registered MCP servers from inside a running container:
 
 ```bash
-docker exec -it mcpjungle-server /mcpjungle list servers
+docker exec -it sami-mcp-gateway-server /sami-mcp-gateway list servers
 ```

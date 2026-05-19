@@ -16,8 +16,8 @@ import (
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
 )
 
 func TestValidateServerName(t *testing.T) {

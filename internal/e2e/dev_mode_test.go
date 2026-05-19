@@ -5,7 +5,7 @@ import (
 	"net/http"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
+	"sami.io/mcpgateway/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

@@ -6,8 +6,9 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
 )
 
@@ -239,6 +240,7 @@ func (s *Server) buildDashboardPromptGroup(c *gin.Context, group model.PromptGro
 	}, nil
 }
 
-func (s *Server) promptGroupProxyPathPrefix(groupName string) string {
-	return s.v0SubgroupMountBasePath("prompt-groups", groupName)
+func (s *Server) promptGroupProxyPathPrefix(c *gin.Context, groupName string) string {
+	tid := tenant.MustFromContext(c.Request.Context())
+	return s.v0SubgroupMountBasePath(tid, "prompt-groups", groupName)
 }

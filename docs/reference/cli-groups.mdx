@@ -1,6 +1,6 @@
 ---
 title: "Managing tool groups"
-description: "Reference for creating, inspecting, updating, and deleting tool groups from the mcpjungle CLI."
+description: "Reference for creating, inspecting, updating, and deleting tool groups from the sami-mcp-gateway CLI."
 ---
 
 Tool groups let you expose a curated subset of tools through their own MCP endpoint. They are useful when different agents or teams should only see a narrow tool surface instead of the full gateway.
@@ -8,7 +8,7 @@ Tool groups let you expose a curated subset of tools through their own MCP endpo
 For the conceptual model and endpoint behavior, see [Tool groups](/guides/tool-groups).
 
 <Note>
-  Treat `mcpjungle create group --help`, `get group --help`, and `update group --help` as the authoritative source for current flags. This page focuses on the important workflows and config shape.
+  Treat `sami-mcp-gateway create group --help`, `get group --help`, and `update group --help` as the authoritative source for current flags. This page focuses on the important workflows and config shape.
 </Note>
 
 ## `create group`
@@ -16,7 +16,7 @@ For the conceptual model and endpoint behavior, see [Tool groups](/guides/tool-g
 Creates a new tool group from a JSON configuration file.
 
 ```bash
-mcpjungle create group --conf <file>
+sami-mcp-gateway create group --conf <file>
 ```
 
 Minimal example:
@@ -49,17 +49,17 @@ Fields:
 Example:
 
 ```bash
-mcpjungle create group --conf ./engineering-tools.json
+sami-mcp-gateway create group --conf ./engineering-tools.json
 ```
 
-After creation, mcpjungle serves the group on:
+After creation, sami-mcp-gateway serves the group on:
 
 - `/v0/groups/{group-name}/mcp`
 - `/v0/groups/{group-name}/sse`
 - `/v0/groups/{group-name}/message`
 
 <Warning>
-  SSE support exists for compatibility, but it is a deprecated transport with limited support in mcpjungle. Prefer the streamable HTTP endpoint.
+  SSE support exists for compatibility, but it is a deprecated transport with limited support in sami-mcp-gateway. Prefer the streamable HTTP endpoint.
 </Warning>
 
 Use `get group` for the full configuration and endpoint URLs.
@@ -69,13 +69,13 @@ Use `get group` for the full configuration and endpoint URLs.
 Shows the stored definition of a tool group and the endpoint URLs it exposes.
 
 ```bash
-mcpjungle get group <name>
+sami-mcp-gateway get group <name>
 ```
 
 Example:
 
 ```bash
-mcpjungle get group engineering-tools
+sami-mcp-gateway get group engineering-tools
 ```
 
 <Note>
@@ -87,13 +87,13 @@ mcpjungle get group engineering-tools
 Replaces the configuration of an existing group with a new JSON file.
 
 ```bash
-mcpjungle update group --conf <file>
+sami-mcp-gateway update group --conf <file>
 ```
 
 Example:
 
 ```bash
-mcpjungle update group --conf ./engineering-tools.updated.json
+sami-mcp-gateway update group --conf ./engineering-tools.updated.json
 ```
 
 The CLI reports what changed, including added or removed tools, servers, and exclusions.
@@ -107,13 +107,13 @@ The CLI reports what changed, including added or removed tools, servers, and exc
 Deletes a tool group and removes its endpoint.
 
 ```bash
-mcpjungle delete group <name>
+sami-mcp-gateway delete group <name>
 ```
 
 Example:
 
 ```bash
-mcpjungle delete group engineering-tools
+sami-mcp-gateway delete group engineering-tools
 ```
 
 Deleting a group does not delete the underlying tools or servers. It only removes the group definition and its dedicated endpoints.
@@ -129,10 +129,10 @@ Two related commands are often useful when working with groups:
 
 ```bash
 # List only the tools currently active in a group
-mcpjungle list tools --group engineering-tools
+sami-mcp-gateway list tools --group engineering-tools
 
 # Invoke a tool while validating that it belongs to the group
-mcpjungle invoke github__create_issue \
+sami-mcp-gateway invoke github__create_issue \
   --input '{"owner":"myorg","repo":"myrepo","title":"Test"}' \
   --group engineering-tools
 ```

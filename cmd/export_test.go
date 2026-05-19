@@ -74,8 +74,8 @@ func TestResolveTargetDirForExport(t *testing.T) {
 			name: "tilde expansion at home",
 			setup: func() (string, error) {
 				home, _ := os.UserHomeDir()
-				testDir := filepath.Join(home, ".mcpjungle_test_"+strings.ReplaceAll(t.Name(), "/", "_"))
-				exportCmdTargetDir = "~/.mcpjungle_test_" + strings.ReplaceAll(t.Name(), "/", "_")
+				testDir := filepath.Join(home, ".sami_mcp_gateway_test_"+strings.ReplaceAll(t.Name(), "/", "_"))
+				exportCmdTargetDir = "~/.sami_mcp_gateway_test_" + strings.ReplaceAll(t.Name(), "/", "_")
 				return testDir, nil
 			},
 			cleanup: func(dir string) {

@@ -14,10 +14,10 @@ import (
 
 	mcpgoclient "github.com/mark3labs/mcp-go/client"
 	mcpgotransport "github.com/mark3labs/mcp-go/client/transport"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -30,7 +30,7 @@ var errUpstreamOAuthDCRUnsupported = errors.New("upstream OAuth provider does no
 
 func upstreamOAuthDCRUnsupportedUserError() error {
 	return fmt.Errorf(
-		"upstream OAuth provider does not support dynamic client registration, and mcpjungle does not yet support the OAuth client identification flow required by this provider. Hint: if you already have provider-issued OAuth client credentials, retry registration by supplying the oauth_client_id and oauth_client_secret in the MCP server configuration",
+		"upstream OAuth provider does not support dynamic client registration, and sami-mcp-gateway does not yet support the OAuth client identification flow required by this provider. Hint: if you already have provider-issued OAuth client credentials, retry registration by supplying the oauth_client_id and oauth_client_secret in the MCP server configuration",
 	)
 }
 
@@ -308,10 +308,10 @@ func (m *MCPService) bootstrapUpstreamOAuth(ctx context.Context, input *types.Re
 	}
 
 	if oauthHandler.GetClientID() == "" {
-		clientID, clientSecret, err := registerOAuthClientWithoutEmptyScope(ctx, oauthHandler, input, "mcpjungle-"+server.Name)
+		clientID, clientSecret, err := registerOAuthClientWithoutEmptyScope(ctx, oauthHandler, input, "sami-mcp-gateway-"+server.Name)
 		if err != nil {
 			if errors.Is(err, errUpstreamOAuthDCRUnsupported) {
-				// TODO: Once MCPJungle supports additional OAuth client identification
+				// TODO: Once SAMI MCP Gateway supports additional OAuth client identification
 				// strategies (for example Client ID Metadata Documents), revisit
 				// this special-case error. At that point this branch may no longer
 				// be needed because the flow should continue with the alternative

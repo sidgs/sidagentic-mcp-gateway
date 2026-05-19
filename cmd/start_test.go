@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/version"
 )
 
 func TestStartCommandStructure(t *testing.T) {
@@ -16,8 +16,8 @@ func TestStartCommandStructure(t *testing.T) {
 		if startServerCmd.Use != "start" {
 			t.Errorf("Expected start command Use to be 'start', got %s", startServerCmd.Use)
 		}
-		if startServerCmd.Short != "Start the MCPJungle server" {
-			t.Errorf("Expected start command Short to be 'Start the MCPJungle server', got %s", startServerCmd.Short)
+		if startServerCmd.Short != "Start the SAMI MCP Gateway server" {
+			t.Errorf("Expected start command Short to be 'Start the SAMI MCP Gateway server', got %s", startServerCmd.Short)
 		}
 	})
 
@@ -76,13 +76,13 @@ func TestNewProxyServers_AdvertiseCurrentVersion(t *testing.T) {
 	testhelpers.AssertMCPServerInfo(
 		t,
 		mcpProxyServer,
-		"MCPJungle Proxy MCP Server",
+		"SAMI MCP Gateway Proxy MCP Server",
 		version.GetVersion(),
 	)
 	testhelpers.AssertMCPServerInfo(
 		t,
 		sseMcpProxyServer,
-		"MCPJungle Proxy MCP Server for SSE transport",
+		"SAMI MCP Gateway Proxy MCP Server for SSE transport",
 		version.GetVersion(),
 	)
 }

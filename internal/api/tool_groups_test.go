@@ -8,10 +8,11 @@ import (
 
 	"github.com/gin-gonic/gin"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	mcpSvc "sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 )
 
 // setupToolGroupServer creates a Server with a real ToolGroupService backed by an in-memory DB.
@@ -80,14 +81,15 @@ func TestGetToolGroupEndpoints_IncludesHTTPPathPrefix(t *testing.T) {
 
 	c, _ := gin.CreateTestContext(nil)
 	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request = c.Request.WithContext(tenant.WithContext(c.Request.Context(), tenant.DefaultID))
 	c.Request.Host = "apps.example.com"
 	c.Request.Header.Set("X-Forwarded-Proto", "https")
 
 	got := s.getToolGroupEndpoints(c, "my-group")
 
-	wantMCP := "https://apps.example.com/api/v1/sami-mcp-gateway/v0/groups/my-group/mcp"
-	wantSSE := "https://apps.example.com/api/v1/sami-mcp-gateway/v0/groups/my-group/sse"
-	wantMsg := "https://apps.example.com/api/v1/sami-mcp-gateway/v0/groups/my-group/message"
+	wantMCP := "https://apps.example.com/api/v1/sami-mcp-gateway/sami/v0/groups/my-group/mcp"
+	wantSSE := "https://apps.example.com/api/v1/sami-mcp-gateway/sami/v0/groups/my-group/sse"
+	wantMsg := "https://apps.example.com/api/v1/sami-mcp-gateway/sami/v0/groups/my-group/message"
 	testhelpers.AssertEqual(t, wantMCP, got.StreamableHTTPEndpoint)
 	testhelpers.AssertEqual(t, wantSSE, got.SSEEndpoint)
 	testhelpers.AssertEqual(t, wantMsg, got.SSEMessageEndpoint)
@@ -99,13 +101,14 @@ func TestGetToolGroupEndpoints_NoHTTPPathPrefix(t *testing.T) {
 
 	c, _ := gin.CreateTestContext(nil)
 	c.Request = httptest.NewRequest(http.MethodGet, "/", nil)
+	c.Request = c.Request.WithContext(tenant.WithContext(c.Request.Context(), tenant.DefaultID))
 	c.Request.Host = "localhost:8080"
 	c.Request.TLS = nil
 	c.Request.Header.Set("X-Forwarded-Proto", "") // http
 
 	got := s.getToolGroupEndpoints(c, "g")
 
-	testhelpers.AssertEqual(t, "http://localhost:8080/v0/groups/g/mcp", got.StreamableHTTPEndpoint)
-	testhelpers.AssertEqual(t, "http://localhost:8080/v0/groups/g/sse", got.SSEEndpoint)
-	testhelpers.AssertEqual(t, "http://localhost:8080/v0/groups/g/message", got.SSEMessageEndpoint)
+	testhelpers.AssertEqual(t, "http://localhost:8080/sami/v0/groups/g/mcp", got.StreamableHTTPEndpoint)
+	testhelpers.AssertEqual(t, "http://localhost:8080/sami/v0/groups/g/sse", got.SSEEndpoint)
+	testhelpers.AssertEqual(t, "http://localhost:8080/sami/v0/groups/g/message", got.SSEMessageEndpoint)
 }

@@ -18,22 +18,22 @@ import (
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
 	"gorm.io/gorm"
 )
 
 const (
 	// serverToolNameSep is the separator used to combine server name and tool name.
-	// This combination produces the canonical name that uniquely identifies a tool across MCPJungle.
+	// This combination produces the canonical name that uniquely identifies a tool across SAMI MCP Gateway.
 	serverToolNameSep = "__"
 
 	// serverPromptNameSep is the separator used to combine server name and prompt name.
-	// This combination produces the canonical name that uniquely identifies a prompt across MCPJungle.
+	// This combination produces the canonical name that uniquely identifies a prompt across SAMI MCP Gateway.
 	serverPromptNameSep = "__"
 
 	// serverResourceNameSep is the separator used to combine server name and resource name.
-	// This combination produces a canonical display name for resources across MCPJungle.
+	// This combination produces a canonical display name for resources across SAMI MCP Gateway.
 	serverResourceNameSep = "__"
 )
 
@@ -42,7 +42,7 @@ var validServerName = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
 
 // validateServerName checks if the server name is valid.
 // Server name must not contain double underscores `__`.
-// Tools in mcpjungle are identified by `<server_name>__<tool_name>` (eg- `github__git_commit`)
+// Tools in sami-mcp-gateway are identified by `<server_name>__<tool_name>` (eg- `github__git_commit`)
 // When a tool is invoked, the text before the first __ is treated as the server name.
 // eg- In `aws__ec2__create_sg`, `aws` is the MCP server's name and `ec2__create_sg` is the tool.
 func validateServerName(name string) error {
@@ -244,12 +244,12 @@ func prepareSHTTPClientOptions(serverName string, conf *model.StreamableHTTPConf
 }
 
 // defaultHTTPInitializeRequest builds the standard initialize payload used when
-// MCPJungle connects to an upstream streamable HTTP server.
+// SAMI MCP Gateway connects to an upstream streamable HTTP server.
 func defaultHTTPInitializeRequest(url string) mcp.InitializeRequest {
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "mcpjungle mcp client for " + url,
+		Name:    "sami-mcp-gateway mcp client for " + url,
 		Version: "0.1",
 	}
 	initRequest.Params.Capabilities = mcp.ClientCapabilities{}
@@ -327,14 +327,14 @@ func createHTTPMcpServerConn(
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf(
 				"initialization request to MCP server timed out after %d seconds."+
-					" To increase the timeout, use the MCP_SERVER_INIT_REQ_TIMEOUT_SEC environment variable for the mcpjungle server",
+					" To increase the timeout, use the MCP_SERVER_INIT_REQ_TIMEOUT_SEC environment variable for the sami-mcp-gateway server",
 				initReqTimeoutSec,
 			)
 		}
 		if errors.Is(err, syscall.ECONNREFUSED) && isLoopbackURL(conf.URL) {
 			return nil, fmt.Errorf(
 				"connection to the MCP server %s was refused. "+
-					"If mcpjungle is running inside Docker, use 'host.docker.internal' as your MCP server's hostname",
+					"If sami-mcp-gateway is running inside Docker, use 'host.docker.internal' as your MCP server's hostname",
 				conf.URL,
 			)
 		}
@@ -345,7 +345,7 @@ func createHTTPMcpServerConn(
 }
 
 // captureStdioServerStderr captures the stderr output of a stdio MCP server in the background
-// and writes it to mcpjungle server logs.
+// and writes it to sami-mcp-gateway server logs.
 // This is useful for troubleshooting and visibility into the stdio server's behaviour.
 func captureStdioServerStderr(name string, c *client.Client) {
 	stdioTransport := c.GetTransport().(*transport.Stdio)
@@ -392,14 +392,14 @@ func runStdioServer(ctx context.Context, s *model.McpServer, initReqTimeoutSec i
 		return nil, fmt.Errorf("failed to create stdio client for MCP server: %w", err)
 	}
 
-	// currently, we only capture the stderr output in the mcpjungle server logs.
+	// currently, we only capture the stderr output in the sami-mcp-gateway server logs.
 	// TODO: Propagate the stderr output to the client as well to provide them quicker feedback on errors.
 	captureStdioServerStderr(s.Name, c)
 
 	initRequest := mcp.InitializeRequest{}
 	initRequest.Params.ProtocolVersion = mcp.LATEST_PROTOCOL_VERSION
 	initRequest.Params.ClientInfo = mcp.Implementation{
-		Name:    "mcpjungle mcp client for stdio",
+		Name:    "sami-mcp-gateway mcp client for stdio",
 		Version: "0.1",
 	}
 	initRequest.Params.Capabilities = mcp.ClientCapabilities{}
@@ -412,8 +412,8 @@ func runStdioServer(ctx context.Context, s *model.McpServer, initReqTimeoutSec i
 		if errors.Is(err, context.DeadlineExceeded) {
 			return nil, fmt.Errorf(
 				"initialization request to MCP server timed out after %d seconds,"+
-					" check mcpjungle server logs for any errors from this MCP server."+
-					" To increase the timeout, use the MCP_SERVER_INIT_REQ_TIMEOUT_SEC environment variable for the mcpjungle server",
+					" check sami-mcp-gateway server logs for any errors from this MCP server."+
+					" To increase the timeout, use the MCP_SERVER_INIT_REQ_TIMEOUT_SEC environment variable for the sami-mcp-gateway server",
 				initReqTimeoutSec,
 			)
 		}
@@ -429,7 +429,7 @@ func defaultSSEInitializeRequest() mcp.InitializeRequest {
 		Params: mcp.InitializeParams{
 			ProtocolVersion: "2024-11-05",
 			Capabilities:    mcp.ClientCapabilities{},
-			ClientInfo:      mcp.Implementation{Name: "mcpjungle-sse-proxy-client", Version: "0.1.0"},
+			ClientInfo:      mcp.Implementation{Name: "sami-mcp-gateway-sse-proxy-client", Version: "0.1.0"},
 		},
 	}
 }

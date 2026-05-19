@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"net/url"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 // RegisterServer registers a new MCP server with the registry.

@@ -1,11 +1,11 @@
-// Package migrations provides database migration functionality for the MCPJungle application.
+// Package migrations provides database migration functionality for the SAMI MCP Gateway application.
 package migrations
 
 import (
 	"fmt"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )

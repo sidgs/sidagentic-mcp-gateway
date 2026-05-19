@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/cliapp"
+	"sami.io/mcpgateway/pkg/types"
+	"sami.io/mcpgateway/pkg/version"
 	"gorm.io/gorm"
 )
 
@@ -31,7 +31,7 @@ type serverInventory struct {
 	ToolCount     int
 	PromptCount   int
 	ResourceCount int
-	// Active counts reflect what is currently exposed through MCPJungle after
+	// Active counts reflect what is currently exposed through SAMI MCP Gateway after
 	// applying both server-level and entity-level enabled flags.
 	ActiveToolCount     int
 	ActivePromptCount   int
@@ -220,7 +220,7 @@ func (s *Service) Resources() (*types.DashboardResourcesResponse, error) {
 }
 
 // Diagnostics is intentionally stricter than Overview: its counts describe what
-// is currently exposed through MCPJungle, not every entity ever discovered.
+// is currently exposed through SAMI MCP Gateway, not every entity ever discovered.
 func (s *Service) Diagnostics(mode model.ServerMode, baseURL string) (*types.DashboardDiagnosticsResponse, error) {
 	inventory, err := s.loadServerInventory()
 	if err != nil {
@@ -479,7 +479,7 @@ func buildServerCommand(command string, args []string) string {
 	return strings.TrimSpace(strings.Join(parts, " "))
 }
 
-// buildEndpoints returns the global MCPJungle endpoints shown in overview/header
+// buildEndpoints returns the global SAMI MCP Gateway endpoints shown in overview/header
 // UI. It is based on the incoming request URL so forwarded hosts/protocols are
 // reflected correctly.
 func buildEndpoints(baseURL string) []types.DashboardEndpoint {

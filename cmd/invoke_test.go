@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/spf13/afero"
 	"github.com/spf13/cobra"
 )

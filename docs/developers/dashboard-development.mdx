@@ -1,8 +1,8 @@
-# MCPJungle dashboard frontend development
+# SAMI MCP Gateway dashboard frontend development
 
 ## 1. What the dashboard is
 
-The Dashboard UI is served by the MCPJungle Go server at `/` in development mode.
+The Dashboard UI is served by the SAMI MCP Gateway Go server at `/` in development mode.
 
 ## 2. Frontend architecture
 
@@ -64,7 +64,7 @@ These routes are backed by `dashboardui.FileServer()` from internal/dashboardui/
 
 ### Are assets embedded or served from disk?
 
-For the real MCPJungle server, assets are embedded into the Go binary. The Go server does not read `web/dashboard/src` directly at runtime.
+For the real SAMI MCP Gateway server, assets are embedded into the Go binary. The Go server does not read `web/dashboard/src` directly at runtime.
 
 During frontend-only development, you can also run the Vite dev server at `http://localhost:5173/`.
 
@@ -113,12 +113,12 @@ From the repo root:
 go run . start
 ```
 
-This starts MCPJungle in development mode by default on `http://localhost:8080`.
+This starts SAMI MCP Gateway in development mode by default on `http://localhost:8080`.
 
 If you are using the installed CLI instead of `go run`, the equivalent command is:
 
 ```bash
-mcpjungle start
+sami-mcp-gateway start
 ```
 
 ### Run the frontend dev server
@@ -268,10 +268,10 @@ This is intentional so the dashboard is local/dev only.
 
 ### What happens in enterprise mode
 
-If MCPJungle is started with:
+If SAMI MCP Gateway is started with:
 
 ```bash
-mcpjungle start --enterprise
+sami-mcp-gateway start --enterprise
 ```
 
 or `SERVER_MODE=enterprise`, dashboard UI routes and dashboard API routes return `404`.
@@ -384,7 +384,7 @@ Dashboard registration supports MCP servers that require upstream OAuth.
 
 The CLI can create its own localhost callback server. See cmd/register.go.
 
-The browser frontend cannot do that, so the dashboard uses the MCPJungle Go server as the OAuth callback receiver.
+The browser frontend cannot do that, so the dashboard uses the SAMI MCP Gateway Go server as the OAuth callback receiver.
 
 ### Current dashboard OAuth flow
 
@@ -565,7 +565,7 @@ Useful test files include:
 
 ### Manual smoke-test checklist
 
-1. Start MCPJungle in dev mode and open `http://localhost:8080/`.
+1. Start SAMI MCP Gateway in dev mode and open `http://localhost:8080/`.
 2. Confirm the default page is `Servers`.
 3. Add a server.
 4. If possible, test an OAuth-required registration.
@@ -620,7 +620,7 @@ Remember:
 
 Check:
 
-- MCPJungle is running in dev mode, not enterprise mode
+- SAMI MCP Gateway is running in dev mode, not enterprise mode
 - you started the real server
 - the server is initialized
 
@@ -687,7 +687,7 @@ go test ./internal/service/mcp
 go test ./...
 ```
 
-4. Rebuild and run MCPJungle.
+4. Rebuild and run SAMI MCP Gateway.
 5. Verify the dashboard from the Go server at `http://localhost:8080/`, not only from `http://localhost:5173/`.
 
 GoReleaser also runs `bash ./scripts/build-dashboard.sh` in its `before.hooks`, so release artifacts automatically include a fresh embedded dashboard bundle.

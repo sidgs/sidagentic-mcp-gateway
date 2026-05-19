@@ -9,10 +9,10 @@ import (
 type ServerMode string
 
 const (
-	// ModeDev is ideal for developers running the mcpjungle locally for personal MCP workflows.
+	// ModeDev is ideal for developers running the sami-mcp-gateway locally for personal MCP workflows.
 	ModeDev ServerMode = "development"
 
-	// ModeEnterprise is ideal for enterprise (production) deployments where multiple users will be using mcpjungle.
+	// ModeEnterprise is ideal for enterprise (production) deployments where multiple users will be using sami-mcp-gateway.
 	ModeEnterprise ServerMode = "enterprise"
 
 	// ModeProd is a deprecated alias for ModeEnterprise.
@@ -28,7 +28,7 @@ func IsEnterpriseMode(mode ServerMode) bool {
 	return mode == ModeEnterprise || mode == ModeProd
 }
 
-// ServerConfig represents the configuration for the MCPJungle server.
+// ServerConfig represents the configuration for the SAMI MCP Gateway server.
 type ServerConfig struct {
 	gorm.Model
 

@@ -1,4 +1,4 @@
-// Package dashboardui embeds the compiled MCPJungle dashboard frontend and
+// Package dashboardui embeds the compiled SAMI MCP Gateway dashboard frontend and
 // exposes an HTTP file server for serving those static assets from the main Go
 // server. It does not build the frontend itself; it only serves the already
 // generated bundle copied into internal/dashboardui/dist.

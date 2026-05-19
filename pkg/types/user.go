@@ -6,7 +6,7 @@ type AccessTokenRef struct {
 	File string `json:"file,omitempty"`
 }
 
-// UserRole represents the role of a user in the MCPJungle system.
+// UserRole represents the role of a user in the SAMI MCP Gateway system.
 type UserRole string
 
 const (
@@ -20,7 +20,7 @@ type UserConfig struct {
 	Username string `json:"name"`
 
 	// AccessToken allows you to provide a custom access token the user can use
-	// to authenticate with MCPJungle.
+	// to authenticate with SAMI MCP Gateway.
 	// It is not recommended to use this field in production environments, since
 	// a hard-coded access token can be a security risk.
 	// Instead, use the AccessTokenRef field to load the access token from
@@ -33,9 +33,9 @@ type UserConfig struct {
 	AccessTokenRef AccessTokenRef `json:"access_token_ref"`
 }
 
-// User represents an authenticated, human user in mcpjungle
+// User represents an authenticated, human user in sami-mcp-gateway
 // A user has lesser privileges than an Admin.
-// They can consume mcpjungle but not necessarily manage it.
+// They can consume sami-mcp-gateway but not necessarily manage it.
 type User struct {
 	Username string `json:"username"`
 	Role     string `json:"role"`

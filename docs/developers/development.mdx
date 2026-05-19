@@ -1,6 +1,6 @@
 ---
 title: "Development guide"
-description: "Development setup, build and test workflows, architecture orientation, and release operations for mcpjungle contributors."
+description: "Development setup, build and test workflows, architecture orientation, and release operations for sami-mcp-gateway contributors."
 ---
 
 This guide covers development setup and technical workflows for contributors and maintainers.
@@ -24,9 +24,9 @@ Mcpjungle consists of several main components:
 
 Good places to orient yourself:
 
-- [CLI commands](https://github.com/mcpjungle/MCPJungle/tree/main/cmd)
-- [HTTP API server](https://github.com/mcpjungle/MCPJungle/blob/main/internal/api/server.go)
-- [MCP proxy server](https://github.com/mcpjungle/MCPJungle/blob/main/internal/service/mcp/proxy.go)
+- 
+- 
+- 
 
 ## Building and testing
 
@@ -62,7 +62,7 @@ go test -cover ./...
 go test ./internal/service/mcp
 
 # Run the sanity test script
-./scripts/test-mcpjungle.sh
+./scripts/test-sami-mcp-gateway.sh
 ```
 
 ### Linting
@@ -88,8 +88,8 @@ See the [golangci-lint installation docs](https://golangci-lint.run/docs/welcome
 ### Quick start
 
 ```bash
-git clone https://github.com/mcpjungle/MCPJungle.git
-cd MCPJungle
+git clone  MCP Gateway.git
+cd SAMI MCP Gateway
 
 docker-compose up -d
 
@@ -103,14 +103,14 @@ goreleaser build --single-target --clean --snapshot
 When running with SQLite, you can inspect the local database using `sqlite3`:
 
 ```bash
-sqlite3 mcpjungle.db
+sqlite3 sami-mcp-gateway.db
 
 .tables
 SELECT * FROM mcp_servers;
 SELECT * FROM tools;
 ```
 
-For backward compatibility, Mcpjungle still reads existing `mcp.db` files if they exist, but new databases are created as `mcpjungle.db`.
+For backward compatibility, Mcpjungle still reads existing `mcp.db` files if they exist, but new databases are created as `sami-mcp-gateway.db`.
 
 ### PostgreSQL
 
@@ -121,9 +121,9 @@ When running with Docker Compose, you can inspect PostgreSQL through pgAdmin:
 3. Add a database server with:
    - Host: `db`
    - Port: `5432`
-   - Username: `mcpjungle`
-   - Password: `mcpjungle`
-   - Database: `mcpjungle`
+   - Username: `sami-mcp-gateway`
+   - Password: `sami-mcp-gateway`
+   - Database: `sami-mcp-gateway`
 
 ## MCP server testing
 
@@ -213,7 +213,7 @@ Common issues:
 
 ## Getting help
 
-- Check [GitHub Issues](https://github.com/mcpjungle/MCPJungle/issues)
+- Check 
 - Join [Discord](https://discord.gg/CapV4Z3krk)
 - Open a GitHub Discussion for design or workflow questions
 

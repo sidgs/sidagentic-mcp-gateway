@@ -1,4 +1,4 @@
-// Package api provides HTTP API functionality for the MCPJungle server.
+// Package api provides HTTP API functionality for the SAMI MCP Gateway server.
 package api
 
 import (
@@ -13,19 +13,19 @@ import (
 	"github.com/coreos/go-oidc/v3/oidc"
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/dashboardui"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
-	"github.com/mcpjungle/mcpjungle/internal/service/config"
-	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/user"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/internal/dashboardui"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/service/agentapp"
+	"sami.io/mcpgateway/internal/service/config"
+	"sami.io/mcpgateway/internal/service/dashboard"
+	"sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/internal/service/user"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
+	"sami.io/mcpgateway/pkg/version"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 	"github.com/redis/go-redis/v9"
 	"go.opentelemetry.io/contrib/instrumentation/github.com/gin-gonic/gin/otelgin"
@@ -86,7 +86,7 @@ type ServerOptions struct {
 	DefaultTenantID string
 }
 
-// Server represents the MCPJungle registry server that handles MCP proxy and API requests
+// Server represents the SAMI MCP Gateway registry server that handles MCP proxy and API requests
 type Server struct {
 	router *gin.Engine
 
@@ -156,7 +156,7 @@ type dashboardOAuthSessionResult struct {
 	UpdatedAt  time.Time
 }
 
-// NewServer initializes a new Gin server for MCPJungle registry and MCP proxy
+// NewServer initializes a new Gin server for SAMI MCP Gateway registry and MCP proxy
 func NewServer(opts *ServerOptions) (*Server, error) {
 	def := strings.TrimSpace(opts.DefaultTenantID)
 	if def == "" {
@@ -362,10 +362,26 @@ func (s *Server) publicGatewayRoot(c *gin.Context) string {
 	return strings.TrimRight(hostRoot, "/") + s.httpPathPrefix
 }
 
-// v0SubgroupMountBasePath is the path prefix for /v0/<segment>/<subgroupName> MCP mounts (includes HTTP_PATH_PREFIX when set).
-func (s *Server) v0SubgroupMountBasePath(segment, subgroupName string) string {
+// publicTenantMCPRoot returns scheme://host[/prefix]/{tenantID} for advertised MCP connection URLs.
+func (s *Server) publicTenantMCPRoot(c *gin.Context) string {
+	tid := tenant.MustFromContext(c.Request.Context())
+	return strings.TrimRight(s.schemeHostPublicURL(c), "/") + s.tenantMCPMountBasePath(tid)
+}
+
+// tenantMCPMountBasePath returns [HTTP_PATH_PREFIX]/{tenantID} (no trailing slash).
+func (s *Server) tenantMCPMountBasePath(tenantID string) string {
 	pp := NormalizeHTTPPathPrefix(s.httpPathPrefix)
-	core := fmt.Sprintf("%s/%s/%s", V0PathPrefix, segment, subgroupName)
+	core := "/" + tenantID
+	if pp == "" {
+		return core
+	}
+	return pp + core
+}
+
+// v0SubgroupMountBasePath returns [HTTP_PATH_PREFIX]/{tenantID}/v0/{segment}/{subgroupName}.
+func (s *Server) v0SubgroupMountBasePath(tenantID, segment, subgroupName string) string {
+	pp := NormalizeHTTPPathPrefix(s.httpPathPrefix)
+	core := fmt.Sprintf("/%s%s/%s/%s", tenantID, V0PathPrefix, segment, subgroupName)
 	if pp == "" {
 		return core
 	}
@@ -446,64 +462,64 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		g.GET("/assets/*filepath", s.requireInitialized(), requireDashboardModeOrOIDC, gin.WrapH(dashboardFileServer))
 	}
 
-	// Set up the MCP proxy server on /mcp
+	// Tenant-scoped MCP connection routes (global + tool/prompt groups).
 	streamableHTTPServer := server.NewStreamableHTTPServer(s.mcpProxyServer)
-	g.Any(
+	sseServer := server.NewSSEServer(
+		s.sseMcpProxyServer,
+		server.WithDynamicBasePath(func(r *http.Request, sessionID string) string {
+			return s.tenantMCPMountBasePath(tenant.MustFromContext(r.Context()))
+		}),
+	)
+	tenantMCP := g.Group("/:tenant_id", s.tenantFromPathMiddleware())
+	tenantMCP.Any(
 		"/mcp",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		gin.WrapH(streamableHTTPServer),
 	)
-
-	g.Any(
-		V0PathPrefix+"/groups/:name/mcp",
-		s.requireInitialized(),
-		s.checkAuthForGroupMcpProxyAccess(true),
-		s.toolGroupMCPServerCallHandler(),
-	)
-
-	g.Any(
-		V0PathPrefix+"/prompt-groups/:name/mcp",
-		s.requireInitialized(),
-		s.checkAuthForGroupMcpProxyAccess(false),
-		s.promptGroupMCPServerCallHandler(),
-	)
-
-	// Set up the SSE transport-based MCP proxy server for the global /sse endpoint
-	sseServer := server.NewSSEServer(s.sseMcpProxyServer)
-	g.Any(
+	tenantMCP.Any(
 		"/sse",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		gin.WrapH(sseServer.SSEHandler()),
 	)
-	g.Any(
+	tenantMCP.Any(
 		"/message",
 		s.requireInitialized(),
 		s.checkAuthForMcpProxyAccess(),
 		gin.WrapH(sseServer.MessageHandler()),
 	)
-
-	g.Any(
+	tenantMCP.Any(
+		V0PathPrefix+"/groups/:name/mcp",
+		s.requireInitialized(),
+		s.checkAuthForGroupMcpProxyAccess(true),
+		s.toolGroupMCPServerCallHandler(),
+	)
+	tenantMCP.Any(
+		V0PathPrefix+"/prompt-groups/:name/mcp",
+		s.requireInitialized(),
+		s.checkAuthForGroupMcpProxyAccess(false),
+		s.promptGroupMCPServerCallHandler(),
+	)
+	tenantMCP.Any(
 		V0PathPrefix+"/groups/:name/sse",
 		s.requireInitialized(),
 		s.checkAuthForGroupMcpProxyAccess(true),
 		s.toolGroupSseMCPServerCallHandler(),
 	)
-	g.Any(
+	tenantMCP.Any(
 		V0PathPrefix+"/groups/:name/message",
 		s.requireInitialized(),
 		s.checkAuthForGroupMcpProxyAccess(true),
 		s.toolGroupSseMCPServerCallMessageHandler(),
 	)
-
-	g.Any(
+	tenantMCP.Any(
 		V0PathPrefix+"/prompt-groups/:name/sse",
 		s.requireInitialized(),
 		s.checkAuthForGroupMcpProxyAccess(false),
 		s.promptGroupSseHandler(),
 	)
-	g.Any(
+	tenantMCP.Any(
 		V0PathPrefix+"/prompt-groups/:name/message",
 		s.requireInitialized(),
 		s.checkAuthForGroupMcpProxyAccess(false),
@@ -511,7 +527,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 	)
 
 	g.POST(
-		V0ApiPathPrefix+"/agent-apps/oauth/token",
+		"/agent-apps/oauth/token",
 		s.requireInitialized(),
 		s.agentAppOAuthTokenHandler(),
 	)

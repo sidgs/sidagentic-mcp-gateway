@@ -1,31 +1,31 @@
 ---
 title: "Add Streamable HTTP MCP servers"
-description: "Register remote MCP servers in mcpjungle using CLI. Expose them via the mcp gateway."
+description: "Register remote MCP servers in sami-mcp-gateway using CLI. Expose them via the mcp gateway."
 ---
 
 MCP servers using the [Streamable HTTP transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#streamable-http) can be added to Mcpjungle.
 
-Once registered, a server's tools, prompts, and resources are available to any MCP client that connects to mcpjungle mcp endpoint.
+Once registered, a server's tools, prompts, and resources are available to any MCP client that connects to sami-mcp-gateway mcp endpoint.
 
 ## Register a server with CLI flags
 
 The quickest way to register a Streamable HTTP server is with the `register` command and inline flags:
 
 ```bash
-mcpjungle register --name context7 --url https://mcp.context7.com/mcp
+sami-mcp-gateway register --name context7 --url https://mcp.context7.com/mcp
 ```
 
 Here's an example of adding a custom MCP server running on your local machine
 
 ```bash
-mcpjungle register --name calculator --description "Provides some basic math tools" --url http://127.0.0.1:5000/mcp
+sami-mcp-gateway register --name calculator --description "Provides some basic math tools" --url http://127.0.0.1:5000/mcp
 ```
 
 <Note>
 If Mcpjungle is running inside Docker on macOS or Windows, the container cannot reach `127.0.0.1` on your host. Use `host.docker.internal` instead:
 
 ```bash
-mcpjungle register --name calculator --description "Provides some basic math tools" --url http://host.docker.internal:5000/mcp
+sami-mcp-gateway register --name calculator --description "Provides some basic math tools" --url http://host.docker.internal:5000/mcp
 ```
 </Note>
 
@@ -34,7 +34,7 @@ mcpjungle register --name calculator --description "Provides some basic math too
 For servers that need authentication or custom headers — or when you want to keep registration configs in version control — use a JSON config file:
 
 ```bash
-mcpjungle register -c ./deepwiki.json
+sami-mcp-gateway register -c ./deepwiki.json
 ```
 
 The full config file format for a Streamable HTTP server is:
@@ -76,7 +76,7 @@ The full config file format for a Streamable HTTP server is:
 Many SaaS-hosted MCP servers require a static API token. Pass it with the `--bearer-token` flag:
 
 ```bash
-mcpjungle register \
+sami-mcp-gateway register \
   --name huggingface \
   --description "HuggingFace MCP Server" \
   --url https://huggingface.co/mcp \
@@ -120,7 +120,7 @@ If the upstream MCP server responds with `401 Unauthorized` and advertises OAuth
 Typical CLI flow:
 
 ```bash
-mcpjungle register --name todoist --url https://ai.todoist.net/mcp
+sami-mcp-gateway register --name todoist --url https://ai.todoist.net/mcp
 ```
 
 What happens next:
@@ -155,13 +155,13 @@ See the [configuration file reference](/reference/config-file#$var_name-placehol
 After registering a server, inspect what Mcpjungle discovered:
 
 ```bash
-mcpjungle list tools
+sami-mcp-gateway list tools
 
 # get the usage schema of a tool
-mcpjungle usage deepwiki__read_wiki_structure
+sami-mcp-gateway usage deepwiki__read_wiki_structure
 
 # call a tool from cli
-mcpjungle invoke deepwiki__read_wiki_structure --input '{"repoName": "facebook/react"}'
+sami-mcp-gateway invoke deepwiki__read_wiki_structure --input '{"repoName": "facebook/react"}'
 ```
 
 That is the quickest way to confirm both the upstream server and Mcpjungle routing are working as expected.
@@ -171,10 +171,10 @@ That is the quickest way to confirm both the upstream server and Mcpjungle routi
 To remove a server from Mcpjungle:
 
 ```bash
-mcpjungle deregister deepwiki
+sami-mcp-gateway deregister deepwiki
 ```
 
-Deregistering removes the server and all the tools, prompts, and resources it provided. They are no longer accessible by clients using mcpjungle.
+Deregistering removes the server and all the tools, prompts, and resources it provided. They are no longer accessible by clients using sami-mcp-gateway.
 
 ## Related pages
 

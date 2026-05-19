@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"net/http"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 // ListResources fetches the list of resources, optionally filtered by server name.
@@ -74,7 +74,7 @@ func (c *Client) GetResource(uri string) (*types.Resource, error) {
 	return &resource, nil
 }
 
-// ReadResource reads live resource content through MCPJungle.
+// ReadResource reads live resource content through SAMI MCP Gateway.
 func (c *Client) ReadResource(uri string) (*types.ResourceReadResult, error) {
 	u, err := c.constructAPIEndpoint("/resources/read")
 	if err != nil {

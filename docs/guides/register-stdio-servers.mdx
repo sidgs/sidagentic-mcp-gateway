@@ -1,6 +1,6 @@
 ---
 title: "Add STDIO MCP servers"
-description: "Register stdio transport-based MCP servers in mcpjungle using CLI. Expose them via the mcp gateway."
+description: "Register stdio transport-based MCP servers in sami-mcp-gateway using CLI. Expose them via the mcp gateway."
 ---
 
 Mcpjungle supports MCP servers that use the [STDIO transport](https://modelcontextprotocol.io/specification/2025-03-26/basic/transports#stdio).
@@ -29,7 +29,7 @@ Because STDIO servers run as local processes, you must register them using a JSO
     Pass the file to the `register` command with the `-c` flag:
 
     ```bash
-    mcpjungle register -c ./filesystem.json
+    sami-mcp-gateway register -c ./filesystem.json
     ```
 
     Mcpjungle spawns the process, initializes the connection, loads its tool list, and registers the server.
@@ -127,7 +127,7 @@ If you need to expose a different directory, add a volume mount to your `docker-
 STDIO-based servers that rely on `npx` or `uvx` require those tools to be present in the Mcpjungle container.
 
 <Warning>
-The default `mcpjungle` Docker image is minimal and does not include `npx` or `uvx`. You must use the `latest-stdio` tagged image when registering STDIO servers that use these commands.
+The default `sami-mcp-gateway` Docker image is minimal and does not include `npx` or `uvx`. You must use the `latest-stdio` tagged image when registering STDIO servers that use these commands.
 </Warning>
 
 Start Mcpjungle with the `stdio` image using the `MCPJUNGLE_IMAGE_TAG` environment variable:

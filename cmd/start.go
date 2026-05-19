@@ -19,20 +19,20 @@ import (
 
 	"github.com/joho/godotenv"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/api"
-	"github.com/mcpjungle/mcpjungle/internal/db"
-	"github.com/mcpjungle/mcpjungle/internal/migrations"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
-	"github.com/mcpjungle/mcpjungle/internal/service/config"
-	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/user"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/internal/api"
+	"sami.io/mcpgateway/internal/db"
+	"sami.io/mcpgateway/internal/migrations"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/service/agentapp"
+	"sami.io/mcpgateway/internal/service/config"
+	"sami.io/mcpgateway/internal/service/dashboard"
+	"sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/internal/service/user"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/version"
 	"github.com/redis/go-redis/v9"
 	"github.com/spf13/cobra"
 )
@@ -114,17 +114,17 @@ var (
 
 var startServerCmd = &cobra.Command{
 	Use:   "start",
-	Short: "Start the MCPJungle server",
-	Long: "Starts the MCPJungle HTTP Registry and the MCP Gateway\n\n" +
-		"The server is started in development mode by default, which is ideal for running mcpjungle locally.\n" +
-		"Teams & Enterprises should run mcpjungle in enterprise mode.\n" +
+	Short: "Start the SAMI MCP Gateway server",
+	Long: "Starts the SAMI MCP Gateway HTTP Registry and the MCP Gateway\n\n" +
+		"The server is started in development mode by default, which is ideal for running sami-mcp-gateway locally.\n" +
+		"Teams & Enterprises should run sami-mcp-gateway in enterprise mode.\n" +
 		"If the database is not yet initialized, startup completes initialization automatically for the selected mode; on first enterprise startup the bootstrap admin access token is printed once to stdout.\n\n" +
 		"By default, this command creates a SQLite database file in the current directory (if it doesn't already exist).\n" +
 		"You can also supply a custom DSN in the DATABASE_URL environment variable.\n" +
-		"eg: export DATABASE_URL='postgres://user:password@localhost:5432/mcpjungle'\n" +
+		"eg: export DATABASE_URL='postgres://user:password@localhost:5432/sami-mcp-gateway'\n" +
 		"For Postgres, you can also set individual connection details using the following environment variables:\n" +
 		"POSTGRES_HOST, POSTGRES_PORT (default 5432), POSTGRES_USER (default postgres), POSTGRES_PASSWORD, POSTGRES_DB (default postgres)\n\n" +
-		"You can also configure the amount of time (in seconds) mcpjungle will wait for a new MCP server's initialization before aborting it.\n" +
+		"You can also configure the amount of time (in seconds) sami-mcp-gateway will wait for a new MCP server's initialization before aborting it.\n" +
 		"Set the MCP_SERVER_INIT_REQ_TIMEOUT_SEC environment variable to an integer (default is 30).\n" +
 		"This is useful when you register a MCP server (usually stdio, like filesystem) that may take some time to start up.\n\n" +
 		"Finally, you can also configure the idle timeout (in seconds) for stateful sessions.\n" +
@@ -165,13 +165,13 @@ func init() {
 }
 
 func newProxyServers() (*server.MCPServer, *server.MCPServer) {
-	// Tie the advertised proxy version to the mcpjungle server version (from
+	// Tie the advertised proxy version to the sami-mcp-gateway server version (from
 	// pkg/version) so the proxies always report the same version as the host
 	// process, instead of a hardcoded string.
 	proxyVersion := version.GetVersion()
 
 	mcpProxyServer := server.NewMCPServer(
-		"MCPJungle Proxy MCP Server",
+		"SAMI MCP Gateway Proxy MCP Server",
 		proxyVersion,
 		server.WithResourceCapabilities(false, false),
 		server.WithToolCapabilities(true),
@@ -179,7 +179,7 @@ func newProxyServers() (*server.MCPServer, *server.MCPServer) {
 		server.WithToolFilter(mcp.ProxyToolFilter),
 	)
 	sseMcpProxyServer := server.NewMCPServer(
-		"MCPJungle Proxy MCP Server for SSE transport",
+		"SAMI MCP Gateway Proxy MCP Server for SSE transport",
 		proxyVersion,
 		server.WithResourceCapabilities(false, false),
 		server.WithToolCapabilities(true),
@@ -190,7 +190,7 @@ func newProxyServers() (*server.MCPServer, *server.MCPServer) {
 	return mcpProxyServer, sseMcpProxyServer
 }
 
-// getDesiredServerMode returns the desired server mode for mcpjungle server.
+// getDesiredServerMode returns the desired server mode for sami-mcp-gateway server.
 // unless explicitly specified, the desired mode is dev
 func getDesiredServerMode(cmd *cobra.Command) (model.ServerMode, error) {
 	desiredServerMode := model.ModeDev
@@ -276,7 +276,7 @@ func getDefaultTenantID() (string, error) {
 	return v, nil
 }
 
-// getBindPort returns the TCP port to bind the mcpjungle server to
+// getBindPort returns the TCP port to bind the sami-mcp-gateway server to
 // precedence: command line flag > environment variable > default
 func getBindPort() string {
 	port := startServerCmdBindPort
@@ -536,7 +536,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return err
 	}
 	otelConfig := &telemetry.Config{
-		ServiceName: "mcpjungle",
+		ServiceName: "sami-mcp-gateway",
 		Enabled:     telemetryEnabled,
 	}
 	otelProviders, err := telemetry.Init(cmd.Context(), otelConfig)

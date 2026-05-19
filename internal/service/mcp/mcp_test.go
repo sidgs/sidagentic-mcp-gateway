@@ -4,9 +4,9 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"gorm.io/gorm"
 )
 

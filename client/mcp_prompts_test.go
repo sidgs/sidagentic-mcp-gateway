@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func TestListPrompts(t *testing.T) {

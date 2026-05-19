@@ -53,7 +53,7 @@ A persistent connection is closed in three situations:
     All stateful connections are closed during graceful shutdown of the Mcpjungle server process.
   </Card>
   <Card title="Server is deregistered" icon="trash">
-    Running `mcpjungle deregister <name>` closes the connection and removes the server from the registry.
+    Running `sami-mcp-gateway deregister <name>` closes the connection and removes the server from the registry.
   </Card>
   <Card title="Idle timeout expires" icon="clock">
     If `SESSION_IDLE_TIMEOUT_SEC` is set on the Mcpjungle server, connections that have been idle for longer than that duration are closed automatically.
@@ -66,7 +66,7 @@ The `SESSION_IDLE_TIMEOUT_SEC` environment variable controls how long Mcpjungle 
 
 ```bash
 export SESSION_IDLE_TIMEOUT_SEC=300  # close connections idle for more than 5 minutes
-mcpjungle start
+sami-mcp-gateway start
 ```
 
 The default value is `-1`, which disables the timeout entirely — stateful connections stay open until the server stops or the server is deregistered.

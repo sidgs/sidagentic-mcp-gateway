@@ -1,20 +1,20 @@
-# MCPJungle Docker Compose configuration for teams & organizations.
-# Use this compose file if you want to host MCPJungle on a remote server for multiple users within your org.
-# The mcpjungle server runs in "enterprise" mode with enterprise features enabled.
+# SAMI MCP Gateway Docker Compose configuration for teams & organizations.
+# Use this compose file if you want to host SAMI MCP Gateway on a remote server for multiple users within your org.
+# The sami-mcp-gateway server runs in "enterprise" mode with enterprise features enabled.
 services:
   db:
     image: postgres:17
-    container_name: mcpjungle-db
+    container_name: sami-mcp-gateway-db
     environment:
-      POSTGRES_USER: mcpjungle
-      POSTGRES_PASSWORD: mcpjungle
-      POSTGRES_DB: mcpjungle
+      POSTGRES_USER: sami-mcp-gateway
+      POSTGRES_PASSWORD: sami-mcp-gateway
+      POSTGRES_DB: sami-mcp-gateway
     ports:
       - "5432:5432"
     volumes:
       - db_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "PGPASSWORD=mcpjungle pg_isready -U mcpjungle"]
+      test: ["CMD-SHELL", "PGPASSWORD=sami-mcp-gateway pg_isready -U sami-mcp-gateway"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -22,7 +22,7 @@ services:
 
   pgadmin:
     image: dpage/pgadmin4:latest
-    container_name: mcpjungle-pgadmin
+    container_name: sami-mcp-gateway-pgadmin
     environment:
       PGADMIN_DEFAULT_EMAIL: admin@admin.com
       PGADMIN_DEFAULT_PASSWORD: admin
@@ -31,11 +31,11 @@ services:
     depends_on:
       - db
 
-  mcpjungle:
-    image: ghcr.io/mcpjungle/mcpjungle:${MCPJUNGLE_IMAGE_TAG:-latest}
-    container_name: mcpjungle-server
+  sami-mcp-gateway:
+    image: ghcr.io/sami-mcp-gateway/sami-mcp-gateway:${MCPJUNGLE_IMAGE_TAG:-latest}
+    container_name: sami-mcp-gateway-server
     environment:
-      DATABASE_URL: postgres://mcpjungle:mcpjungle@db:5432/mcpjungle
+      DATABASE_URL: postgres://sami-mcp-gateway:sami-mcp-gateway@db:5432/sami-mcp-gateway
       SERVER_MODE: ${SERVER_MODE:-enterprise}
       OTEL_ENABLED: ${OTEL_ENABLED:-true}
       MCP_SERVER_INIT_REQ_TIMEOUT_SEC: ${MCP_SERVER_INIT_REQ_TIMEOUT_SEC:-10}
@@ -57,7 +57,7 @@ services:
 
   prometheus:
     image: prom/prometheus:v2.53.0
-    container_name: mcpjungle-prometheus
+    container_name: sami-mcp-gateway-prometheus
     ports:
       - "9090:9090"
     command:
@@ -69,7 +69,7 @@ services:
       - source: prometheus_config
         target: /etc/prometheus/prometheus.yml
     depends_on:
-      - mcpjungle
+      - sami-mcp-gateway
     restart: unless-stopped
 
 configs:
@@ -80,9 +80,9 @@ configs:
         evaluation_interval: 30s
 
       scrape_configs:
-        - job_name: 'mcpjungle'
+        - job_name: 'sami-mcp-gateway'
           static_configs:
-            - targets: ['mcpjungle:8080']
+            - targets: ['sami-mcp-gateway:8080']
           metrics_path: '/metrics'
           scrape_interval: 15s
 

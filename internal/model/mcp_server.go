@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -40,7 +40,7 @@ type SSEConfig struct {
 	BearerToken string `json:"bearer_token,omitempty"`
 }
 
-// McpServer represents a MCP server registered in mcpjungle
+// McpServer represents a MCP server registered in sami-mcp-gateway
 type McpServer struct {
 	gorm.Model
 
@@ -56,7 +56,7 @@ type McpServer struct {
 	// It contains the JSON representation of either StreamableHTTPConfig or StdioConfig.
 	Config datatypes.JSON `json:"config" gorm:"type:jsonb;not null"`
 
-	// SessionMode controls how mcpjungle manages connections to this MCP server.
+	// SessionMode controls how sami-mcp-gateway manages connections to this MCP server.
 	// "stateless" (default): Creates a new connection for each tool call.
 	// "stateful": Maintains a persistent connection across tool calls.
 	SessionMode types.SessionMode `json:"session_mode" gorm:"type:varchar(20);default:'stateless'"`

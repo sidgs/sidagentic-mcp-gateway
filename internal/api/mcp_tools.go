@@ -6,7 +6,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/internal/model"
+	"sami.io/mcpgateway/internal/model"
 )
 
 // listToolsHandler returns a list of all tools, or all tools for a given mcp server if "server" query param is provided

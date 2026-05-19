@@ -1,11 +1,11 @@
 ---
 title: "CLI configuration file"
-description: "Reference for ~/.mcpjungle.conf"
+description: "Reference for ~/.sami-mcp-gateway.conf"
 ---
 
-The Mcpjungle CLI reads a YAML configuration file at `~/.mcpjungle.conf` on startup. It stores two values: the URL of the Mcpjungle server and an access token for authenticated requests. Most users never edit this file by hand — `mcpjungle init-server` and `mcpjungle login` write to it automatically.
+The Mcpjungle CLI reads a YAML configuration file at `~/.sami-mcp-gateway.conf` on startup. It stores two values: the URL of the Mcpjungle server and an access token for authenticated requests. Most users never edit this file by hand — `sami-mcp-gateway init-server` and `sami-mcp-gateway login` write to it automatically.
 
-## Client config file (`~/.mcpjungle.conf`)
+## Client config file (`~/.sami-mcp-gateway.conf`)
 
 ### Location and format
 
@@ -29,7 +29,7 @@ Both fields are optional. If either is absent the CLI falls back to its default 
 </ParamField>
 
 <ParamField path="access_token" type="string">
-  Bearer token sent in the `Authorization: Bearer` header with every API request. Required when the server runs in enterprise mode. Populated automatically by `mcpjungle init-server` (admin token) or `mcpjungle login` (user token).
+  Bearer token sent in the `Authorization: Bearer` header with every API request. Required when the server runs in enterprise mode. Populated automatically by `sami-mcp-gateway init-server` (admin token) or `sami-mcp-gateway login` (user token).
 
   ```yaml
   access_token: 1YHf2LwE1LXtp5lW_vM-gmdYHlPHdqwnILitBhXE4Aw
@@ -41,7 +41,7 @@ Both fields are optional. If either is absent the CLI falls back to its default 
 When the CLI resolves the registry URL it uses the following order, highest priority first:
 
 1. `--registry` flag passed explicitly on the command line
-2. `registry_url` set in `~/.mcpjungle.conf`
+2. `registry_url` set in `~/.sami-mcp-gateway.conf`
 3. Built-in default (`http://127.0.0.1:8080`)
 
 <Tip>
@@ -50,10 +50,10 @@ When the CLI resolves the registry URL it uses the following order, highest prio
 
 ### Populating the file automatically
 
-`~/.mcpjungle.conf` is usually created or updated in one of two ways:
+`~/.sami-mcp-gateway.conf` is usually created or updated in one of two ways:
 
-- `mcpjungle init-server` writes the initial admin credentials during enterprise bootstrap
-- `mcpjungle login <user-token>` stores a user token for later authenticated CLI use
+- `sami-mcp-gateway init-server` writes the initial admin credentials during enterprise bootstrap
+- `sami-mcp-gateway login <user-token>` stores a user token for later authenticated CLI use
 
 You can also edit the file manually if needed.
 
@@ -63,7 +63,7 @@ For the enterprise bootstrap flow and login workflow, see [Enterprise operations
 
 ## JSON config file formats
 
-Several `mcpjungle` commands accept a `-c` / `--conf` flag pointing to a JSON file instead of inline CLI flags. This section documents every supported JSON format.
+Several `sami-mcp-gateway` commands accept a `-c` / `--conf` flag pointing to a JSON file instead of inline CLI flags. This section documents every supported JSON format.
 
 ### `${VAR_NAME}` placeholder substitution
 
@@ -87,7 +87,7 @@ Rules:
 
 ### Register a Streamable HTTP server
 
-Used with `mcpjungle register -c <file>`.
+Used with `sami-mcp-gateway register -c <file>`.
 
 ```json
 {
@@ -127,7 +127,7 @@ Used with `mcpjungle register -c <file>`.
 
 ### Register a STDIO server
 
-Used with `mcpjungle register -c <file>`.
+Used with `sami-mcp-gateway register -c <file>`.
 
 ```json
 {
@@ -155,7 +155,7 @@ Used with `mcpjungle register -c <file>`.
 
 ### Create a tool group
 
-Used with `mcpjungle create group -c <file>`.
+Used with `sami-mcp-gateway create group -c <file>`.
 
 ```json
 {
@@ -184,7 +184,7 @@ Used with `mcpjungle create group -c <file>`.
 
 ### Create an MCP client
 
-Used with `mcpjungle create mcp-client --conf <file>` (enterprise mode).
+Used with `sami-mcp-gateway create mcp-client --conf <file>` (enterprise mode).
 
 ```json
 {
@@ -192,7 +192,7 @@ Used with `mcpjungle create mcp-client --conf <file>` (enterprise mode).
   "allowed_servers": ["calculator", "github"],
   "access_token": "my_secret_token_123",
   "access_token_ref": {
-    "file": "/run/secrets/mcpjungle_token",
+    "file": "/run/secrets/sami_mcp_gateway_token",
     "env": "MCPJUNGLE_CLIENT_TOKEN"
   }
 }
@@ -222,7 +222,7 @@ Use `access_token` only for testing or throwaway setups. For anything more serio
 
 ### Create a user account
 
-Used with `mcpjungle create user --conf <file>` (enterprise mode).
+Used with `sami-mcp-gateway create user --conf <file>` (enterprise mode).
 
 ```json
 {

@@ -1,9 +1,9 @@
 ---
 title: "CLI command reference"
-description: "Information about how to use the mcpjungle CLI"
+description: "Information about how to use the sami-mcp-gateway CLI"
 ---
 
-The `mcpjungle` binary serves two roles: it runs the gateway server and acts as a client for managing everything in that server.
+The `sami-mcp-gateway` binary serves two roles: it runs the gateway server and acts as a client for managing everything in that server.
 
 Every subcommand talks to the registry over HTTP, so you can run the CLI on any machine that can reach the server — your laptop, a CI runner, or inside the same container.
 
@@ -20,11 +20,11 @@ The `--registry` flag precedence order is: explicit flag value → `registry_url
 
 ## Config file
 
-On startup, the CLI attempts to read `.mcpjungle.conf` in your home directory.
+On startup, the CLI attempts to read `.sami-mcp-gateway.conf` in your home directory.
 
 The file is YAML and contains the following fields:
 
-```yaml ~/.mcpjungle.conf
+```yaml ~/.sami-mcp-gateway.conf
 registry_url: http://your-server:8080
 access_token: your-access-token
 ```
@@ -34,4 +34,4 @@ access_token: your-access-token
 | `registry_url` | URL of the Mcpjungle server. Overrides the `--registry` default.                               |
 | `access_token` | Auth token that represents the user, sent with every CLI request. Required in enterprise mode only. |
 
-In enterprise mode, this file gets created automatically when you initialise mcpjungle or login using your CLI.
+In enterprise mode, this file gets created automatically when you initialise sami-mcp-gateway or login using your CLI.

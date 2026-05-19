@@ -12,10 +12,10 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/mcpjungle/mcpjungle/client"
-	"github.com/mcpjungle/mcpjungle/internal/configresolver"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/client"
+	"sami.io/mcpgateway/internal/configresolver"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -34,11 +34,11 @@ var (
 var registerMCPServerCmd = &cobra.Command{
 	Use:   "register",
 	Short: "Register an MCP Server",
-	Long: "Register an MCP Server in mcpjungle.\n" +
+	Long: "Register an MCP Server in sami-mcp-gateway.\n" +
 		"The recommended way is to specify the json configuration file for your mcp server.\n" +
 		"Flags are provided for convenience if you want to register a streamable http based server.\n" +
 		"But a config file is *required* if you want to register a server using stdio or sse transport.\n" +
-		"\nNOTE: A server's name is unique across mcpjungle and must not contain\nany whitespaces, special characters or multiple consecutive underscores '__'.",
+		"\nNOTE: A server's name is unique across sami-mcp-gateway and must not contain\nany whitespaces, special characters or multiple consecutive underscores '__'.",
 	PreRunE: func(cmd *cobra.Command, args []string) error {
 		// Skip flag validation if config file is provided
 		if registerCmdServerConfigFilePath != "" {
@@ -83,7 +83,7 @@ func init() {
 		&registerCmdBearerToken,
 		"bearer-token",
 		"",
-		"If provided, MCPJungle will use this token to authenticate with the http MCP server for all requests."+
+		"If provided, SAMI MCP Gateway will use this token to authenticate with the http MCP server for all requests."+
 			" This is useful if the MCP server requires static tokens (eg- your API token) for authentication.",
 	)
 	registerMCPServerCmd.Flags().BoolVar(

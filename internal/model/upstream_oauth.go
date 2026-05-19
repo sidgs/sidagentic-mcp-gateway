@@ -3,7 +3,7 @@ package model
 import (
 	"time"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )

@@ -28,7 +28,7 @@ var enableCmd = &cobra.Command{
 	Use:   "enable",
 	Short: "Enable MCP entities like tools & prompts globally",
 	Long: "Enable one or more tools or prompts globally.\n" +
-		"If an entity is enabled in mcpjungle, it can be consumed by mcp clients via the gateway.\n\n" +
+		"If an entity is enabled in sami-mcp-gateway, it can be consumed by mcp clients via the gateway.\n\n" +
 		"NOTE: For backward-compatibility, you can still run 'enable [name]' to enable a tool or all tools from a mcp server.\n" +
 		"But the recommended way to achieve this now is 'enable tool [name]'.",
 	Annotations: map[string]string{

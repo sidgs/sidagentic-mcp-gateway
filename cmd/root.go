@@ -1,5 +1,5 @@
 /*
-Package cmd implements the CLI command structure for mcpjungle.
+Package cmd implements the CLI command structure for SAMI MCP Gateway.
 
 Command Organization:
 - Commands are grouped into "basic" and "advanced" categories using annotations
@@ -24,10 +24,10 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/mcpjungle/mcpjungle/client"
-	"github.com/mcpjungle/mcpjungle/cmd/config"
-	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/client"
+	"sami.io/mcpgateway/cmd/config"
+	"sami.io/mcpgateway/pkg/cliapp"
+	"sami.io/mcpgateway/pkg/version"
 	"github.com/spf13/cobra"
 )
 
@@ -58,7 +58,7 @@ var ErrSilent = errors.New("SilentErr")
 
 var registryServerURL string
 
-// apiClient is the global API client used by command handlers to interact with the MCPJungle registry server.
+// apiClient is the global API client used by command handlers to interact with the SAMI MCP Gateway registry server.
 // It is not the best choice to rely on a global variable, but cobra doesn't seem to provide any neat way to
 // pass an object down the command tree.
 var apiClient *client.Client
@@ -102,7 +102,7 @@ func Execute() error {
 		&registryServerURL,
 		"registry",
 		"http://127.0.0.1:"+BindPortDefault,
-		"Base URL of the MCPJungle gateway (scheme+host+optional path prefix, e.g. http://127.0.0.1:8080 or https://host/ai/v1/sami-mcp-gateway)",
+		"Base URL of the SAMI MCP Gateway gateway (scheme+host+optional path prefix, e.g. http://127.0.0.1:8080 or https://host/ai/v1/sami-mcp-gateway)",
 	)
 
 	// Initialize the API client with the registry server URL & client configuration (if any)
@@ -140,7 +140,7 @@ func Execute() error {
 }
 
 // displayRootCmdHelpMsg displays custom help message for the root command, ie,
-// when the mcpjungle CLI is run without any subcommands.
+// when the sami-mcp-gateway CLI is run without any subcommands.
 func displayRootCmdHelpMsg(cmd *cobra.Command) {
 	cmd.Println(cmd.Short)
 	cmd.Println()

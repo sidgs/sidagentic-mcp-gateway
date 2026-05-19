@@ -11,7 +11,7 @@ type Resource struct {
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;index"`
 
-	// URI is the MCPJungle-assigned public URI for this resource.
+	// URI is the SAMI MCP Gateway-assigned public URI for this resource.
 	URI string `json:"uri" gorm:"not null"`
 
 	// OriginalURI is the resource's original URI as advertised by the upstream MCP server

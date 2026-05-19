@@ -1,6 +1,6 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "name": "mcpjungle",
+  "name": "sami-mcp-gateway",
   "theme": "aspen",
   "colors": {
     "primary": "#5c64f4",
@@ -12,18 +12,7 @@
     "light": "/images/logo.png",
     "dark": "/images/logo.png"
   },
-  "navbar": {
-    "primary": {
-      "type": "github",
-      "href": "https://github.com/mcpjungle/mcpjungle"
-    }
-  },
-  "footer": {
-    "socials": {
-      "github": "https://github.com/mcpjungle/mcpjungle",
-      "discord": "https://discord.gg/CapV4Z3krk"
-    }
-  },
+  "footer": {},
   "navigation": {
     "tabs": [
       {

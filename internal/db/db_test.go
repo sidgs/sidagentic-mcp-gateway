@@ -5,12 +5,12 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/testhelpers"
 )
 
 // cleanupDBFiles removes both old and new database files and their associated WAL and SHM files
 func cleanupDBFiles(t *testing.T) {
-	dbFiles := []string{"mcp.db", "mcpjungle.db"}
+	dbFiles := []string{"mcp.db", "sami-mcp-gateway.db"}
 	extensions := []string{"", "-wal", "-shm"}
 
 	for _, dbFile := range dbFiles {
@@ -25,7 +25,7 @@ func cleanupDBFiles(t *testing.T) {
 
 // cleanupDBFilesBenchmark is the same as cleanupDBFiles but for benchmark tests
 func cleanupDBFilesBenchmark(b *testing.B) {
-	dbFiles := []string{"mcp.db", "mcpjungle.db"}
+	dbFiles := []string{"mcp.db", "sami-mcp-gateway.db"}
 	extensions := []string{"", "-wal", "-shm"}
 
 	for _, dbFile := range dbFiles {
@@ -118,7 +118,7 @@ func TestNewDBConnection_SQLiteFallback(t *testing.T) {
 	testhelpers.AssertNotNil(t, db)
 
 	// Verify SQLite database file was created (should be the new name)
-	_, err = os.Stat("mcpjungle.db")
+	_, err = os.Stat("sami-mcp-gateway.db")
 	testhelpers.AssertNoError(t, err)
 
 	// Test database operations
@@ -230,7 +230,7 @@ func TestNewDBConnection_WithCustomPath(t *testing.T) {
 	testhelpers.AssertNotNil(t, db)
 
 	// Verify database file was created in temp directory
-	dbPath := filepath.Join(tempDir, "mcpjungle.db")
+	dbPath := filepath.Join(tempDir, "sami-mcp-gateway.db")
 	_, err = os.Stat(dbPath)
 	testhelpers.AssertNoError(t, err)
 
@@ -322,7 +322,7 @@ func TestSQLiteDBPath_BackwardCompatibility(t *testing.T) {
 		{
 			name:           "no existing files - should create new file",
 			setup:          func() {},
-			expectedDBFile: "mcpjungle.db",
+			expectedDBFile: "sami-mcp-gateway.db",
 			expectWarning:  false,
 		},
 		{
@@ -338,11 +338,11 @@ func TestSQLiteDBPath_BackwardCompatibility(t *testing.T) {
 		{
 			name: "new file exists - should use new file",
 			setup: func() {
-				newDB, err := os.Create("mcpjungle.db")
+				newDB, err := os.Create("sami-mcp-gateway.db")
 				testhelpers.AssertNoError(t, err)
 				newDB.Close()
 			},
-			expectedDBFile: "mcpjungle.db",
+			expectedDBFile: "sami-mcp-gateway.db",
 			expectWarning:  false,
 		},
 		{
@@ -352,11 +352,11 @@ func TestSQLiteDBPath_BackwardCompatibility(t *testing.T) {
 				testhelpers.AssertNoError(t, err)
 				oldDB.Close()
 
-				newDB, err := os.Create("mcpjungle.db")
+				newDB, err := os.Create("sami-mcp-gateway.db")
 				testhelpers.AssertNoError(t, err)
 				newDB.Close()
 			},
-			expectedDBFile: "mcpjungle.db",
+			expectedDBFile: "sami-mcp-gateway.db",
 			expectWarning:  false,
 		},
 	}

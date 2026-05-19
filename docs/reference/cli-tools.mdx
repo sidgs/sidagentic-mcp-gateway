@@ -13,34 +13,34 @@ Use the dedicated guides for deeper workflows:
 - [Manage resources](/guides/manage-resources)
 
 <Note>
-  Treat `mcpjungle <command> --help` as the authoritative source for the currently supported flags. This page keeps the higher-value workflows and examples.
+  Treat `sami-mcp-gateway <command> --help` as the authoritative source for the currently supported flags. This page keeps the higher-value workflows and examples.
 </Note>
 
 ## `register`
 
-Registers an upstream MCP server in mcpjungle. Once registration succeeds, the server's tools, prompts, and resources become available through the gateway.
+Registers an upstream MCP server in sami-mcp-gateway. Once registration succeeds, the server's tools, prompts, and resources become available through the gateway.
 
 ```bash
-mcpjungle register [flags]
+sami-mcp-gateway register [flags]
 ```
 
 For streamable HTTP servers, you can use flags directly:
 
 ```bash
-mcpjungle register --name context7 --url https://mcp.context7.com/mcp
+sami-mcp-gateway register --name context7 --url https://mcp.context7.com/mcp
 ```
 
 You can also pass a static bearer token for upstream authentication:
 
 ```bash
-mcpjungle register --name github --url https://api.githubcopilot.com/mcp \
+sami-mcp-gateway register --name github --url https://api.githubcopilot.com/mcp \
   --bearer-token ghp_your_token_here
 ```
 
 For `stdio` and `sse` servers, use a JSON config file:
 
 ```bash
-mcpjungle register --conf ./filesystem.json
+sami-mcp-gateway register --conf ./filesystem.json
 ```
 
 ### Common flags
@@ -102,7 +102,7 @@ For the full config fields, `session_mode`, environment-variable placeholders, a
 - [Config file reference](/reference/config-file)
 
 <Note>
-  Server names must be unique across mcpjungle and must not contain whitespace, special characters, or consecutive underscores (`__`).
+  Server names must be unique across sami-mcp-gateway and must not contain whitespace, special characters, or consecutive underscores (`__`).
 </Note>
 
 ## `deregister`
@@ -110,13 +110,13 @@ For the full config fields, `session_mode`, environment-variable placeholders, a
 Removes a registered MCP server and all of its tools, prompts, and resources from the gateway.
 
 ```bash
-mcpjungle deregister <server-name>
+sami-mcp-gateway deregister <server-name>
 ```
 
 Example:
 
 ```bash
-mcpjungle deregister context7
+sami-mcp-gateway deregister context7
 ```
 
 <Warning>
@@ -125,10 +125,10 @@ mcpjungle deregister context7
 
 ## `list`
 
-Lists the entities currently registered in mcpjungle.
+Lists the entities currently registered in sami-mcp-gateway.
 
 ```bash
-mcpjungle list <subcommand> [flags]
+sami-mcp-gateway list <subcommand> [flags]
 ```
 
 ### `list servers`
@@ -136,7 +136,7 @@ mcpjungle list <subcommand> [flags]
 Lists registered MCP servers and their transport details.
 
 ```bash
-mcpjungle list servers
+sami-mcp-gateway list servers
 ```
 
 ### `list tools`
@@ -144,8 +144,8 @@ mcpjungle list servers
 Lists tools across the gateway, or filters them by server or tool group.
 
 ```bash
-mcpjungle list tools [--server <name>]
-mcpjungle list tools [--group <name>]
+sami-mcp-gateway list tools [--server <name>]
+sami-mcp-gateway list tools [--group <name>]
 ```
 
 <ParamField body="--server" type="string">
@@ -165,8 +165,8 @@ mcpjungle list tools [--group <name>]
 Lists prompts across all servers or from one server.
 
 ```bash
-mcpjungle list prompts
-mcpjungle list prompts --server github
+sami-mcp-gateway list prompts
+sami-mcp-gateway list prompts --server github
 ```
 
 ### `list resources`
@@ -174,8 +174,8 @@ mcpjungle list prompts --server github
 Lists resources across all servers or from one server.
 
 ```bash
-mcpjungle list resources
-mcpjungle list resources --server mintlify-mcpjungle
+sami-mcp-gateway list resources
+sami-mcp-gateway list resources --server mintlify-sami-mcp-gateway
 ```
 
 ### `list groups`
@@ -183,26 +183,26 @@ mcpjungle list resources --server mintlify-mcpjungle
 Lists tool groups.
 
 ```bash
-mcpjungle list groups
+sami-mcp-gateway list groups
 ```
 
 ### Common examples
 
 ```bash
 # List all tools
-mcpjungle list tools
+sami-mcp-gateway list tools
 
 # List tools from one server
-mcpjungle list tools --server github
+sami-mcp-gateway list tools --server github
 
 # List tools currently active in a group
-mcpjungle list tools --group engineering-tools
+sami-mcp-gateway list tools --group engineering-tools
 
 # List prompts from one server
-mcpjungle list prompts --server github
+sami-mcp-gateway list prompts --server github
 
 # List resources from one server
-mcpjungle list resources --server mintlify-mcpjungle
+sami-mcp-gateway list resources --server mintlify-sami-mcp-gateway
 ```
 
 ## `usage`
@@ -210,23 +210,23 @@ mcpjungle list resources --server mintlify-mcpjungle
 Shows the input schema for a tool before you invoke it.
 
 ```bash
-mcpjungle usage <tool-name>
+sami-mcp-gateway usage <tool-name>
 ```
 
 Example:
 
 ```bash
-mcpjungle usage github__create_issue
+sami-mcp-gateway usage github__create_issue
 ```
 
 The output includes the tool description, argument types, required fields, and any JSON-schema constraints exposed by the upstream MCP server.
 
 ## `invoke`
 
-Calls a tool directly through mcpjungle.
+Calls a tool directly through sami-mcp-gateway.
 
 ```bash
-mcpjungle invoke <tool-name> [flags]
+sami-mcp-gateway invoke <tool-name> [flags]
 ```
 
 ### Flags
@@ -243,14 +243,14 @@ mcpjungle invoke <tool-name> [flags]
 
 ```bash
 # Invoke a tool with no input
-mcpjungle invoke github__list_repos
+sami-mcp-gateway invoke github__list_repos
 
 # Invoke a tool with JSON input
-mcpjungle invoke github__create_issue \
+sami-mcp-gateway invoke github__create_issue \
   --input '{"owner": "myorg", "repo": "myrepo", "title": "Bug report"}'
 
 # Invoke within a tool group
-mcpjungle invoke github__create_issue \
+sami-mcp-gateway invoke github__create_issue \
   --input '{"owner": "myorg", "repo": "myrepo", "title": "Bug"}' \
   --group engineering-tools
 ```
@@ -262,26 +262,26 @@ Text responses are printed to stdout. If the response contains images, audio, or
 Enables tools, prompts, or an entire server globally.
 
 ```bash
-mcpjungle enable <subcommand> <name>
+sami-mcp-gateway enable <subcommand> <name>
 ```
 
 Supported forms:
 
-- `mcpjungle enable tool <name>`
-- `mcpjungle enable prompt <name>`
-- `mcpjungle enable server <name>`
+- `sami-mcp-gateway enable tool <name>`
+- `sami-mcp-gateway enable prompt <name>`
+- `sami-mcp-gateway enable server <name>`
 
 Examples:
 
 ```bash
-mcpjungle enable tool github__create_issue
-mcpjungle enable tool github
-mcpjungle enable prompt github
-mcpjungle enable server github
+sami-mcp-gateway enable tool github__create_issue
+sami-mcp-gateway enable tool github
+sami-mcp-gateway enable prompt github
+sami-mcp-gateway enable server github
 ```
 
 <Note>
-  The legacy form `mcpjungle enable <name>` still works for backward compatibility, but `enable tool <name>` or `enable server <name>` is preferred.
+  The legacy form `sami-mcp-gateway enable <name>` still works for backward compatibility, but `enable tool <name>` or `enable server <name>` is preferred.
 </Note>
 
 ## `disable`
@@ -289,26 +289,26 @@ mcpjungle enable server github
 Disables tools, prompts, or an entire server globally.
 
 ```bash
-mcpjungle disable <subcommand> <name>
+sami-mcp-gateway disable <subcommand> <name>
 ```
 
 Supported forms:
 
-- `mcpjungle disable tool <name>`
-- `mcpjungle disable prompt <name>`
-- `mcpjungle disable server <name>`
+- `sami-mcp-gateway disable tool <name>`
+- `sami-mcp-gateway disable prompt <name>`
+- `sami-mcp-gateway disable server <name>`
 
 Examples:
 
 ```bash
-mcpjungle disable tool github__delete_repo
-mcpjungle disable tool github
-mcpjungle disable prompt github
-mcpjungle disable server github
+sami-mcp-gateway disable tool github__delete_repo
+sami-mcp-gateway disable tool github
+sami-mcp-gateway disable prompt github
+sami-mcp-gateway disable server github
 ```
 
 <Note>
-  The legacy form `mcpjungle disable <name>` still works for backward compatibility, but only maps to tool disabling behavior.
+  The legacy form `sami-mcp-gateway disable <name>` still works for backward compatibility, but only maps to tool disabling behavior.
 </Note>
 
 ## `get prompt`
@@ -316,13 +316,13 @@ mcpjungle disable server github
 Retrieves a prompt template and optionally renders it with arguments.
 
 ```bash
-mcpjungle get prompt <prompt-name> [--arg key=value ...]
+sami-mcp-gateway get prompt <prompt-name> [--arg key=value ...]
 ```
 
 Example:
 
 ```bash
-mcpjungle get prompt github__code-review \
+sami-mcp-gateway get prompt github__code-review \
   --arg code="def hello(): print('world')" \
   --arg language="python"
 ```
@@ -334,18 +334,18 @@ The output shows the generated structured messages returned by the upstream MCP 
 Retrieves resource metadata, or reads the resource contents.
 
 ```bash
-mcpjungle get resource <uri>
-mcpjungle get resource --read <uri>
+sami-mcp-gateway get resource <uri>
+sami-mcp-gateway get resource --read <uri>
 ```
 
 Examples:
 
 ```bash
 # View metadata
-mcpjungle get resource mcpj://res/mintlify-mcpjungle/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
+sami-mcp-gateway get resource mcpj://res/mintlify-sami-mcp-gateway/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
 
 # Read the contents
-mcpjungle get resource --read mcpj://res/mintlify-mcpjungle/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
+sami-mcp-gateway get resource --read mcpj://res/mintlify-sami-mcp-gateway/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
 ```
 
 With `--read`, text content is printed inline. Blob content may be decoded and written to a file in the current working directory.

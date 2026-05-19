@@ -8,12 +8,12 @@ import (
 
 	"github.com/gin-gonic/gin"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/user"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/internal/service/user"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/testhelpers"
 )
 
 func setupInvalidInputServer(t *testing.T) *Server {

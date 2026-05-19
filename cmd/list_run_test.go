@@ -7,8 +7,8 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/client"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/client"
+	"sami.io/mcpgateway/pkg/types"
 	"github.com/spf13/cobra"
 )
 

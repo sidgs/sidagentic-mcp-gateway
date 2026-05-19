@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/apierrors"
 )
 
 // MCP group endpoint security (tool groups and prompt groups).

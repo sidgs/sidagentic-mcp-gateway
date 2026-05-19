@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/cliapp"
+	"sami.io/mcpgateway/pkg/cliapp"
 )
 
 func TestRootCommandStructure(t *testing.T) {

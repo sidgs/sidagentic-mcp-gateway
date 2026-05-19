@@ -13,7 +13,7 @@ type Prompt struct {
 
 	// Name is just the name of the prompt, without the server name prefix.
 	// A prompt name is unique only within the context of a server.
-	// This means that two prompts in mcpjungle DB CAN have the same name because
+	// This means that two prompts in sami-mcp-gateway DB CAN have the same name because
 	// they belong to different servers, identified by server ID.
 	Name string `json:"name" gorm:"not null"`
 

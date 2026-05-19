@@ -1,6 +1,6 @@
 ---
 title: "Authenticate to upstream MCP servers"
-description: "Configure mcpjungle to make authenticated requests to upstream MCPs"
+description: "Configure sami-mcp-gateway to make authenticated requests to upstream MCPs"
 ---
 
 This page is about **upstream authentication**: how Mcpjungle authenticates when it calls an upstream MCP server.
@@ -21,7 +21,7 @@ Typical examples:
 If the upstream server accepts a standard bearer token, pass it at registration time:
 
 ```bash
-mcpjungle register \
+sami-mcp-gateway register \
   --name huggingface \
   --description "HuggingFace MCP Server" \
   --url https://huggingface.co/mcp \
@@ -73,7 +73,7 @@ Mcpjungle now supports OAuth flows for upstream HTTP MCP servers in beta.
 The simplest path is interactive CLI registration:
 
 ```bash
-mcpjungle register --name todoist --url https://ai.todoist.net/mcp
+sami-mcp-gateway register --name todoist --url https://ai.todoist.net/mcp
 ```
 
 If the upstream MCP server requires OAuth:

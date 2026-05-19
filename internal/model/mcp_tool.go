@@ -13,7 +13,7 @@ type Tool struct {
 
 	// Name is just the name of the tool, without the server name prefix.
 	// A tool name is unique only within the context of a server.
-	// This means that two tools in mcpjungle DB CAN have the same name because
+	// This means that two tools in sami-mcp-gateway DB CAN have the same name because
 	// they belong to different servers, identified by server ID.
 	Name string `json:"name" gorm:"not null"`
 

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -31,9 +31,9 @@ var listToolsCmd = &cobra.Command{
 	Use:   "tools",
 	Short: "List available tools",
 	Long: "List tools available either from a specific MCP server, tool group, or across " +
-		"all MCP servers registered in mcpjungle.\n\n" +
+		"all MCP servers registered in sami-mcp-gateway.\n\n" +
 		"NOTE: When using --group flag, this command only displays tools that currently exist " +
-		"in mcpjungle and are part of the group.\n" +
+		"in sami-mcp-gateway and are part of the group.\n" +
 		"So if, for example, the group includes a tool that has been deleted, this command won't display it.\n" +
 		"To get the full list of tools included in a group, use the `get group` command instead.",
 	RunE: runListTools,
@@ -42,14 +42,14 @@ var listToolsCmd = &cobra.Command{
 var listPromptsCmd = &cobra.Command{
 	Use:   "prompts",
 	Short: "List available prompts",
-	Long:  "List prompt templates available either from a specific MCP server or across all MCP servers in mcpjungle.",
+	Long:  "List prompt templates available either from a specific MCP server or across all MCP servers in sami-mcp-gateway.",
 	RunE:  runListPrompts,
 }
 
 var listResourcesCmd = &cobra.Command{
 	Use:   "resources",
 	Short: "List available resources",
-	Long:  "List resources available either from a specific MCP server or across all MCP servers in mcpjungle.",
+	Long:  "List resources available either from a specific MCP server or across all MCP servers in sami-mcp-gateway.",
 	RunE:  runListResources,
 }
 
@@ -62,7 +62,7 @@ var listServersCmd = &cobra.Command{
 var listUsersCmd = &cobra.Command{
 	Use:   "users",
 	Short: "List users (Enterprise mode)",
-	Long:  "List users that are authorized to access MCPJungle.",
+	Long:  "List users that are authorized to access SAMI MCP Gateway.",
 	RunE:  runListUsers,
 }
 
@@ -140,9 +140,9 @@ func runListTools(cmd *cobra.Command, args []string) error {
 		}
 
 		// Get all tools first, then filter by group's effective tools.
-		// This is necessary because a group might contain tools that do not currently exist in mcpjungle.
+		// This is necessary because a group might contain tools that do not currently exist in sami-mcp-gateway.
 		// for eg- the tool was deleted after group creation or the group includes a non-existent tool.
-		// ListTools only returns tools that actually exist in mcpjungle, so we must cross-check.
+		// ListTools only returns tools that actually exist in sami-mcp-gateway, so we must cross-check.
 		allTools, err := apiClient.ListTools("")
 		if err != nil {
 			return fmt.Errorf("failed to list all tools: %w", err)

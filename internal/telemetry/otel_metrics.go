@@ -21,14 +21,14 @@ const (
 	attrValueUnknown = "unknown"
 )
 
-// OtelCustomMetrics bundles all the OpenTelemetry metric instruments used for MCPJungle.
+// OtelCustomMetrics bundles all the OpenTelemetry metric instruments used for SAMI MCP Gateway.
 // It implements the CustomMetrics interface.
 type OtelCustomMetrics struct {
 	toolCalls       metric.Int64Counter
 	toolCallLatency metric.Float64Histogram
 }
 
-// NewOtelCustomMetrics initializes all metric instruments required by MCPJungle.
+// NewOtelCustomMetrics initializes all metric instruments required by SAMI MCP Gateway.
 // Returns an CustomMetrics instance ready for use, or an error if any instrument
 // could not be created.
 func NewOtelCustomMetrics(meter metric.Meter) (CustomMetrics, error) {
@@ -37,7 +37,7 @@ func NewOtelCustomMetrics(meter metric.Meter) (CustomMetrics, error) {
 	}
 
 	toolInv, err := meter.Int64Counter(
-		"mcpjungle_tool_calls_total",
+		"sami_mcp_gateway_tool_calls_total",
 		metric.WithDescription("Total number of tool calls"),
 		metric.WithUnit("1"),
 	)
@@ -46,7 +46,7 @@ func NewOtelCustomMetrics(meter metric.Meter) (CustomMetrics, error) {
 	}
 
 	toolLat, err := meter.Float64Histogram(
-		"mcpjungle_tool_call_latency_seconds",
+		"sami_mcp_gateway_tool_call_latency_seconds",
 		metric.WithDescription("Latency of tool calls in seconds"),
 		metric.WithUnit("s"),
 		metric.WithExplicitBucketBoundaries(0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1, 2, 5, 10, 20, 30),

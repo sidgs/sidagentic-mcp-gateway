@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/pkg/version"
 )
 
 func TestVersionCommand(t *testing.T) {

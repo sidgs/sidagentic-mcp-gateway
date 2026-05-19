@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/types"
 	"github.com/spf13/cobra"
 )
 
@@ -16,7 +16,7 @@ func TestCreateCommandStructure(t *testing.T) {
 
 	// Test command properties
 	testhelpers.AssertEqual(t, "create", createCmd.Use)
-	testhelpers.AssertEqual(t, "Create entities in mcpjungle", createCmd.Short)
+	testhelpers.AssertEqual(t, "Create entities in sami-mcp-gateway", createCmd.Short)
 
 	// Test command annotations
 	annotationTests := []testhelpers.CommandAnnotationTest{

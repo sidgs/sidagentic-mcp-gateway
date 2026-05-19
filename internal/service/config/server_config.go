@@ -1,4 +1,4 @@
-// Package config provides configuration service functionality for the MCPJungle application.
+// Package config provides configuration service functionality for the SAMI MCP Gateway application.
 package config
 
 import (
@@ -6,8 +6,8 @@ import (
 	"errors"
 	"fmt"
 
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
 	"gorm.io/gorm"
 )
 

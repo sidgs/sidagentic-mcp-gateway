@@ -13,9 +13,9 @@ Use the `get resource` command with the resource URI to inspect metadata about a
 
 ```bash
 # list available resources (useful for discovering resource URIs)
-mcpjungle list resources
+sami-mcp-gateway list resources
 
-mcpjungle get resource mcpj://res/mintlify-mcpjungle/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
+sami-mcp-gateway get resource mcpj://res/mintlify-sami-mcp-gateway/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
 ```
 
 ## Read resource contents
@@ -23,7 +23,7 @@ mcpjungle get resource mcpj://res/mintlify-mcpjungle/bWludGxpZnk6Ly9za2lsbHMvbWN
 Add the `--read` flag to read the resource contents:
 
 ```bash
-mcpjungle get resource --read mcpj://res/mintlify-mcpjungle/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
+sami-mcp-gateway get resource --read mcpj://res/mintlify-sami-mcp-gateway/bWludGxpZnk6Ly9za2lsbHMvbWNwanVuZ2xl
 ```
 
 Mcpjungle resolves the URI, routes the request to the upstream MCP server that owns the resource, and returns the resource contents.

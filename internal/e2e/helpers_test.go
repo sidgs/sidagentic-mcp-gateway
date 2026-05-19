@@ -1,7 +1,7 @@
-// Package e2e contains end-to-end integration tests for MCPJungle against
+// Package e2e contains end-to-end integration tests for SAMI MCP Gateway against
 // @modelcontextprotocol/server-everything.
 //
-// Tests spin up a full MCPJungle HTTP server backed by an in-memory SQLite
+// Tests spin up a full SAMI MCP Gateway HTTP server backed by an in-memory SQLite
 // database, register server-everything as a stdio upstream, then exercise every
 // major API surface:
 //   - Global tools: list, get, invoke
@@ -26,17 +26,18 @@ import (
 	"github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/api"
-	"github.com/mcpjungle/mcpjungle/internal/migrations"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	configSvc "github.com/mcpjungle/mcpjungle/internal/service/config"
-	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
-	"github.com/mcpjungle/mcpjungle/internal/service/dashboard"
-	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	userSvc "github.com/mcpjungle/mcpjungle/internal/service/user"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
+	"sami.io/mcpgateway/internal/api"
+	"sami.io/mcpgateway/internal/migrations"
+	"sami.io/mcpgateway/internal/model"
+	configSvc "sami.io/mcpgateway/internal/service/config"
+	"sami.io/mcpgateway/internal/service/agentapp"
+	"sami.io/mcpgateway/internal/service/dashboard"
+	mcpSvc "sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	userSvc "sami.io/mcpgateway/internal/service/user"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/tenant"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
@@ -72,7 +73,7 @@ type renderedPromptResult struct {
 // Test environment
 // -----------------------------------------------------------------------
 
-// e2eEnv holds a running MCPJungle httptest server and associated tokens.
+// e2eEnv holds a running SAMI MCP Gateway httptest server and associated tokens.
 type e2eEnv struct {
 	baseURL         string
 	adminToken      string // populated only in enterprise mode
@@ -113,7 +114,7 @@ func decodeJSON(t *testing.T, r *http.Response, target any) {
 	require.NoError(t, json.NewDecoder(r.Body).Decode(target))
 }
 
-// setupE2EServer spins up a full MCPJungle HTTP server backed by an in-memory
+// setupE2EServer spins up a full SAMI MCP Gateway HTTP server backed by an in-memory
 // SQLite DB, initialised in the requested mode.
 // HTTP routes are at the host root (HTTP_PATH_PREFIX is unset). To test a
 // prefixed deployment, set HTTP_PATH_PREFIX before start and use baseURL+prefix in requests.
@@ -129,12 +130,12 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 	require.NoError(t, err)
 	require.NoError(t, migrations.Migrate(db))
 
-	mcpProxy := server.NewMCPServer("MCPJungle", "0.0.1",
+	mcpProxy := server.NewMCPServer("sami-mcp-gateway", "0.0.1",
 		server.WithToolCapabilities(true),
 		server.WithPromptCapabilities(true),
 		server.WithToolFilter(mcpSvc.ProxyToolFilter),
 	)
-	sseMcpProxy := server.NewMCPServer("MCPJungle SSE", "0.0.1",
+	sseMcpProxy := server.NewMCPServer("sami-mcp-gateway-sse", "0.0.1",
 		server.WithToolCapabilities(true),
 		server.WithPromptCapabilities(true),
 		server.WithToolFilter(mcpSvc.ProxyToolFilter),
@@ -256,6 +257,11 @@ func promptNames(prompts []map[string]any) []string {
 	return names
 }
 
+// tenantMCPURL returns the base URL for tenant-scoped MCP routes (/{tenant_id}/...).
+func (env *e2eEnv) tenantMCPURL(suffix string) string {
+	return env.baseURL + "/" + tenant.DefaultID + suffix
+}
+
 // newMCPProxyClient creates an initialized StreamableHTTP MCP client on the global /mcp endpoint.
 func newMCPProxyClient(t *testing.T, env *e2eEnv) *client.Client {
 	t.Helper()
@@ -265,7 +271,7 @@ func newMCPProxyClient(t *testing.T, env *e2eEnv) *client.Client {
 			"X-API-Key": env.globalMCPAPIKey,
 		}))
 	}
-	c, err := client.NewStreamableHttpClient(env.baseURL+"/mcp", opts...)
+	c, err := client.NewStreamableHttpClient(env.tenantMCPURL("/mcp"), opts...)
 	require.NoError(t, err)
 	_, err = c.Initialize(context.Background(), mcp.InitializeRequest{
 		Params: mcp.InitializeParams{
@@ -292,7 +298,7 @@ func newGroupMCPClient(t *testing.T, env *e2eEnv, groupName string, token string
 		}))
 	}
 	c, err := client.NewStreamableHttpClient(
-		env.baseURL+"/v0/groups/"+groupName+"/mcp",
+		env.tenantMCPURL("/v0/groups/"+groupName+"/mcp"),
 		opts...,
 	)
 	require.NoError(t, err)

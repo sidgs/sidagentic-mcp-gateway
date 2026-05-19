@@ -1,4 +1,4 @@
-// Package internal provides internal utility functionality for the MCPJungle application.
+// Package internal provides internal utility functionality for the SAMI MCP Gateway application.
 package internal
 
 import (

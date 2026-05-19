@@ -15,10 +15,10 @@ import (
 	mcpgotransport "github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -272,7 +272,7 @@ func TestRegisterOAuthClientWithoutEmptyScope_OmitsScopeWhenUnset(t *testing.T) 
 		&types.RegisterServerInput{
 			OAuthRedirectURI: upstream.server.URL + "/callback",
 		},
-		"mcpjungle-test",
+		"sami-mcp-gateway-test",
 	)
 	require.NoError(t, err)
 	require.Equal(t, "mock-client-id", clientID)

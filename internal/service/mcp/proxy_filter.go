@@ -4,10 +4,10 @@ import (
 	"context"
 
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/agentappauth"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
+	"sami.io/mcpgateway/internal/agentappauth"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/mcpgatewayctx"
+	"sami.io/mcpgateway/pkg/tenant"
 )
 
 // ProxyToolFilter filters tools exposed by the MCP proxy.

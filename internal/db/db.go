@@ -1,4 +1,4 @@
-// Package db provides database functionality for the MCPJungle application.
+// Package db provides database functionality for the SAMI MCP Gateway application.
 package db
 
 import (
@@ -16,12 +16,12 @@ import (
 // Only one database connection should be created and used throughout the application.
 
 const (
-	dbFilename           = "mcpjungle.db"
+	dbFilename           = "sami-mcp-gateway.db"
 	deprecatedDBFilename = "mcp.db"
 )
 
 // getSQLiteDBPath determines which SQLite database file to use.
-// It prioritizes the new mcpjungle.db file, but falls back to the old mcp.db file for backward compatibility.
+// It prioritizes the new sami-mcp-gateway.db file, but falls back to the old mcp.db file for backward compatibility.
 func getSQLiteDBPath() string {
 	// Check if the new database file exists
 	if _, err := os.Stat(dbFilename); err == nil {
@@ -41,7 +41,7 @@ func getSQLiteDBPath() string {
 // NewDBConnection creates a new database connection based on the provided DSN.
 // If the DSN is empty, it falls back to an embedded SQLite database.
 // For backward compatibility, it will use an existing "mcp.db" file if present,
-// otherwise it creates/uses "mcpjungle.db".
+// otherwise it creates/uses "sami-mcp-gateway.db".
 func NewDBConnection(dsn string) (*gorm.DB, error) {
 	var dialector gorm.Dialector
 	if dsn == "" {

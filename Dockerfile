@@ -29,17 +29,17 @@ RUN rm -rf internal/dashboardui/dist
 COPY --from=dashboard-builder /src/web/dashboard/dist ./internal/dashboardui/dist
 
 RUN CGO_ENABLED=0 go build -trimpath \
-	-ldflags="-s -w -X github.com/mcpjungle/mcpjungle/pkg/version.Version=${VERSION}" \
+	-ldflags="-s -w -X sami.io/mcpgateway/pkg/version.Version=${VERSION}" \
 	-o /sami-mcp-gateway .
 
 # Phase 2 — runtime
 FROM gcr.io/distroless/base
 
 # OCI image labels
-# LABEL org.opencontainers.image.source="https://github.com/mcpjungle/mcpjungle"
-# LABEL org.opencontainers.image.description="MCPJungle - Self-hosted MCP Gateway for developers and enterprises"
-# LABEL org.opencontainers.image.title="MCPJungle"
-# LABEL org.opencontainers.image.vendor="mcpjungle"
+# LABEL org.opencontainers.image.source="https://sami.io/mcpgateway"
+# LABEL org.opencontainers.image.description="SAMI MCP Gateway - Self-hosted MCP Gateway for developers and enterprises"
+# LABEL org.opencontainers.image.title="SAMI MCP Gateway"
+# LABEL org.opencontainers.image.vendor="sidglobal"
 
 COPY --from=builder /sami-mcp-gateway /sami-mcp-gateway
 

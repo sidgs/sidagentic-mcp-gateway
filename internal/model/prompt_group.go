@@ -24,7 +24,7 @@ type PromptGroup struct {
 	Name        string `json:"name" gorm:"uniqueIndex:ux_promptgroup_tenant_name; not null"`
 	Description string `json:"description"`
 
-	// SecurityOption controls how /v0/prompt-groups/:name/* MCP routes authenticate.
+	// SecurityOption controls how /{tenant_id}/v0/prompt-groups/:name/* MCP routes authenticate.
 	SecurityOption string `json:"security_option" gorm:"size:32;not null;default:basic"`
 
 	IncludedPrompts datatypes.JSON `json:"included_prompts" gorm:"type:jsonb"`

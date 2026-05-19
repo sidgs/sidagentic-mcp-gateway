@@ -5,8 +5,8 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func maskBearerToken(token string) string {
@@ -55,7 +55,7 @@ func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 func (s *Server) dashboardOverviewHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mode := c.MustGet("mode").(model.ServerMode)
-		resp, err := s.dashboardService.Overview(mode, s.publicGatewayRoot(c))
+		resp, err := s.dashboardService.Overview(mode, s.publicTenantMCPRoot(c))
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -115,7 +115,7 @@ func (s *Server) dashboardResourcesHandler() gin.HandlerFunc {
 func (s *Server) dashboardDiagnosticsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mode := c.MustGet("mode").(model.ServerMode)
-		resp, err := s.dashboardService.Diagnostics(mode, s.publicGatewayRoot(c))
+		resp, err := s.dashboardService.Diagnostics(mode, s.publicTenantMCPRoot(c))
 		if err != nil {
 			handleServiceError(c, err)
 			return

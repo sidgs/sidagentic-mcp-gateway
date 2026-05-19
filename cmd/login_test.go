@@ -3,13 +3,13 @@ package cmd
 import (
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/testhelpers"
 )
 
 func TestLoginCommandStructure(t *testing.T) {
 	t.Run("command_properties", func(t *testing.T) {
 		testhelpers.AssertEqual(t, "login [access_token]", loginCmd.Use)
-		testhelpers.AssertEqual(t, "Log in to MCPJungle (Enterprise mode)", loginCmd.Short)
+		testhelpers.AssertEqual(t, "Log in to SAMI MCP Gateway (Enterprise mode)", loginCmd.Short)
 	})
 
 	t.Run("command_annotations", func(t *testing.T) {

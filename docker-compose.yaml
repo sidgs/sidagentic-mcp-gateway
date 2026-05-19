@@ -1,6 +1,6 @@
-# MCPJungle Docker Compose configuration for individual users.
-# Use this compose file if you want to run MCPJungle locally for your personal MCP management & Gateway.
-# The mcpjungle server runs in development mode.
+# SAMI MCP Gateway Docker Compose configuration for individual users.
+# Use this compose file if you want to run SAMI MCP Gateway locally for your personal MCP management & Gateway.
+# The sami-mcp-gateway server runs in development mode.
 services:
   db:
     image: postgres:17
@@ -38,7 +38,7 @@ services:
     environment:
       DATABASE_URL: postgres://sami:sami@db:5432/sami
       SERVER_MODE: ${SERVER_MODE:-enterprise}
-      OTEL_ENABLED: ${OTEL_ENABLED:-false}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
       MCP_SERVER_INIT_REQ_TIMEOUT_SEC: ${MCP_SERVER_INIT_REQ_TIMEOUT_SEC:-10}
       HTTP_PATH_PREFIX: ${HTTP_PATH_PREFIX:-/api/v1/sami-mcp-gateway}
       COGNITO_ISSUER_URL: ${COGNITO_ISSUER_URL:-https://cognito-idp.us-east-1.amazonaws.com/us-east-1_D0dfwkRq0}
@@ -55,6 +55,7 @@ services:
       # PUBLIC_URL_SCHEME: ${PUBLIC_URL_SCHEME:-}
       POST_LOGIN_REDIRECT_URL: ${POST_LOGIN_REDIRECT_URL:-/#home}
       GLOBAL_MCP_API_KEY: ${GLOBAL_MCP_API_KEY:-1234567890}
+      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-sid-agentic}
 
     ports:
       - "${HOST_PORT:-8080}:8080"

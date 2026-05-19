@@ -2,7 +2,7 @@
 
 # This script tests that the MCP Jungle server returns appropriate error responses for invalid API requests.
 # It starts an isolated server instance, initializes it, and then makes various API calls.
-# It refreshes the mcpjungle binary when the checked-in Go sources are newer than the binary.
+# It refreshes the sami-mcp-gateway binary when the checked-in Go sources are newer than the binary.
 
 set -euo pipefail
 
@@ -43,7 +43,7 @@ ensure_fresh_binary() {
   fi
 
   if [[ "$needs_build" -eq 1 ]]; then
-    log "Building fresh MCPJungle binary at ${BIN_PATH}"
+    log "Building fresh SAMI MCP Gateway binary at ${BIN_PATH}"
     mkdir -p "$(dirname "$BIN_PATH")"
     (
       cd "$ROOT_DIR"
@@ -282,7 +282,7 @@ require_cmd go
 
 ensure_fresh_binary
 
-log "Starting isolated MCPJungle server on port ${PORT}"
+log "Starting isolated SAMI MCP Gateway server on port ${PORT}"
 (
   cd "$TMP_DIR"
   exec "$BIN_PATH" start --enterprise --port "$PORT"
@@ -465,7 +465,7 @@ assert_status \
   "POST" \
   "/api/v0/resources/get" \
   "400" \
-  "not a valid MCPJungle resource URI" \
+  "not a valid SAMI MCP Gateway resource URI" \
   "$ADMIN_TOKEN" \
   '{"uri":"not-a-mcpj-uri"}'
 
@@ -483,7 +483,7 @@ assert_status \
   "POST" \
   "/api/v0/resources/read" \
   "400" \
-  "not a valid MCPJungle resource URI" \
+  "not a valid SAMI MCP Gateway resource URI" \
   "$ADMIN_TOKEN" \
   '{"uri":"not-a-mcpj-uri"}'
 

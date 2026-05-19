@@ -3,7 +3,7 @@ package cmd
 import (
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/testhelpers"
 )
 
 func TestGetCommandStructure(t *testing.T) {

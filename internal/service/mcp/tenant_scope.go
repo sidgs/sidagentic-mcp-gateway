@@ -3,7 +3,7 @@ package mcp
 import (
 	"context"
 
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
+	"sami.io/mcpgateway/pkg/tenant"
 	"gorm.io/gorm"
 )
 

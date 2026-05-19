@@ -10,17 +10,17 @@ import (
 
 	"github.com/gin-gonic/gin"
 	mcpserver "github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/migrations"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/internal/mcpgatewayctx"
-	"github.com/mcpjungle/mcpjungle/internal/service/agentapp"
-	mcpSvc "github.com/mcpjungle/mcpjungle/internal/service/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/service/promptgroup"
-	"github.com/mcpjungle/mcpjungle/internal/service/toolgroup"
-	"github.com/mcpjungle/mcpjungle/internal/telemetry"
-	"github.com/mcpjungle/mcpjungle/pkg/testhelpers"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/migrations"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/mcpgatewayctx"
+	"sami.io/mcpgateway/internal/service/agentapp"
+	mcpSvc "sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/testhelpers"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -326,7 +326,7 @@ func TestCheckAuthForGroupMcpProxyAccess_PrefixedPathInjectsToolGroup(t *testing
 
 	r := gin.New()
 	r.Use(testTenantAndModeMiddleware(model.ModeEnterprise))
-	r.GET("/pfx/v0/groups/:name/mcp", env.s.checkAuthForGroupMcpProxyAccess(true), func(c *gin.Context) {
+	r.GET("/pfx/:tenant_id/v0/groups/:name/mcp", env.s.checkAuthForGroupMcpProxyAccess(true), func(c *gin.Context) {
 		g, ok := mcpgatewayctx.ToolGroupRoute(c.Request.Context())
 		if !ok || g != "tg" {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": "missing tool group in context"})
@@ -334,7 +334,7 @@ func TestCheckAuthForGroupMcpProxyAccess_PrefixedPathInjectsToolGroup(t *testing
 		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
-	req := httptest.NewRequest(http.MethodGet, "/pfx/v0/groups/tg/mcp", nil)
+	req := httptest.NewRequest(http.MethodGet, "/pfx/"+tenant.DefaultID+"/v0/groups/tg/mcp", nil)
 	req.Header.Set("X-API-Key", app.ClientID)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)

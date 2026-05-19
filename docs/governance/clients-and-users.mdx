@@ -36,13 +36,13 @@ Compared with admins, a standard user has a narrower permission set. They can in
 
 ```bash
 # Auto-generated token
-mcpjungle create user bob
+sami-mcp-gateway create user bob
 
 # Custom token
-mcpjungle create user alice --access-token alice_token_123
+sami-mcp-gateway create user alice --access-token alice_token_123
 
 # From config file
-mcpjungle create user --conf /path/to/user-config.json
+sami-mcp-gateway create user --conf /path/to/user-config.json
 ```
 
 ## User config file
@@ -73,7 +73,7 @@ See the [configuration file reference](/reference/config-file#var_name-placehold
 For a small to medium sized deployment:
 
 - create a small number of admin users for platform operators
-- create one user in mcpjungle for each human operator who needs CLI or API access
+- create one user in sami-mcp-gateway for each human operator who needs CLI or API access
 - create one MCP client per consuming application or workflow
 - avoid sharing one token across multiple tools or teams
 

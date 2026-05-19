@@ -1,6 +1,6 @@
 ---
 title: "Installation"
-description: "Install and run the mcpjungle CLI and gateway server"
+description: "Install and run the sami-mcp-gateway CLI and gateway server"
 ---
 
 Mcpjungle ships as a single binary.
@@ -8,7 +8,7 @@ Mcpjungle ships as a single binary.
 You will usually use this binary in two ways:
 
 - To run the Mcpjungle gateway server, which manages all upstream MCPs and serves the HTTP API & MCP endpoints
-- As a CLI client to manage the mcpjungle server and interact with the mcp gateway
+- As a CLI client to manage the sami-mcp-gateway server and interact with the mcp gateway
 
 For individual users, the simplest (and recommended) setup is: install the CLI, then run the gateway with Docker Compose.
 
@@ -17,7 +17,7 @@ For individual users, the simplest (and recommended) setup is: install the CLI, 
     Homebrew is the recommended installation method on macOS and Linux.
 
     ```bash
-    brew install mcpjungle/mcpjungle/mcpjungle
+    brew install sami-mcp-gateway/sami-mcp-gateway/sami-mcp-gateway
     ```
 
     <Warning>
@@ -27,7 +27,7 @@ For individual users, the simplest (and recommended) setup is: install the CLI, 
     Verify the installation:
 
     ```bash
-    mcpjungle version
+    sami-mcp-gateway version
     ```
   </Tab>
 
@@ -35,15 +35,15 @@ For individual users, the simplest (and recommended) setup is: install the CLI, 
     Pull the official Mcpjungle image if you want to run the gateway in Docker:
 
     ```bash
-    docker pull ghcr.io/mcpjungle/mcpjungle
+    docker pull ghcr.io/sami-mcp-gateway/sami-mcp-gateway
     ```
 
-    The default image is light-weight & minimal. It contains only the `mcpjungle` binary and the dependencies needed for runtime.
+    The default image is light-weight & minimal. It contains only the `sami-mcp-gateway` binary and the dependencies needed for runtime.
 
     If you need to register stdio-based MCP servers that rely on `npx` or `uvx`, use the `stdio`-tagged image instead:
 
     ```bash
-    docker pull ghcr.io/mcpjungle/mcpjungle:latest-stdio
+    docker pull ghcr.io/sami-mcp-gateway/sami-mcp-gateway:latest-stdio
     ```
 
     <Note>
@@ -55,7 +55,7 @@ For individual users, the simplest (and recommended) setup is: install the CLI, 
   </Tab>
 
   <Tab title="Binary">
-    Pre-built binaries for Linux and macOS are available on the [GitHub Releases page](https://github.com/mcpjungle/MCPJungle/releases).
+    Pre-built binaries for Linux and macOS are available on the .
 
     Download the binary for your platform, make it executable, and move it to a directory on your `PATH`.
 
@@ -68,7 +68,7 @@ For individual users, the simplest (and recommended) setup is: install the CLI, 
     Verify the installation after placing the binary on your `PATH`:
 
     ```bash
-    mcpjungle version
+    sami-mcp-gateway version
     ```
   </Tab>
 </Tabs>
@@ -78,7 +78,7 @@ For individual users, the simplest (and recommended) setup is: install the CLI, 
 You can use the binary to run the server directly on your host:
 
 ```bash
-mcpjungle start
+sami-mcp-gateway start
 ```
 
 This starts the server on port 8080 by default. You can run a quick health check:
@@ -92,7 +92,7 @@ The CLI also connects to this address by default.
 If the following command also returns the server version, then your CLI is correctly connected to the server:
 
 ```bash
-mcpjungle version
+sami-mcp-gateway version
 ```
 
 ## Configure a custom registry URL
@@ -104,11 +104,11 @@ By default, the CLI connects to Mcpjungle at `http://127.0.0.1:8080`. If your se
         Pass the URL inline with every command:
 
         ```bash
-        mcpjungle --registry http://my-server:9000 list tools
+        sami-mcp-gateway --registry http://my-server:9000 list tools
         ```
     </Tab>
     <Tab title="Config file">
-        Create or edit `.mcpjungle.conf` in your home directory so you don't repeat the flag:
+        Create or edit `.sami-mcp-gateway.conf` in your home directory so you don't repeat the flag:
 
         ```yaml
         registry_url: http://my-server:9000
@@ -116,7 +116,7 @@ By default, the CLI connects to Mcpjungle at `http://127.0.0.1:8080`. If your se
     </Tab>
 </Tabs>
 
-You have now successfully installed mcpjungle and connected the CLI to the server.
+You have now successfully installed sami-mcp-gateway and connected the CLI to the server.
 
 ## Next steps
 
@@ -128,9 +128,9 @@ You have now successfully installed mcpjungle and connected the CLI to the serve
     Understand the difference between the CLI, the gateway, upstream MCP servers, and groups.
   </Card>
   <Card title="Add a streamable HTTP MCP server" icon="server" href="/guides/register-http-servers">
-    Register a remote MCP server and expose it through mcpjungle.
+    Register a remote MCP server and expose it through sami-mcp-gateway.
   </Card>
   <Card title="Add a STDIO MCP server" icon="terminal" href="/guides/register-stdio-servers">
-    Register a local STDIO-based MCP server and expose it through mcpjungle.
+    Register a local STDIO-based MCP server and expose it through sami-mcp-gateway.
   </Card>
 </CardGroup>

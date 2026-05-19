@@ -12,7 +12,7 @@ In enterprise mode, that is no longer true. No MCP client can access any registe
 Use `create mcp-client` and specify the servers it should be allowed to access:
 
 ```bash
-mcpjungle create mcp-client cursor-local --allow "calculator, github"
+sami-mcp-gateway create mcp-client cursor-local --allow "calculator, github"
 ```
 
 Mcpjungle prints the generated access token once:
@@ -33,7 +33,7 @@ Send this token in the `Authorization: Bearer {token}` HTTP header.
   You can use `--allow "*"` to give an MCP client access to all registered MCP servers.
 
   ```bash
-  mcpjungle create mcp-client cursor-local --allow "*"
+  sami-mcp-gateway create mcp-client cursor-local --allow "*"
   ```
 
   This is highly discouraged in production environments. Prefer explicit allow-lists so each client only gets access to the servers it actually needs.
@@ -48,7 +48,7 @@ Example for Cursor:
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "sami-mcp-gateway": {
       "url": "http://localhost:8080/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_ACCESS_TOKEN"
@@ -63,7 +63,7 @@ Example for Claude via `mcp-remote`:
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "sami-mcp-gateway": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -82,7 +82,7 @@ Example for Claude via `mcp-remote`:
 If you want to supply your own token instead of using a generated one:
 
 ```bash
-mcpjungle create mcp-client cursor-local --allow "calculator, github" --access-token my_custom_token
+sami-mcp-gateway create mcp-client cursor-local --allow "calculator, github" --access-token my_custom_token
 ```
 
 This is useful when tokens are issued or tracked externally. For example, you might be managing identities and tokens through Vault or AWS KMS.
@@ -104,7 +104,7 @@ This is useful when tokens are issued or tracked externally. For example, you mi
 Create it with:
 
 ```bash
-mcpjungle create mcp-client --conf ./cursor-local.json
+sami-mcp-gateway create mcp-client --conf ./cursor-local.json
 ```
 
 <Warning>

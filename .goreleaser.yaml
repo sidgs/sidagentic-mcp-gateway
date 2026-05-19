@@ -4,7 +4,7 @@
 version: 2
 
 # Basename for the build artifacts, used in the archive names and Docker images.
-project_name: mcpjungle
+project_name: sami-mcp-gateway
 
 before:
   hooks:
@@ -14,7 +14,7 @@ before:
     - go mod tidy
 
 builds:
-  - id: mcpjungle
+  - id: sami-mcp-gateway
     main: ./main.go
     binary: sami-mcp-gateway
     goos:
@@ -25,13 +25,11 @@ builds:
       - amd64
       - arm64
     ldflags:
-      - -s -w -X github.com/mcpjungle/mcpjungle/pkg/version.Version={{.Version}}
+      - -s -w -X sami.io/mcpgateway/pkg/version.Version={{.Version}}
     env:
       - CGO_ENABLED=0
       - GOWORK=off
     overrides:
-      # macOS builds - use CGO for better compatibility
-      # overrides for darwin builds to enable CGO
       - goos: darwin
         goarch: amd64
         env:
@@ -45,7 +43,6 @@ builds:
 
 archives:
   - formats: [tar.gz]
-    # this name template makes the OS and Arch compatible with the results of `uname`.
     name_template: >-
       {{ .ProjectName }}_
       {{- title .Os }}_
@@ -66,23 +63,11 @@ signs:
 changelog:
   disable: true
 
-brews:
-  - url_template: "https://github.com/mcpjungle/MCPJungle/releases/download/{{ .Tag }}/{{ .ArtifactName }}"
-    commit_author:
-      name: "Raghav Dua"
-    homepage: "https://github.com/mcpjungle/MCPJungle"
-    description: "Self-hosted MCP tool registry for enterprise AI agents"
-    repository:
-      owner: "mcpjungle"
-      name: "homebrew-mcpjungle"
-
 dockers:
   - dockerfile: Dockerfile
     image_templates:
-      - "mcpjungle/mcpjungle:{{ .Tag }}-amd64"
-      - "mcpjungle/mcpjungle:latest-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:latest-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-amd64"
     use: buildx
     build_flag_templates:
       - "--pull"
@@ -92,10 +77,8 @@ dockers:
 
   - dockerfile: Dockerfile
     image_templates:
-      - "mcpjungle/mcpjungle:{{ .Tag }}-arm64"
-      - "mcpjungle/mcpjungle:latest-arm64"
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-arm64"
-      - "ghcr.io/mcpjungle/mcpjungle:latest-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-arm64"
     use: buildx
     build_flag_templates:
       - "--pull"
@@ -103,11 +86,10 @@ dockers:
       - "--build-arg=VERSION={{ .Version }}"
     goarch: arm64
 
-  # Prefixed HTTP path + dashboard base (see Dockerfile.api)
   - dockerfile: Dockerfile.api
     image_templates:
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-amd64"
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-api-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-api-amd64"
     use: buildx
     build_flag_templates:
       - "--pull"
@@ -117,8 +99,8 @@ dockers:
 
   - dockerfile: Dockerfile.api
     image_templates:
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-arm64"
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-api-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-api-arm64"
     use: buildx
     build_flag_templates:
       - "--pull"
@@ -128,10 +110,8 @@ dockers:
 
   - dockerfile: stdio.Dockerfile
     image_templates:
-      - "mcpjungle/mcpjungle:{{ .Tag }}-stdio-amd64"
-      - "mcpjungle/mcpjungle:latest-stdio-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-stdio-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:latest-stdio-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-stdio-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-stdio-amd64"
     use: buildx
     build_flag_templates:
       - "--pull"
@@ -140,10 +120,8 @@ dockers:
 
   - dockerfile: stdio.Dockerfile
     image_templates:
-      - "mcpjungle/mcpjungle:{{ .Tag }}-stdio-arm64"
-      - "mcpjungle/mcpjungle:latest-stdio-arm64"
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-stdio-arm64"
-      - "ghcr.io/mcpjungle/mcpjungle:latest-stdio-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-stdio-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-stdio-arm64"
     use: buildx
     build_flag_templates:
       - "--pull"
@@ -151,52 +129,32 @@ dockers:
     goarch: arm64
 
 docker_manifests:
-  - name_template: "mcpjungle/mcpjungle:{{ .Tag }}"
+  - name_template: "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}"
     image_templates:
-      - "mcpjungle/mcpjungle:{{ .Tag }}-amd64"
-      - "mcpjungle/mcpjungle:{{ .Tag }}-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-arm64"
 
-  - name_template: "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}"
+  - name_template: "sidgs.jfrog.io/sami/sami-mcp-gateway:latest"
     image_templates:
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-arm64"
 
-  - name_template: "mcpjungle/mcpjungle:latest"
+  - name_template: "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-api"
     image_templates:
-      - "mcpjungle/mcpjungle:latest-amd64"
-      - "mcpjungle/mcpjungle:latest-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-api-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-api-arm64"
 
-  - name_template: "ghcr.io/mcpjungle/mcpjungle:latest"
+  - name_template: "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-api"
     image_templates:
-      - "ghcr.io/mcpjungle/mcpjungle:latest-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:latest-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-api-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-api-arm64"
 
-  - name_template: "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}"
+  - name_template: "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-stdio"
     image_templates:
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-amd64"
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:{{ .Tag }}-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-stdio-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:{{ .Tag }}-stdio-arm64"
 
-  - name_template: "ghcr.io/mcpjungle/sami-mcpgateway-api:latest"
+  - name_template: "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-stdio"
     image_templates:
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-amd64"
-      - "ghcr.io/mcpjungle/sami-mcpgateway-api:latest-arm64"
-
-  - name_template: "mcpjungle/mcpjungle:{{ .Tag }}-stdio"
-    image_templates:
-      - "mcpjungle/mcpjungle:{{ .Tag }}-stdio-amd64"
-      - "mcpjungle/mcpjungle:{{ .Tag }}-stdio-arm64"
-
-  - name_template: "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-stdio"
-    image_templates:
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-stdio-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:{{ .Tag }}-stdio-arm64"
-
-  - name_template: "mcpjungle/mcpjungle:latest-stdio"
-    image_templates:
-      - "mcpjungle/mcpjungle:latest-stdio-amd64"
-      - "mcpjungle/mcpjungle:latest-stdio-arm64"
-
-  - name_template: "ghcr.io/mcpjungle/mcpjungle:latest-stdio"
-    image_templates:
-      - "ghcr.io/mcpjungle/mcpjungle:latest-stdio-amd64"
-      - "ghcr.io/mcpjungle/mcpjungle:latest-stdio-arm64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-stdio-amd64"
+      - "sidgs.jfrog.io/sami/sami-mcp-gateway:latest-stdio-arm64"

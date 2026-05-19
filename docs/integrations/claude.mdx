@@ -1,5 +1,5 @@
 ---
-title: "Connect Claude to mcpjungle"
+title: "Connect Claude to sami-mcp-gateway"
 description: "Connect Claude Desktop to your Mcpjungle gateway and give it access to all your MCP servers"
 ---
 
@@ -41,7 +41,7 @@ Claude Desktop reads its MCP server configuration from a JSON file on disk.
     ```json
     {
       "mcpServers": {
-        "mcpjungle": {
+        "sami-mcp-gateway": {
           "command": "npx",
           "args": [
             "mcp-remote",
@@ -80,7 +80,7 @@ If your Mcpjungle instance runs in enterprise mode, you must create an MCP clien
 First, create a client with the Mcpjungle CLI:
 
 ```bash
-mcpjungle create mcp-client claude-desktop --allow "server1, server2"
+sami-mcp-gateway create mcp-client claude-desktop --allow "server1, server2"
 ```
 
 This will output an access token for your client which is allowed to call tools from `server1` and `server2`.
@@ -90,7 +90,7 @@ Pass the token to `mcp-remote` using the `--header` flag:
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "sami-mcp-gateway": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -104,7 +104,7 @@ Pass the token to `mcp-remote` using the `--header` flag:
 }
 ```
 
-Replace `YOUR_ACCESS_TOKEN` with the token printed by `mcpjungle create mcp-client`.
+Replace `YOUR_ACCESS_TOKEN` with the token printed by `sami-mcp-gateway create mcp-client`.
 
 <Warning>
   In enterprise mode, a client can only see and call tools from the servers it was explicitly granted access to. If Claude reports no tools available, verify that the `--allow` flag included the correct server names when you created the client.
@@ -119,7 +119,7 @@ Use [Tool Groups](/guides/tool-groups) to create a curated subset of tools and p
 ```json
 {
   "mcpServers": {
-    "mcpjungle": {
+    "sami-mcp-gateway": {
       "command": "npx",
       "args": [
         "mcp-remote",
@@ -132,5 +132,5 @@ Use [Tool Groups](/guides/tool-groups) to create a curated subset of tools and p
 ```
 
 <Tip>
-  Run `mcpjungle list tools` to see all available tools, then cherry-pick the ones Claude actually needs when creating a group.
+  Run `sami-mcp-gateway list tools` to see all available tools, then cherry-pick the ones Claude actually needs when creating a group.
 </Tip>

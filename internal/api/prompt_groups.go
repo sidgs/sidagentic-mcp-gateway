@@ -7,9 +7,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/tenant"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func (s *Server) createPromptGroupHandler() gin.HandlerFunc {
@@ -209,7 +209,8 @@ func (s *Server) getPromptGroupSseServer(c *gin.Context, groupName string) (*ser
 	sse := server.NewSSEServer(
 		mcpSrv,
 		server.WithDynamicBasePath(func(r *http.Request, sessionID string) string {
-			return s.promptGroupProxyPathPrefix(groupName)
+			tid := tenant.MustFromContext(r.Context())
+			return s.v0SubgroupMountBasePath(tid, "prompt-groups", groupName)
 		}),
 	)
 	s.promptGroupSseServers.Store(cacheKey, sse)
@@ -242,7 +243,7 @@ func (s *Server) promptGroupSseMessageHandler() gin.HandlerFunc {
 
 func (s *Server) getPromptGroupEndpoints(c *gin.Context, groupName string) *types.ToolGroupEndpoints {
 	scheme := s.publicSchemeForURLs(c)
-	basePath := s.promptGroupProxyPathPrefix(groupName)
+	basePath := s.promptGroupProxyPathPrefix(c, groupName)
 	u := &url.URL{Scheme: scheme, Host: c.Request.Host, Path: basePath}
 	base := u.String()
 

@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func TestRegisterServer(t *testing.T) {

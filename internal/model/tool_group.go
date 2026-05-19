@@ -25,7 +25,7 @@ type ToolGroup struct {
 	Name        string `json:"name" gorm:"uniqueIndex:ux_toolgroup_tenant_name; not null"`
 	Description string `json:"description"`
 
-	// SecurityOption controls how /v0/groups/:name/* MCP routes authenticate (open, api_key, basic, bearer).
+	// SecurityOption controls how /{tenant_id}/v0/groups/:name/* MCP routes authenticate (open, api_key, basic, bearer).
 	SecurityOption string `json:"security_option" gorm:"size:32;not null;default:basic"`
 
 	// IncludedTools contains a list of tool names that are included in this group.

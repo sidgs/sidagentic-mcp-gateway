@@ -11,9 +11,9 @@ import (
 
 	"github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
-	"github.com/mcpjungle/mcpjungle/internal/model"
-	"github.com/mcpjungle/mcpjungle/pkg/apierrors"
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
 
@@ -33,7 +33,7 @@ func buildResourceURI(tenantID, serverName, originalURI string) string {
 func parseResourceURI(resourceURI string) (tenantID, serverName, originalURI string, err error) {
 	if len(resourceURI) <= len(resourceURIPrefix) || resourceURI[:len(resourceURIPrefix)] != resourceURIPrefix {
 		return "", "", "", fmt.Errorf(
-			"resource URI %s is not a valid MCPJungle resource URI: %w", resourceURI, apierrors.ErrInvalidInput,
+			"resource URI %s is not a valid SAMI MCP Gateway resource URI: %w", resourceURI, apierrors.ErrInvalidInput,
 		)
 	}
 
@@ -74,7 +74,7 @@ func parseResourceURI(resourceURI string) (tenantID, serverName, originalURI str
 	}
 
 	return "", "", "", fmt.Errorf(
-		"resource URI %s is not a valid MCPJungle resource URI: %w", resourceURI, apierrors.ErrInvalidInput,
+		"resource URI %s is not a valid SAMI MCP Gateway resource URI: %w", resourceURI, apierrors.ErrInvalidInput,
 	)
 }
 

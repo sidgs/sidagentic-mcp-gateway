@@ -3,8 +3,8 @@ package cmd
 import (
 	"fmt"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
-	"github.com/mcpjungle/mcpjungle/pkg/util"
+	"sami.io/mcpgateway/pkg/types"
+	"sami.io/mcpgateway/pkg/util"
 	"github.com/spf13/cobra"
 )
 

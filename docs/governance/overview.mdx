@@ -5,7 +5,7 @@ description: "Understand Mcpjungle's enterprise operating model: authenticated c
 
 If you're an individual user running mpcjungle locally or for personal use (most likely in development mode), you can skip this section entirely.
 
-The Governance model is useful for organizations running mcpjungle in a shared environment in the **enterprise mode**.
+The Governance model is useful for organizations running sami-mcp-gateway in a shared environment in the **enterprise mode**.
 
 In enterprise mode, organizations want:
 
@@ -52,7 +52,7 @@ Users are human identities for people who need authenticated access to Mcpjungle
     Deploy the gateway in enterprise mode and connect it to PostgreSQL.
   </Step>
   <Step title="Initialize the server">
-    Run `mcpjungle init-server` once to create the initial admin identity.
+    Run `sami-mcp-gateway init-server` once to create the initial admin identity.
   </Step>
   <Step title="Register MCP servers">
     Add the upstream servers you want the gateway to expose.

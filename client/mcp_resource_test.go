@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mcpjungle/mcpjungle/pkg/types"
+	"sami.io/mcpgateway/pkg/types"
 )
 
 func TestListResources(t *testing.T) {
@@ -175,7 +175,7 @@ func TestReadResource(t *testing.T) {
 			t.Fatalf("Failed to decode request: %v", err)
 		}
 		if request.URI != "mcpj://res/polaro/c3lzdGVtOi8vc3lzdGVtL2luZm8" {
-			t.Errorf("Expected MCPJungle URI, got %s", request.URI)
+			t.Errorf("Expected SAMI MCP Gateway URI, got %s", request.URI)
 		}
 
 		w.Header().Set("Content-Type", "application/json")

@@ -28,7 +28,7 @@ var disableCmd = &cobra.Command{
 	Use:   "disable",
 	Short: "Disable MCP entities like tools and prompts globally",
 	Long: "Disable one or more tools or prompts globally.\n" +
-		"If an entity is disabled in mcpjungle, it CANNOT be consumed by mcp clients via the gateway.\n\n" +
+		"If an entity is disabled in sami-mcp-gateway, it CANNOT be consumed by mcp clients via the gateway.\n\n" +
 		"NOTE: For backward-compatibility, you can still run 'disable [name]' to disable a tool or all tools from a mcp server.\n" +
 		"But the recommended way to achieve this now is 'disable tool [name]'.",
 	Annotations: map[string]string{

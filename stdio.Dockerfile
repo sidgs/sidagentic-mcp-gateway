@@ -1,13 +1,12 @@
-# This docker image is used when you want mcpjungle to run STDIO MCP servers that rely on `uvx` or `npx` to start.
+# This docker image is used when you want SAMI MCP Gateway to run STDIO MCP servers that rely on `uvx` or `npx` to start.
 
 # Use the official uv image as base
 FROM ghcr.io/astral-sh/uv:debian
 
 # OCI image labels
-LABEL org.opencontainers.image.source="https://github.com/mcpjungle/mcpjungle"
-LABEL org.opencontainers.image.description="MCPJungle - Self-hosted MCP Gateway for developers and enterprises"
-LABEL org.opencontainers.image.title="MCPJungle"
-LABEL org.opencontainers.image.vendor="mcpjungle"
+LABEL org.opencontainers.image.description="SAMI MCP Gateway - Self-hosted MCP Gateway for developers and enterprises"
+LABEL org.opencontainers.image.title="SAMI MCP Gateway"
+LABEL org.opencontainers.image.vendor="sidglobal"
 
 # Install Node.js
 RUN apt-get update \

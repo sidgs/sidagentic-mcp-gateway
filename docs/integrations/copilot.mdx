@@ -1,5 +1,5 @@
 ---
-title: "Connect GitHub Copilot to mcpjungle"
+title: "Connect GitHub Copilot to sami-mcp-gateway"
 description: "Add Mcpjungle as an MCP server in GitHub Copilot's mcp.json config and give Copilot Chat access to all your registered tools."
 ---
 
@@ -25,7 +25,7 @@ Follow [GitHub's documentation on configuring MCP servers manually](https://docs
     ```json
     {
       "servers": {
-        "mcpjungle": {
+        "sami-mcp-gateway": {
           "url": "http://localhost:8080/mcp"
         }
       }
@@ -59,7 +59,7 @@ If your Mcpjungle instance runs in enterprise mode, create a dedicated MCP clien
 Create the client with the Mcpjungle CLI:
 
 ```bash
-mcpjungle create mcp-client copilot-local --allow "server1, server2"
+sami-mcp-gateway create mcp-client copilot-local --allow "server1, server2"
 ```
 
 Then update `mcp.json` to send the token:
@@ -67,7 +67,7 @@ Then update `mcp.json` to send the token:
 ```json
 {
   "servers": {
-    "mcpjungle": {
+    "sami-mcp-gateway": {
       "url": "http://localhost:8080/mcp",
       "headers": {
         "Authorization": "Bearer YOUR_ACCESS_TOKEN"
@@ -77,7 +77,7 @@ Then update `mcp.json` to send the token:
 }
 ```
 
-Replace `YOUR_ACCESS_TOKEN` with the token printed by `mcpjungle create mcp-client`.
+Replace `YOUR_ACCESS_TOKEN` with the token printed by `sami-mcp-gateway create mcp-client`.
 
 <Warning>
   In enterprise mode, a client can only access the servers listed in its `--allow` flag. If Copilot reports no tools, verify the client was created with the correct server names.
@@ -92,7 +92,7 @@ Create a group and point `mcp.json` at its dedicated endpoint:
 ```json
 {
   "servers": {
-    "mcpjungle": {
+    "sami-mcp-gateway": {
       "url": "http://localhost:8080/v0/groups/copilot-tools/mcp"
     }
   }
@@ -100,5 +100,5 @@ Create a group and point `mcp.json` at its dedicated endpoint:
 ```
 
 <Tip>
-  Run `mcpjungle list tools` to see all registered tools, then create a group with only the tools your Copilot workflow needs.
+  Run `sami-mcp-gateway list tools` to see all registered tools, then create a group with only the tools your Copilot workflow needs.
 </Tip>

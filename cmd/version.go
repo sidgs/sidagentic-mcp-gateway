@@ -4,14 +4,14 @@ import (
 	"context"
 	"time"
 
-	"github.com/mcpjungle/mcpjungle/pkg/version"
+	"sami.io/mcpgateway/pkg/version"
 	"github.com/spf13/cobra"
 )
 
 var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Print version information",
-	Long:  `Print version information for the CLI and the connected mcpjungle server.`,
+	Long:  `Print version information for the CLI and the connected sami-mcp-gateway server.`,
 	Run: func(cmd *cobra.Command, args []string) {
 		// We want the extra newline for proper formatting
 		cmd.Print(asciiArt) //nolint:staticcheck
