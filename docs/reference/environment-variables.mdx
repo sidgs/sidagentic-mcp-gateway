@@ -167,13 +167,13 @@ When the server starts it resolves the database connection in this order:
 
 ## Docker
 
-<ParamField path="MCPJUNGLE_IMAGE_TAG" type="string">
+<ParamField path="MCPGATEWAY_IMAGE_TAG" type="string">
   Docker image tag used when pulling `ghcr.io/sami-mcp-gateway/sami-mcp-gateway` in the provided Docker Compose files.
 
   Set this when you want to lock your sami-mcp-gateway deployment to a specific version when using one of the provided docker compose files.
 
   ```bash
-  MCPJUNGLE_IMAGE_TAG=0.4.0-stdio docker compose up -d
+  MCPGATEWAY_IMAGE_TAG=0.4.0-stdio docker compose up -d
   ```
 
   | Tag | Description |
@@ -203,4 +203,4 @@ When the server starts it resolves the database connection in this order:
 | `OTEL_ENABLED` | Observability | mode-dependent | Enable OpenTelemetry metrics. |
 | `OTEL_RESOURCE_ATTRIBUTES` | Observability | — | Additional OTel resource attributes. |
 | `SESSION_IDLE_TIMEOUT_SEC` | Connections | `-1` | Idle timeout for stateful sessions. |
-| `MCPJUNGLE_IMAGE_TAG` | Docker | `latest` | Docker image tag for Compose deployments. |
+| `MCPGATEWAY_IMAGE_TAG` | Docker | `latest` | Docker image tag for Compose deployments. |

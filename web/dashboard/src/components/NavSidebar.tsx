@@ -139,7 +139,7 @@ export function NavSidebar({
                   component="span"
                   sx={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden" }}
                 >
-                  MCP Gateway
+                  SAMI MCPHub
                 </Typography>
               </Box>
               <Tooltip title="Collapse menu">

@@ -1,6 +1,6 @@
 ---
 title: "Register popular MCP Servers"
-description: "Example-driven guide for registering commonly used MCP servers in Mcpjungle."
+description: "Example-driven guide for registering commonly used MCP servers in Mcpgateway."
 ---
 
 This page shows practical registration examples for commonly used MCP servers. It complements the transport-specific guides:
@@ -74,7 +74,7 @@ Some hosted servers use OAuth instead of static API tokens. Figma is a good exam
 }
 ```
 
-If the upstream server advertises OAuth, the CLI opens a browser, you approve access, and Mcpjungle completes registration automatically.
+If the upstream server advertises OAuth, the CLI opens a browser, you approve access, and Mcpgateway completes registration automatically.
 
 ### Todoist: OAuth flow from a direct CLI command
 
@@ -84,7 +84,7 @@ Todoist is a good example of a hosted server where the fastest path is still a d
 sami-mcp-gateway register --name todoist --url https://ai.todoist.net/mcp
 ```
 
-Todoist enforces OAuth. Running this command starts the upstream OAuth flow in your browser, and Mcpjungle completes the registration after you approve access.
+Todoist enforces OAuth. Running this command starts the upstream OAuth flow in your browser, and Mcpgateway completes the registration after you approve access.
 
 ## Local STDIO servers
 
@@ -104,7 +104,7 @@ The official filesystem server is the canonical example of local STDIO registrat
 
 This pattern is useful for local tools that do not need extra secrets or long-lived sessions.
 
-If you run Mcpjungle inside Docker and want to use the filesystem server, see the Docker caveat in [Add STDIO MCP servers](/guides/register-stdio-servers#running-in-docker-filesystem-access).
+If you run Mcpgateway inside Docker and want to use the filesystem server, see the Docker caveat in [Add STDIO MCP servers](/guides/register-stdio-servers#running-in-docker-filesystem-access).
 
 ### Playwright: STDIO server with `stateful` sessions
 
@@ -173,7 +173,7 @@ This is a good template for small Python-distributed MCP servers.
 ## SSE transport
 
 <Warning>
-SSE is a deprecated MCP transport and is discouraged in Mcpjungle. Prefer Streamable HTTP for remote servers unless you specifically need to connect to an older SSE-based deployment.
+SSE is a deprecated MCP transport and is discouraged in Mcpgateway. Prefer Streamable HTTP for remote servers unless you specifically need to connect to an older SSE-based deployment.
 </Warning>
 
 If you still need to register an SSE server, use a JSON config file:

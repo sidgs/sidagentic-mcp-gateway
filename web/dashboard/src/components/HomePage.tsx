@@ -189,7 +189,7 @@ export function HomePage({
                 textShadow: "0 1px 24px rgba(0,0,0,0.2)",
               }}
             >
-              MCP Gateway
+              SAMI MCPHub
             </Typography>
             <Typography
               variant="h6"
@@ -289,7 +289,7 @@ export function HomePage({
 
       <Container maxWidth="lg" disableGutters sx={{ px: { xs: 0, sm: 0 } }}>
         <Typography variant="h5" component="h2" sx={{ fontWeight: 700, mb: 1 }}>
-          Why use an MCP gateway?
+          Why use SAMI MCPHub?
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 3, maxWidth: 800, lineHeight: 1.6 }}>
           MCP connects assistants to your systems, but every new server usually means another client config, another set

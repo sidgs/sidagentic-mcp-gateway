@@ -3,19 +3,19 @@ title: "Core concepts"
 description: "Understand the core concepts in sami-mcp-gateway to get the most out of it"
 ---
 
-## Mcpjungle server
+## Mcpgateway server
 The long-running HTTP service that you run either locally or deploy to a remote host machine.
 
 It exposes a REST API for managing sami-mcp-gateway registry itself and a streamable HTTP endpoint at `/mcp` for AI clients to connect to.
 
 ### Data persistence
-Mcpjungle stores all its data in a SQL database.
+Mcpgateway stores all its data in a SQL database.
 
 By default, it uses SQLite with a local file. For production deployments, we recommend PostgreSQL.
 
 If you use the docker-compose.yaml provided in the repository, it will automatically start a PostgreSQL container and ensure connectivity.
 
-## Mcpjungle client
+## Mcpgateway client
 The `sami-mcp-gateway` CLI tool you run from your terminal for server management and automation.
 
 Today, the CLI remains the most complete management client, and SAMI MCP Gateway also includes a Dashboard UI for local/dev visibility and common management tasks.
@@ -24,14 +24,14 @@ You can also build your own clients that talk to the server's REST API for custo
 
 ## Upstream MCP server
 
-An **upstream MCP server** is any MCP server you add in Mcpjungle.
+An **upstream MCP server** is any MCP server you add in Mcpgateway.
 
-This mcp server then becomes accessible to AI clients that connect to Mcpjungle's gateway endpoint.
+This mcp server then becomes accessible to AI clients that connect to Mcpgateway's gateway endpoint.
 
 ## Canonical names
 
 ### Tools and Prompts
-Mcpjungle assigns canonical names to tools and prompts so they remain unique across all registered servers.
+Mcpgateway assigns canonical names to tools and prompts so they remain unique across all registered servers.
 
 Tool format:
 
@@ -95,7 +95,7 @@ SSE:
 
 ## Development mode vs Enterprise mode
 
-Mcpjungle supports 2 operating modes.
+Mcpgateway supports 2 operating modes.
 
 ### Development mode
 When you start sami-mcp-gateway server, it runs in development mode by default.
@@ -121,7 +121,7 @@ Use enterprise mode when:
 - you need centralized management and governance features such as observability, audit logs, etc
 
 <Info>
-    Mcpjungle is currently free to use for both individuals and enterprises.
+    Mcpgateway is currently free to use for both individuals and enterprises.
 </Info>
 
 ## Initialization
@@ -139,11 +139,11 @@ This concept is only relevant in enterprise mode.
 Enterprise mode distinguishes between two identity types:
 
 - **MCP clients**: Non-human identities AI clients like Cursor, Claude, Codex, custom agents, etc. They authenticate to the gateway and receive access to specific servers.
-- **Users**: Human operators who use the CLI or HTTP API. Standard users can inspect and use Mcpjungle, but write access remains restricted to admins.
+- **Users**: Human operators who use the CLI or HTTP API. Standard users can inspect and use Mcpgateway, but write access remains restricted to admins.
 
 ## Stateless versus stateful sessions
 
-For each upstream server, Mcpjungle can manage connection lifecycle in one of two ways:
+For each upstream server, Mcpgateway can manage connection lifecycle in one of two ways:
 
 - **Stateless**: Open a fresh connection for each tool call, then close it.
 - **Stateful**: Keep the connection open and reuse it across calls.
@@ -152,10 +152,10 @@ Stateless is the default and should remain your first choice. Stateful is mainly
 
 ## Recommended mental model
 
-Think of Mcpjungle as three layers:
+Think of Mcpgateway as three layers:
 
 1. **Upstream servers**: The actual capabilities.
-2. **Mcpjungle**: The control plane and unified gateway.
+2. **Mcpgateway**: The control plane and unified gateway.
 3. **AI clients**: Claude, Cursor, Copilot, or agents consuming MCPs.
 
 ## Documentation for AI Agents

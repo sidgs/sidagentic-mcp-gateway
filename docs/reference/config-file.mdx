@@ -3,7 +3,7 @@ title: "CLI configuration file"
 description: "Reference for ~/.sami-mcp-gateway.conf"
 ---
 
-The Mcpjungle CLI reads a YAML configuration file at `~/.sami-mcp-gateway.conf` on startup. It stores two values: the URL of the Mcpjungle server and an access token for authenticated requests. Most users never edit this file by hand — `sami-mcp-gateway init-server` and `sami-mcp-gateway login` write to it automatically.
+The Mcpgateway CLI reads a YAML configuration file at `~/.sami-mcp-gateway.conf` on startup. It stores two values: the URL of the Mcpgateway server and an access token for authenticated requests. Most users never edit this file by hand — `sami-mcp-gateway init-server` and `sami-mcp-gateway login` write to it automatically.
 
 ## Client config file (`~/.sami-mcp-gateway.conf`)
 
@@ -21,7 +21,7 @@ Both fields are optional. If either is absent the CLI falls back to its default 
 ### Supported fields
 
 <ParamField path="registry_url" type="string" default="http://127.0.0.1:8080">
-  Base URL of the Mcpjungle server the CLI connects to. Set this to avoid passing `--registry` on every command.
+  Base URL of the Mcpgateway server the CLI connects to. Set this to avoid passing `--registry` on every command.
 
   ```yaml
   registry_url: http://my-server:9000
@@ -108,11 +108,11 @@ Used with `sami-mcp-gateway register -c <file>`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | Yes | Unique name for this server in Mcpjungle. |
+| `name` | string | Yes | Unique name for this server in Mcpgateway. |
 | `transport` | string | Yes | Must be `"streamable_http"`. |
 | `description` | string | No | Human-readable description. |
 | `url` | string | Yes | Full URL of the MCP server endpoint. |
-| `bearer_token` | string | No | If set, Mcpjungle adds `Authorization: Bearer <token>` to every upstream request. |
+| `bearer_token` | string | No | If set, Mcpgateway adds `Authorization: Bearer <token>` to every upstream request. |
 | `oauth_redirect_uri` | string | No | Redirect URI used if the upstream MCP server requires OAuth during registration. |
 | `oauth_client_id` | string | No | Optional pre-registered OAuth client ID. |
 | `oauth_client_secret` | string | No | Optional OAuth client secret paired with `oauth_client_id`. |
@@ -122,7 +122,7 @@ Used with `sami-mcp-gateway register -c <file>`.
 <Note>
   Upstream OAuth support is currently beta.
 
-  For interactive CLI use, you usually do not need to set `oauth_redirect_uri` manually. Mcpjungle can provision a localhost callback automatically when the upstream MCP server actually requires OAuth.
+  For interactive CLI use, you usually do not need to set `oauth_redirect_uri` manually. Mcpgateway can provision a localhost callback automatically when the upstream MCP server actually requires OAuth.
 </Note>
 
 ### Register a STDIO server
@@ -145,7 +145,7 @@ Used with `sami-mcp-gateway register -c <file>`.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `name` | string | Yes | Unique name for this server in Mcpjungle. |
+| `name` | string | Yes | Unique name for this server in Mcpgateway. |
 | `transport` | string | Yes | Must be `"stdio"`. |
 | `description` | string | No | Human-readable description. |
 | `command` | string | Yes | Executable to run the MCP server process (e.g., `"npx"`, `"uvx"`). |
@@ -193,7 +193,7 @@ Used with `sami-mcp-gateway create mcp-client --conf <file>` (enterprise mode).
   "access_token": "my_secret_token_123",
   "access_token_ref": {
     "file": "/run/secrets/sami_mcp_gateway_token",
-    "env": "MCPJUNGLE_CLIENT_TOKEN"
+    "env": "MCPGATEWAY_CLIENT_TOKEN"
   }
 }
 ```
@@ -207,7 +207,7 @@ Used with `sami-mcp-gateway create mcp-client --conf <file>` (enterprise mode).
 | `access_token_ref.env` | string | No | Name of an environment variable containing the token string. |
 
 <Warning>
-  When creating a client from a config file, you must supply a token via `access_token` or `access_token_ref`. Mcpjungle cannot print a generated token back to the console when reading from a file.
+  When creating a client from a config file, you must supply a token via `access_token` or `access_token_ref`. Mcpgateway cannot print a generated token back to the console when reading from a file.
 </Warning>
 
 ### Token supply strategies
@@ -242,4 +242,4 @@ Used with `sami-mcp-gateway create user --conf <file>` (enterprise mode).
 | `access_token_ref.file` | string | No | Path to a plain-text file containing only the token string. |
 | `access_token_ref.env` | string | No | Name of an environment variable containing the token string. |
 
-The same `${VAR_NAME}` placeholder substitution applies to user config files. When using a config file you must supply a token — Mcpjungle cannot print a generated one to the console.
+The same `${VAR_NAME}` placeholder substitution applies to user config files. When using a config file you must supply a token — Mcpgateway cannot print a generated one to the console.

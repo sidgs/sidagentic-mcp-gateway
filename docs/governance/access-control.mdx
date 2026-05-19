@@ -15,7 +15,7 @@ Use `create mcp-client` and specify the servers it should be allowed to access:
 sami-mcp-gateway create mcp-client cursor-local --allow "calculator, github"
 ```
 
-Mcpjungle prints the generated access token once:
+Mcpgateway prints the generated access token once:
 
 ```text
 MCP client 'cursor-local' created successfully!
@@ -108,7 +108,7 @@ sami-mcp-gateway create mcp-client --conf ./cursor-local.json
 ```
 
 <Warning>
-  When creating an MCP client from a config file, you must provide a token explicitly. Mcpjungle cannot print an auto-generated token back through the file-based workflow.
+  When creating an MCP client from a config file, you must provide a token explicitly. Mcpgateway cannot print an auto-generated token back through the file-based workflow.
 </Warning>
 
 See the [configuration file reference](/reference/config-file#token-supply-strategies) for the supported ways to supply a custom token in config files.
@@ -136,7 +136,7 @@ That keeps access explicit and rotation manageable.
     Manage machine identities and human user accounts separately.
   </Card>
   <Card title="Production deployment" icon="cloud" href="/deployment/production">
-    Run Mcpjungle in enterprise mode and initialize it correctly.
+    Run Mcpgateway in enterprise mode and initialize it correctly.
   </Card>
   <Card title="Integrations" icon="plug" href="/integrations/cursor">
     See how to apply client tokens in Cursor, Claude, and Copilot configs.

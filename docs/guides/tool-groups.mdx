@@ -7,13 +7,13 @@ As more MCP servers are added to sami-mcp-gateway, the number of tools, prompts 
 
 This can cause context overload for your clients.
 
-Mcpjungle allows you to create custom MCP endpoints that only expose cherry-picked tools to clients. These are called **Tool Groups**.
+Mcpgateway allows you to create custom MCP endpoints that only expose cherry-picked tools to clients. These are called **Tool Groups**.
 
 Your client can then connect to the specific group endpoint instead of the main `/mcp` gateway and only see tools you want to expose to it.
 
 ## How tool groups work
 
-When you create a group, Mcpjungle registers a new streamable HTTP endpoint at:
+When you create a group, Mcpgateway registers a new streamable HTTP endpoint at:
 
 ```
 /v0/groups/{group-name}/mcp
@@ -21,7 +21,7 @@ When you create a group, Mcpjungle registers a new streamable HTTP endpoint at:
 
 Point your MCP client at that URL instead of the main gateway. The client will only discover and call the tools included in that group.
 
-Mcpjungle also creates SSE endpoints for the group:
+Mcpgateway also creates SSE endpoints for the group:
 
 ```text
 /v0/groups/{group-name}/sse
@@ -29,7 +29,7 @@ Mcpjungle also creates SSE endpoints for the group:
 ```
 
 <Warning>
-  SSE is a deprecated MCP transport and its support in Mcpjungle is limited. Prefer the streamable HTTP endpoint unless you specifically need SSE compatibility.
+  SSE is a deprecated MCP transport and its support in Mcpgateway is limited. Prefer the streamable HTTP endpoint unless you specifically need SSE compatibility.
 </Warning>
 
 <Note>
@@ -70,7 +70,7 @@ You define a group in a JSON file and pass it to the `create group` command. Thr
     }
     ```
 
-    This group exposes exactly three tools regardless of how many tools are registered in Mcpjungle.
+    This group exposes exactly three tools regardless of how many tools are registered in Mcpgateway.
 
     <Tip>
       Run `sami-mcp-gateway list tools` to see all available tool names before building your group configuration.
@@ -115,7 +115,7 @@ Pass the configuration file to the `create group` command using the `-c` flag:
 sami-mcp-gateway create group -c ./claude-tools-group.json
 ```
 
-Mcpjungle confirms the group was created and prints its endpoint:
+Mcpgateway confirms the group was created and prints its endpoint:
 
 ```
 Tool Group claude-tools created successfully
@@ -178,6 +178,6 @@ These commands are useful for verifying that a group is configured correctly bef
     [MCP Prompts](https://modelcontextprotocol.io/specification/2025-06-18/server/prompts) and Resources are not currently available through group endpoints. Clients connected to a group endpoint cannot discover or invoke prompts. This is a known issue tracked at .
   </Accordion>
   <Accordion title="Enterprise mode: only admins can create groups">
-    When Mcpjungle runs in `enterprise` mode, only an admin account can create Tool Groups. Standard users do not have permission to create groups. Support for user-scoped groups is planned for a future release.
+    When Mcpgateway runs in `enterprise` mode, only an admin account can create Tool Groups. Standard users do not have permission to create groups. Support for user-scoped groups is planned for a future release.
   </Accordion>
 </AccordionGroup>

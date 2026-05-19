@@ -7,13 +7,13 @@ This guide covers development setup and technical workflows for contributors and
 
 ## Principles
 
-Mcpjungle follows minimalism.
+Mcpgateway follows minimalism.
 
 When implementing a feature or fixing an issue, prefer the least amount of change required to ship something that works well without breaking other behavior. Improvements beyond that should be guided by user feedback, not by the urge to add complexity.
 
 ## Architecture overview
 
-Mcpjungle consists of several main components:
+Mcpgateway consists of several main components:
 
 - **CLI**: command-line interface for managing MCP servers and tools in `cmd/`
 - **HTTP API**: REST API for management workflows in `internal/api/`
@@ -67,7 +67,7 @@ go test ./internal/service/mcp
 
 ### Linting
 
-Mcpjungle uses `golangci-lint`.
+Mcpgateway uses `golangci-lint`.
 
 ```bash
 golangci-lint run
@@ -110,7 +110,7 @@ SELECT * FROM mcp_servers;
 SELECT * FROM tools;
 ```
 
-For backward compatibility, Mcpjungle still reads existing `mcp.db` files if they exist, but new databases are created as `sami-mcp-gateway.db`.
+For backward compatibility, Mcpgateway still reads existing `mcp.db` files if they exist, but new databases are created as `sami-mcp-gateway.db`.
 
 ### PostgreSQL
 

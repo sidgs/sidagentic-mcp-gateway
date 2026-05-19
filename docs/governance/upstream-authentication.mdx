@@ -3,7 +3,7 @@ title: "Authenticate to upstream MCP servers"
 description: "Configure sami-mcp-gateway to make authenticated requests to upstream MCPs"
 ---
 
-This page is about **upstream authentication**: how Mcpjungle authenticates when it calls an upstream MCP server.
+This page is about **upstream authentication**: how Mcpgateway authenticates when it calls an upstream MCP server.
 
 ## When you need this
 
@@ -28,7 +28,7 @@ sami-mcp-gateway register \
   --bearer-token <your-hf-api-token>
 ```
 
-Mcpjungle will send:
+Mcpgateway will send:
 
 ```text
 Authorization: Bearer <your-hf-api-token>
@@ -68,7 +68,7 @@ If you set both `bearer_token` and `headers.Authorization`, the explicit header 
 
 ## Upstream OAuth during registration
 
-Mcpjungle now supports OAuth flows for upstream HTTP MCP servers in beta.
+Mcpgateway now supports OAuth flows for upstream HTTP MCP servers in beta.
 
 The simplest path is interactive CLI registration:
 
@@ -78,10 +78,10 @@ sami-mcp-gateway register --name todoist --url https://ai.todoist.net/mcp
 
 If the upstream MCP server requires OAuth:
 
-1. Mcpjungle first tries a normal unauthenticated registration.
+1. Mcpgateway first tries a normal unauthenticated registration.
 2. If the upstream server responds with `401` and advertises OAuth, the CLI opens your browser.
 3. You approve the OAuth request.
-4. Mcpjungle stores the resulting token and completes server registration.
+4. Mcpgateway stores the resulting token and completes server registration.
 
 <Note>
 This upstream OAuth support is currently beta.
@@ -110,7 +110,7 @@ Field meanings:
 - `oauth_client_secret`: optional client secret associated with `oauth_client_id`
 - `oauth_scopes`: optional scopes to request during authorization
 
-If `oauth_client_id` is omitted, Mcpjungle attempts dynamic client registration when the upstream authorization server supports it.
+If `oauth_client_id` is omitted, Mcpgateway attempts dynamic client registration when the upstream authorization server supports it.
 
 ## Environment variable placeholders
 
@@ -128,7 +128,7 @@ JSON config files support `${VAR_NAME}` placeholders in string fields, including
 }
 ```
 
-Placeholder expansion happens in the CLI process before the config is sent to Mcpjungle.
+Placeholder expansion happens in the CLI process before the config is sent to Mcpgateway.
 
 See the [configuration file reference](/reference/config-file#var_name-placeholder-substitution) for the full substitution rules.
 
@@ -150,14 +150,14 @@ Example:
 }
 ```
 
-Mcpjungle will start the STDIO server process with those environment variables, allowing the upstream server to read its credentials from the process environment.
+Mcpgateway will start the STDIO server process with those environment variables, allowing the upstream server to read its credentials from the process environment.
 
 ## Important scope distinction
 
 Two different authentication layers can exist in the same deployment:
 
-- **Gateway authentication**: Enterprise-mode clients authenticating to Mcpjungle.
-- **Upstream authentication**: Mcpjungle authenticating to a registered MCP server.
+- **Gateway authentication**: Enterprise-mode clients authenticating to Mcpgateway.
+- **Upstream authentication**: Mcpgateway authenticating to a registered MCP server.
 
 Those are separate concerns and use different configuration points.
 
@@ -176,7 +176,7 @@ Current upstream OAuth support has some limitations:
     Register streamable HTTP MCP servers with CLI flags or config files.
   </Card>
   <Card title="Access control" icon="shield-halved" href="/governance/access-control">
-    Configure how MCP clients authenticate to the Mcpjungle gateway itself.
+    Configure how MCP clients authenticate to the Mcpgateway gateway itself.
   </Card>
   <Card title="Clients and users" icon="users" href="/governance/clients-and-users">
     Manage human and machine identities in enterprise mode.

@@ -13,7 +13,7 @@ These flags are accepted by every command and subcommand.
 
 | Flag | Type | Default | Description |
 |------|------|---------|-------------|
-| `--registry` | string | `http://127.0.0.1:8080` | Base URL of the Mcpjungle registry server. |
+| `--registry` | string | `http://127.0.0.1:8080` | Base URL of the Mcpgateway registry server. |
 | `--help` | — | — | Print help for the current command and exit. |
 
 The `--registry` flag precedence order is: explicit flag value → `registry_url` in the config file → built-in default.
@@ -31,7 +31,7 @@ access_token: your-access-token
 
 | Field | Description                                                                                    |
 |-------|------------------------------------------------------------------------------------------------|
-| `registry_url` | URL of the Mcpjungle server. Overrides the `--registry` default.                               |
+| `registry_url` | URL of the Mcpgateway server. Overrides the `--registry` default.                               |
 | `access_token` | Auth token that represents the user, sent with every CLI request. Required in enterprise mode only. |
 
 In enterprise mode, this file gets created automatically when you initialise sami-mcp-gateway or login using your CLI.

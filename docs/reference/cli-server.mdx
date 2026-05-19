@@ -3,11 +3,11 @@ title: "Starting the server"
 description: "Starting and initializing the sami-mcp-gateway server"
 ---
 
-These commands operate on the Mcpjungle server process itself rather than on its registry contents. `start` launches the gateway, `init-server` prepares it for enterprise use, and `version` reports what is running.
+These commands operate on the Mcpgateway server process itself rather than on its registry contents. `start` launches the gateway, `init-server` prepares it for enterprise use, and `version` reports what is running.
 
 ## `start`
 
-Starts the Mcpjungle HTTP server and MCP gateway.
+Starts the Mcpgateway HTTP server and MCP gateway.
 
 ```bash
 sami-mcp-gateway start [flags]
@@ -61,7 +61,7 @@ DATABASE_URL="postgres://user:password@localhost:5432/sami-mcp-gateway" sami-mcp
 
 ## `init-server`
 
-Initializes the Mcpjungle server when running in enterprise mode. Run it once, from your local machine, after the server has started.
+Initializes the Mcpgateway server when running in enterprise mode. Run it once, from your local machine, after the server has started.
 
 ```bash
 sami-mcp-gateway init-server [--registry <url>]

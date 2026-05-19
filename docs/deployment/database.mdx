@@ -1,9 +1,9 @@
 ---
 title: "Configure sami-mcp-gateway's database"
-description: "Choose SQLite for local evaluation or PostgreSQL for serious deployments, and configure Mcpjungle with either a full DSN or Postgres-specific environment variables."
+description: "Choose SQLite for local evaluation or PostgreSQL for serious deployments, and configure Mcpgateway with either a full DSN or Postgres-specific environment variables."
 ---
 
-Mcpjungle requires a database to persist registered servers, tool groups, users, and related configuration.
+Mcpgateway requires a database to persist registered servers, tool groups, users, and related configuration.
 
 Use the database choice as a deployment signal:
 
@@ -12,18 +12,18 @@ Use the database choice as a deployment signal:
 
 ## Default: SQLite
 
-When no database configuration is provided, Mcpjungle automatically creates a SQLite file named `sami-mcp-gateway.db` in the directory where the process is started:
+When no database configuration is provided, Mcpgateway automatically creates a SQLite file named `sami-mcp-gateway.db` in the directory where the process is started:
 
 ```bash
 sami-mcp-gateway start
 # Creates ./sami-mcp-gateway.db in the current directory
 ```
 
-SQLite requires no setup and works well for individuals running Mcpjungle locally. It is not recommended for production or multi-user deployments.
+SQLite requires no setup and works well for individuals running Mcpgateway locally. It is not recommended for production or multi-user deployments.
 
 ## PostgreSQL
 
-Mcpjungle supports PostgreSQL for serious deployments. You can configure it with either a full DSN or individual environment variables.
+Mcpgateway supports PostgreSQL for serious deployments. You can configure it with either a full DSN or individual environment variables.
 
 ### Option 1: Connection DSN
 
@@ -89,7 +89,7 @@ sami-mcp-gateway start
 
 ## Variable precedence
 
-When Mcpjungle starts, it resolves the database connection in this order:
+When Mcpgateway starts, it resolves the database connection in this order:
 
 1. `DATABASE_URL` — used as-is if set
 2. `POSTGRES_HOST` (+ optional variables) — constructs a DSN if `POSTGRES_HOST` is set

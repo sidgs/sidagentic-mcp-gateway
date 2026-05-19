@@ -1,9 +1,9 @@
 ---
-title: "Mcpjungle Documentation"
+title: "Mcpgateway Documentation"
 description: "Run all your MCP servers behind one endpoint"
 ---
 
-Mcpjungle is a self-hosted MCP gateway for developers and teams who want to manage multiple MCP servers without scattered client configurations, duplicated setup, or inconsistent access control.
+Mcpgateway is a self-hosted MCP gateway for developers and teams who want to manage multiple MCP servers without scattered client configurations, duplicated setup, or inconsistent access control.
 
 Use it **locally** to keep your personal MCP setup clean, or run it as **shared infrastructure** for a team with centralized discovery, access control, and observability.
 
@@ -11,10 +11,10 @@ Use it **locally** to keep your personal MCP setup clean, or run it as **shared 
   <img src="/images/sami-mcp-gateway-diagram-april-2026.png" alt="sami-mcp-gateway product diagram" />
 </p>
 
-Instead of wiring every MCP server into every AI client, register your servers once in Mcpjungle and let Claude, Cursor, Codex, or your own agents connect to a single MCP endpoint.
+Instead of wiring every MCP server into every AI client, register your servers once in Mcpgateway and let Claude, Cursor, Codex, or your own agents connect to a single MCP endpoint.
 
 ## Use Cases
-Mcpjungle is primarily built for:
+Mcpgateway is primarily built for:
 
 - **Developers** who want one clean local MCP endpoint instead of per-client server configuration.
 - **Teams** who want shared MCP infrastructure with centralized discovery, access control, and observability.
@@ -38,7 +38,7 @@ Mcpjungle is primarily built for:
     AI agents can also access the sami-mcp-gateway documentation using MCP - `https://docs.sami-mcp-gateway.com/mcp`.
 </Info>
 
-## Why Mcpjungle?
+## Why Mcpgateway?
 
 MCP is powerful, but managing many MCP servers gets messy fast.
 
@@ -50,14 +50,14 @@ Without a gateway:
 - Teams have no shared view of available MCP tools.
 - Local setups become hard to reproduce.
 
-Mcpjungle gives you a single control point:
+Mcpgateway gives you a single control point:
 
 <CardGroup cols={2}>
   <Card title="One endpoint for everything" icon="network-wired">
     Register your MCP servers once. Every AI client and agent connects to a single `/mcp` endpoint.
   </Card>
   <Card title="Self-hosted infrastructure" icon="server">
-    Run Mcpjungle locally for yourself or on your own infrastructure for a team. Your MCP traffic, tool access, and operational data stay inside infrastructure you control.
+    Run Mcpgateway locally for yourself or on your own infrastructure for a team. Your MCP traffic, tool access, and operational data stay inside infrastructure you control.
   </Card>
   <Card title="Tool Groups" icon="layer-group" href="/guides/tool-groups">
     Expose curated subsets of tools so each client only sees the tools it actually needs.
@@ -73,7 +73,7 @@ Start with a local setup. Scale to a shared team gateway when you need it.
 
 <Steps>
   <Step title="Start the server">
-    Pull the Docker Compose file and start Mcpjungle with a persistent Postgres database:
+    Pull the Docker Compose file and start Mcpgateway with a persistent Postgres database:
 
     ```bash
     curl -O https://raw.githubusercontent.com/sami-mcp-gateway/SAMI MCP Gateway/refs/heads/main/docker-compose.yaml
@@ -93,7 +93,7 @@ Start with a local setup. Scale to a shared team gateway when you need it.
     Register remote and STDIO-based MCP servers, curate what they expose, and manage prompts and groups.
   </Card>
   <Card title="Deploy and operate" icon="cloud" href="/deployment/production">
-    Run Mcpjungle in local or enterprise mode with the right database, runtime, and observability setup.
+    Run Mcpgateway in local or enterprise mode with the right database, runtime, and observability setup.
   </Card>
   <Card title="Access and governance" icon="lock" href="/governance/overview">
     Understand enterprise mode, upstream authentication, client tokens, and user access.
