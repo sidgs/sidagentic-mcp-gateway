@@ -138,7 +138,7 @@ func TestCheckAuthForGroupMcpProxyAccess_DevNoAuth(t *testing.T) {
 	testhelpers.AssertEqual(t, http.StatusOK, w.Code)
 }
 
-func TestCheckAuthForGroupMcpProxyAccess_EnterpriseRequiresAgentApp(t *testing.T) {
+func TestCheckAuthForGroupMcpProxyAccess_EnterpriseOpenNoAuth(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	env := setupGroupMCPTestServer(t, "")
 	insertToolGroup(t, env.db, "gopen", types.GroupSecurityOpen)
@@ -151,7 +151,34 @@ func TestCheckAuthForGroupMcpProxyAccess_EnterpriseRequiresAgentApp(t *testing.T
 	req := httptest.NewRequest(http.MethodGet, "/v0/groups/gopen/mcp", nil)
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	testhelpers.AssertEqual(t, http.StatusUnauthorized, w.Code)
+	testhelpers.AssertEqual(t, http.StatusOK, w.Code)
+}
+
+func TestCheckAuthForGroupMcpProxyAccess_EnterpriseOpenIgnoresAPIKey(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	env := setupGroupMCPTestServer(t, "")
+	insertToolGroup(t, env.db, "gopen", types.GroupSecurityOpen)
+	insertToolGroup(t, env.db, "other", types.GroupSecurityAPIKey)
+	ctx := tenant.WithContext(context.Background(), tenant.DefaultID)
+	_, _, err := env.agentS.Create(ctx, "owner", "a1", "", []string{"other"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var app model.AgentApp
+	if err := env.db.Where("name = ?", "a1").First(&app).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	r := gin.New()
+	r.Use(testTenantAndModeMiddleware(model.ModeEnterprise))
+	r.GET("/v0/groups/:name/mcp", env.s.checkAuthForGroupMcpProxyAccess(true), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v0/groups/gopen/mcp", nil)
+	req.Header.Set("X-API-Key", app.ClientID)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	testhelpers.AssertEqual(t, http.StatusOK, w.Code)
 }
 
 func TestCheckAuthForGroupMcpProxyAccess_APIKeyAllowed(t *testing.T) {
@@ -250,7 +277,7 @@ func TestCheckAuthForGroupMcpProxyAccess_BearerJWTNotConfigured(t *testing.T) {
 	req.Header.Set("Authorization", "Bearer x")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
-	testhelpers.AssertEqual(t, http.StatusUnauthorized, w.Code)
+	testhelpers.AssertEqual(t, http.StatusServiceUnavailable, w.Code)
 }
 
 func TestCheckAuthForGroupMcpProxyAccess_BearerJWTValid(t *testing.T) {

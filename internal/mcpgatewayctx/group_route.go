@@ -11,6 +11,7 @@ const (
 	keyToolGroupRoute routeCtxKey = iota + 1
 	keyPromptGroupRoute
 	keyGlobalMCPAPIKeyAuth
+	keyOpenGroupMCP
 )
 
 // WithToolGroupRoute annotates the context with the tool group name served by the current MCP route.
@@ -43,5 +44,16 @@ func WithGlobalMCPAPIKeyAuth(ctx context.Context, ok bool) context.Context {
 // GlobalMCPAPIKeyAuth reports whether the global MCP proxy request was authenticated with the configured global API key.
 func GlobalMCPAPIKeyAuth(ctx context.Context) bool {
 	v, ok := ctx.Value(keyGlobalMCPAPIKeyAuth).(bool)
+	return ok && v
+}
+
+// WithOpenGroupMCP marks the request as accessing a group MCP endpoint with security_option "open".
+func WithOpenGroupMCP(ctx context.Context, open bool) context.Context {
+	return context.WithValue(ctx, keyOpenGroupMCP, open)
+}
+
+// OpenGroupMCP reports whether the current group MCP route has security_option "open".
+func OpenGroupMCP(ctx context.Context) bool {
+	v, ok := ctx.Value(keyOpenGroupMCP).(bool)
 	return ok && v
 }

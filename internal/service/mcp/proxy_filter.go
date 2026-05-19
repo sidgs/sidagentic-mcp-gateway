@@ -14,6 +14,7 @@ import (
 // In development mode, only tools qualified for the request tenant are returned.
 // In enterprise mode:
 //   - Global /mcp (authenticated with GLOBAL_MCP_API_KEY) returns all tenant-qualified, well-formed tools.
+//   - Open tool-group MCP returns tenant-qualified tools registered on that group's server.
 //   - Tool-group MCP (agent-app principal) returns tools on that group's server when the app is attached to the group.
 func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 	serverMode, ok := ctx.Value("mode").(model.ServerMode)
@@ -35,6 +36,12 @@ func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 
 	if mcpgatewayctx.GlobalMCPAPIKeyAuth(ctx) {
 		return tenantQualifiedEnterpriseTools(ctx, tools)
+	}
+
+	if mcpgatewayctx.OpenGroupMCP(ctx) {
+		if _, ok := mcpgatewayctx.ToolGroupRoute(ctx); ok {
+			return tenantQualifiedEnterpriseTools(ctx, tools)
+		}
 	}
 
 	if aa, ok := agentappauth.PrincipalFromContext(ctx); ok {

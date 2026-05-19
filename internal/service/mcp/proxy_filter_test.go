@@ -109,6 +109,22 @@ func TestMcpProxyToolFilter_EnterpriseMalformedToolNamesAreDenied(t *testing.T) 
 	assert.Equal(t, []string{tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")}, toolNames(got))
 }
 
+func TestMcpProxyToolFilter_EnterpriseOpenToolGroup(t *testing.T) {
+	t.Parallel()
+
+	ctx := context.WithValue(context.Background(), "mode", model.ModeEnterprise)
+	ctx = tenant.WithContext(ctx, tenant.DefaultID)
+	ctx = mcpgatewayctx.WithToolGroupRoute(ctx, "mygroup")
+	ctx = mcpgatewayctx.WithOpenGroupMCP(ctx, true)
+
+	tools := []mcp.Tool{
+		{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
+		{Name: "missing_separator"},
+	}
+	got := ProxyToolFilter(ctx, tools)
+	assert.Equal(t, []string{tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")}, toolNames(got))
+}
+
 func TestMcpProxyToolFilter_EnterpriseToolGroupWithAgentApp(t *testing.T) {
 	t.Parallel()
 
