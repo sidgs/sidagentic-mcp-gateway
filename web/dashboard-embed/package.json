@@ -1,0 +1,13 @@
+{
+  "name": "@sami/mcp-gateway-dashboard-embed",
+  "version": "0.1.0",
+  "description": "Embeddable MCP Gateway dashboard static assets",
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "build": "cd ../dashboard && npm ci && npm run build:embed && rm -rf ../dashboard-embed/dist && cp -R dist-embed ../dashboard-embed/dist",
+    "prepublishOnly": "npm run build"
+  },
+  "license": "UNLICENSED"
+}

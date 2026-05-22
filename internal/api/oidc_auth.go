@@ -18,6 +18,7 @@ import (
 	"github.com/gin-gonic/gin"
 	jwt "github.com/golang-jwt/jwt/v4"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
 	"golang.org/x/oauth2"
 )
 
@@ -421,6 +422,71 @@ func (s *Server) validOIDCSessionFromRequest(c *gin.Context) (*oidcServerSession
 	return &sess, true
 }
 
+type oidcBearerClaims struct {
+	Email          string `json:"email"`
+	TenantID       string `json:"tenant_id"`
+	CustomTenantID string `json:"custom:tenant_id"`
+}
+
+func tenantIDFromOIDCBearerClaims(claims *oidcBearerClaims) string {
+	for _, v := range []string{claims.TenantID, claims.CustomTenantID} {
+		v = strings.TrimSpace(v)
+		if v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+// validOIDCBearerFromRequest verifies Authorization: Bearer as a Cognito/OIDC ID token (embed mode).
+func (s *Server) validOIDCBearerFromRequest(c *gin.Context) (*oidcServerSession, bool) {
+	if !s.oidcConfigured() {
+		return nil, false
+	}
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+	const bearerPrefix = "Bearer "
+	if len(authHeader) <= len(bearerPrefix) || !strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
+		return nil, false
+	}
+	rawToken := strings.TrimSpace(authHeader[len(bearerPrefix):])
+	if rawToken == "" {
+		return nil, false
+	}
+
+	ctx := c.Request.Context()
+	provider, err := s.oidcLazyProvider(ctx)
+	if err != nil {
+		return nil, false
+	}
+	verifier := provider.Verifier(&oidc.Config{ClientID: s.oidcSettings.ClientID})
+	idTok, err := verifier.Verify(ctx, rawToken)
+	if err != nil {
+		return nil, false
+	}
+
+	var claims oidcBearerClaims
+	if err := idTok.Claims(&claims); err != nil {
+		return nil, false
+	}
+
+	jwtTenant := tenantIDFromOIDCBearerClaims(&claims)
+	headerTenant := strings.TrimSpace(c.GetHeader(tenant.HeaderName))
+	if jwtTenant != "" && headerTenant != "" && jwtTenant != headerTenant {
+		return nil, false
+	}
+
+	email := strings.TrimSpace(claims.Email)
+	if email == "" {
+		email = strings.TrimSpace(idTok.Email)
+	}
+
+	return &oidcServerSession{
+		ExpiresAt: sessionExpiry(idTok),
+		Sub:       idTok.Subject,
+		Email:     email,
+	}, true
+}
+
 // requireDashboardModeOrOIDC allows the dashboard when the server is in dev mode, or when OIDC is enabled.
 func (s *Server) requireDashboardModeOrOIDC() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -454,6 +520,10 @@ func (s *Server) requireOIDCSessionIfEnabled() gin.HandlerFunc {
 			return
 		}
 		if _, ok := s.validOIDCSessionFromRequest(c); ok {
+			c.Next()
+			return
+		}
+		if _, ok := s.validOIDCBearerFromRequest(c); ok {
 			c.Next()
 			return
 		}

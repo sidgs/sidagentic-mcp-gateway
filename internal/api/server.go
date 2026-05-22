@@ -84,6 +84,9 @@ type ServerOptions struct {
 
 	// DefaultTenantID is used when the X-Tenant-ID header is absent (typically from DEFAULT_TENANT_ID).
 	DefaultTenantID string
+
+	// DashboardEmbedAllowedOrigins is a comma-separated list of browser origins allowed to call /dashboard/* with Bearer auth (embed mode).
+	DashboardEmbedAllowedOrigins string
 }
 
 // Server represents the SAMI MCP Gateway registry server that handles MCP proxy and API requests
@@ -142,6 +145,9 @@ type Server struct {
 
 	// defaultTenantID is used when X-Tenant-ID is missing and for non-HTTP operations.
 	defaultTenantID string
+
+	// dashboardEmbedAllowedOrigins lists browser origins permitted for cross-origin embed dashboard API calls.
+	dashboardEmbedAllowedOrigins []string
 }
 
 // dashboardOAuthSessionResult is the dashboard-facing terminal state for an
@@ -230,6 +236,7 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		oidcSettings:              opts.OIDC,
 		oidcSessionStore:      sessionStore,
 		oidcSessionMaxTTL:     maxTTL,
+		dashboardEmbedAllowedOrigins: parseDashboardEmbedAllowedOrigins(opts.DashboardEmbedAllowedOrigins),
 	}
 
 	// Set up the router after the server is fully initialized
@@ -629,6 +636,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			"/dashboard",
 			s.requireInitialized(),
 			requireDashboardModeOrOIDC,
+			s.dashboardEmbedCORS(),
 		)
 		{
 			dashboardPublic.GET("/auth-status", s.dashboardAuthStatusHandler())
@@ -637,6 +645,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			"/dashboard",
 			s.requireInitialized(),
 			requireDashboardModeOrOIDC,
+			s.dashboardEmbedCORS(),
 			requireOIDCSessionIfEnabled,
 		)
 		{

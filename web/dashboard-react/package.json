@@ -1,0 +1,29 @@
+{
+  "name": "@sami/mcp-gateway-dashboard-react",
+  "version": "0.1.0",
+  "description": "MCP Gateway dashboard as a React component",
+  "type": "module",
+  "main": "./dist/mcp-gateway-dashboard.cjs",
+  "module": "./dist/mcp-gateway-dashboard.js",
+  "types": "./dist/component.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/component.d.ts",
+      "import": "./dist/mcp-gateway-dashboard.js",
+      "require": "./dist/mcp-gateway-dashboard.cjs"
+    },
+    "./style.css": "./dist/mcp-gateway-dashboard.css"
+  },
+  "files": [
+    "dist/**"
+  ],
+  "scripts": {
+    "build": "cd ../dashboard && npm ci && npm run build:lib && rm -rf ../dashboard-react/dist && cp -R dist-lib ../dashboard-react/dist",
+    "prepublishOnly": "npm run build"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0"
+  },
+  "license": "UNLICENSED"
+}

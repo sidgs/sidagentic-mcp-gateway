@@ -78,6 +78,9 @@ const (
 	OIDCScopesEnvVar = "OIDC_SCOPES"
 	// PostLoginRedirectURLEnvVar is an optional absolute (https://…) or root-relative (/…) Location after OIDC callback success and after /logout.
 	PostLoginRedirectURLEnvVar = "POST_LOGIN_REDIRECT_URL"
+
+	// DashboardEmbedAllowedOriginsEnvVar is a comma-separated list of browser origins allowed to call /dashboard/* cross-origin (embed mode).
+	DashboardEmbedAllowedOriginsEnvVar = "DASHBOARD_EMBED_ALLOWED_ORIGINS"
 )
 
 const (
@@ -709,6 +712,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		PostLoginRedirectURL: strings.TrimSpace(os.Getenv(PostLoginRedirectURLEnvVar)),
 		CognitoOAuthRedirectURI: strings.TrimSpace(os.Getenv(CognitoRedirectURIEnvVar)),
 		DefaultTenantID:      defaultTenantID,
+		DashboardEmbedAllowedOrigins: strings.TrimSpace(os.Getenv(DashboardEmbedAllowedOriginsEnvVar)),
 	}
 	s, err := api.NewServer(opts)
 	if err != nil {

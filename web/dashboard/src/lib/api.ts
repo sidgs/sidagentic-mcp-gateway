@@ -24,6 +24,8 @@ import type {
   DashboardToolsResponse,
 } from "./types";
 import { DashboardAuthRequiredError } from "./auth";
+import { getExternalAuthHeaders } from "./embedAuth";
+import { isExternalAuthMode, resolveHttpPathPrefix } from "./runtimeConfig";
 
 function normalizeHttpPathPrefix(prefix: string): string {
   const trimmed = prefix.trim();
@@ -31,25 +33,27 @@ function normalizeHttpPathPrefix(prefix: string): string {
   return trimmed.replace(/\/$/, "");
 }
 
-// When set, JSON API URLs are root-relative: /<VITE_HTTP_PATH_PREFIX>/dashboard/... (not under
+// When set, JSON API URLs are root-relative: /<httpPathPrefix>/dashboard/... (not under
 // Vite BASE_URL). When unset, URLs are relative to BASE_URL so a dashboard mounted only under
 // VITE_DASHBOARD_BASE still reaches /<base>/dashboard/... on the same host.
-const gatewayHttpPrefix = normalizeHttpPathPrefix(
-  typeof import.meta.env.VITE_HTTP_PATH_PREFIX === "string" ? import.meta.env.VITE_HTTP_PATH_PREFIX : ""
-);
+function gatewayHttpPrefix(): string {
+  return normalizeHttpPathPrefix(resolveHttpPathPrefix());
+}
 
 /** Absolute path from the origin (includes HTTP path prefix when set). */
 function gatewayOriginPath(absPathUnderGatewayMount: string): string {
   const path = absPathUnderGatewayMount.startsWith("/")
     ? absPathUnderGatewayMount
     : `/${absPathUnderGatewayMount}`;
-  if (gatewayHttpPrefix !== "") return `${gatewayHttpPrefix}${path}`;
+  const prefix = gatewayHttpPrefix();
+  if (prefix !== "") return `${prefix}${path}`;
   return path;
 }
 
 function dashboardFetchURL(absPathUnderGatewayMount: string): string {
   const originPath = gatewayOriginPath(absPathUnderGatewayMount);
-  if (gatewayHttpPrefix !== "") {
+  const prefix = gatewayHttpPrefix();
+  if (prefix !== "") {
     return originPath;
   }
   const base = import.meta.env.BASE_URL;
@@ -58,10 +62,12 @@ function dashboardFetchURL(absPathUnderGatewayMount: string): string {
 }
 
 async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
+  const embedHeaders = isExternalAuthMode() ? getExternalAuthHeaders() : {};
   const response = await fetch(dashboardFetchURL(path), {
     ...init,
     headers: {
       Accept: "application/json",
+      ...embedHeaders,
       ...(init?.headers ?? {}),
     },
   });
@@ -81,7 +87,7 @@ async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
     ? parsed
     : {}) as { error?: string; login_path?: string };
 
-  if (response.status === 401 && typeof payload.login_path === "string") {
+  if (response.status === 401 && typeof payload.login_path === "string" && !isExternalAuthMode()) {
     const lp = payload.login_path.trim();
     if (lp.length > 0) {
       throw new DashboardAuthRequiredError(lp);

@@ -14,6 +14,7 @@ import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
+import Chip from "@mui/material/Chip";
 import IconButton from "@mui/material/IconButton";
 import List from "@mui/material/List";
 import ListItem from "@mui/material/ListItem";
@@ -69,12 +70,18 @@ export function NavSidebar({
   active,
   onSelect,
   signOutHref,
+  embedMode = false,
+  signedInEmail,
 }: {
   active: AppSection;
   onSelect: (section: AppSection) => void;
   /** When set (OIDC session), shows Sign out at the bottom of the nav. */
   signOutHref?: string;
+  /** Embedded mode: hide Home and Sign out; show signed-in email when provided. */
+  embedMode?: boolean;
+  signedInEmail?: string;
 }) {
+  const navItems = embedMode ? items.filter((item) => item.key !== "home") : items;
   const [expanded, setExpanded] = useState(() => {
     try {
       const saved = window.localStorage.getItem("dashboard-nav-expanded");
@@ -158,7 +165,7 @@ export function NavSidebar({
         </Stack>
 
         <List disablePadding sx={{ px: 0, flex: 1, minHeight: 0, overflowY: "auto" }} aria-label="Dashboard sections">
-          {items.map((item) => {
+          {navItems.map((item) => {
             const isActive = active === item.key;
             const button = (
               <ListItemButton
@@ -211,7 +218,27 @@ export function NavSidebar({
           })}
         </List>
 
-        {signOutHref ? (
+        {embedMode && signedInEmail ? (
+          <Box
+            sx={{
+              mt: "auto",
+              pt: 1.5,
+              borderTop: 1,
+              borderColor: "divider",
+              flexShrink: 0,
+            }}
+          >
+            {expanded ? (
+              <Chip label={`Signed in as ${signedInEmail}`} size="small" sx={{ width: "100%" }} />
+            ) : (
+              <Tooltip title={`Signed in as ${signedInEmail}`} placement="right">
+                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <Chip label={signedInEmail.slice(0, 1).toUpperCase()} size="small" />
+                </Box>
+              </Tooltip>
+            )}
+          </Box>
+        ) : signOutHref ? (
           <Box
             sx={{
               mt: "auto",

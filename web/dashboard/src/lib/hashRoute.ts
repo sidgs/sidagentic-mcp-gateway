@@ -1,4 +1,5 @@
 import type { AppSection } from "./types";
+import { usesHashRouting } from "./runtimeConfig";
 
 const SECTIONS = new Set<string>([
   "home",
@@ -126,4 +127,22 @@ export function promptDetailHash(canonicalName: string): string {
 
 export function getSectionFromHashOrDefault(fallback: AppSection): AppSection {
   return parseAppSectionFromHash() ?? fallback;
+}
+
+/** Updates the URL hash when hash routing is enabled (skipped in React component mode). */
+export function setDashboardLocationHash(hash: string): void {
+  if (!usesHashRouting()) {
+    return;
+  }
+  if (window.location.hash !== hash) {
+    window.location.hash = hash;
+  }
+}
+
+/** Replaces the URL when hash routing is enabled (skipped in React component mode). */
+export function replaceDashboardLocation(pathname: string, search: string, hash: string): void {
+  if (!usesHashRouting()) {
+    return;
+  }
+  window.history.replaceState(null, "", `${pathname}${search}${hash}`);
 }

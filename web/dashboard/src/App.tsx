@@ -24,7 +24,17 @@ import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import { api } from "@/lib/api";
-import { DashboardAuthRequiredError, redirectToGatewayLogin } from "@/lib/auth";
+import { DashboardAuthRequiredError, EmbedAuthMissingError, redirectToGatewayLogin } from "@/lib/auth";
+import {
+  getExternalAuthHeaders,
+  parseEmbedClaims,
+  resolveExternalAuthToken,
+} from "@/lib/embedAuth";
+import {
+  isExternalAuthMode,
+  resolveDefaultAppSection,
+  usesHashRouting,
+} from "@/lib/runtimeConfig";
 import {
   appAgentAppDetailHash,
   appSectionToHash,
@@ -32,7 +42,9 @@ import {
   parseHashRoute,
   promptDetailHash,
   promptGroupDetailHash,
+  replaceDashboardLocation,
   serverDetailHash,
+  setDashboardLocationHash,
   toolDetailHash,
   toolGroupDetailHash,
 } from "@/lib/hashRoute";
@@ -201,11 +213,21 @@ interface SchemaFieldSummary {
 }
 
 function maybeRedirectDashboardAuth(error: unknown): boolean {
+  if (isExternalAuthMode()) {
+    return false;
+  }
   if (error instanceof DashboardAuthRequiredError) {
     redirectToGatewayLogin(error.loginPath);
     return true;
   }
   return false;
+}
+
+function resolveInitialAppSection(): AppSection {
+  if (usesHashRouting()) {
+    return parseHashRoute().section ?? resolveDefaultAppSection();
+  }
+  return resolveDefaultAppSection();
 }
 
 const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
@@ -611,11 +633,17 @@ function createInitialPromptGroupForm(): PromptGroupFormState {
 }
 
 export default function App() {
-  const [section, setSection] = useState<AppSection>(() => parseHashRoute().section ?? "home");
+  const externalAuth = isExternalAuthMode();
+  const [section, setSection] = useState<AppSection>(resolveInitialAppSection);
   const [authSession, setAuthSession] = useState<DashboardAuthStatusResponse | null>(null);
 
   const selectSection = useCallback((next: AppSection) => {
-    if (authSession?.oidc_enabled && !authSession.authenticated && next !== "home") {
+    if (
+      !externalAuth &&
+      authSession?.oidc_enabled &&
+      !authSession.authenticated &&
+      next !== "home"
+    ) {
       const lp = authSession.login_path?.trim();
       if (lp) {
         redirectToGatewayLogin(lp);
@@ -623,11 +651,10 @@ export default function App() {
       return;
     }
     setSection(next);
-    const h = appSectionToHash(next);
-    if (window.location.hash !== h) {
-      window.location.hash = h;
+    if (usesHashRouting()) {
+      setDashboardLocationHash(appSectionToHash(next));
     }
-  }, [authSession]);
+  }, [authSession, externalAuth]);
 
   const [loadState, setLoadState] = useState<LoadState>("checking_session");
   const [errorMessage, setErrorMessage] = useState("");
@@ -642,22 +669,27 @@ export default function App() {
   const [promptGroupPromptFilter, setPromptGroupPromptFilter] = useState("");
   const [promptGroupPromptServerFilter, setPromptGroupPromptServerFilter] = useState("all");
   const [expandedServer, setExpandedServer] = useState<string | null>(() => {
+    if (!usesHashRouting()) return null;
     const r = parseHashRoute();
     return r.section === "servers" ? r.serverName : null;
   });
   const [expandedTool, setExpandedTool] = useState<string | null>(() => {
+    if (!usesHashRouting()) return null;
     const r = parseHashRoute();
     return r.section === "tools" ? r.toolCanonicalName : null;
   });
   const [expandedToolGroup, setExpandedToolGroup] = useState<string | null>(() => {
+    if (!usesHashRouting()) return null;
     const r = parseHashRoute();
     return r.section === "tool_groups" ? r.toolGroupName : null;
   });
   const [expandedPromptGroup, setExpandedPromptGroup] = useState<string | null>(() => {
+    if (!usesHashRouting()) return null;
     const r = parseHashRoute();
     return r.section === "prompt_groups" ? r.promptGroupName : null;
   });
   const [expandedPrompt, setExpandedPrompt] = useState<string | null>(() => {
+    if (!usesHashRouting()) return null;
     const r = parseHashRoute();
     return r.section === "prompts" ? r.promptCanonicalName : null;
   });
@@ -687,6 +719,7 @@ export default function App() {
     null,
   );
   const [agentAppDetailId, setAgentAppDetailId] = useState<number | null>(() => {
+    if (!usesHashRouting()) return null;
     const r = parseHashRoute();
     return r.section === "agent_apps" ? r.agentAppId : null;
   });
@@ -694,13 +727,15 @@ export default function App() {
 
   /** Ensure canonical `#/section` when hash is missing or invalid (bookmarkable URLs). */
   useEffect(() => {
+    if (!usesHashRouting()) {
+      return;
+    }
     if (parseAppSectionFromHash() !== null) {
       return;
     }
     const { pathname, search } = window.location;
-    const next = `${pathname}${search}${appSectionToHash("home")}`;
-    window.history.replaceState(null, "", next);
-    setSection("home");
+    replaceDashboardLocation(pathname, search, appSectionToHash(resolveDefaultAppSection()));
+    setSection(resolveDefaultAppSection());
     setAgentAppDetailId(null);
     setExpandedServer(null);
     setExpandedToolGroup(null);
@@ -711,14 +746,22 @@ export default function App() {
 
   /** Back/forward and manual hash edits → active section */
   useEffect(() => {
+    if (!usesHashRouting()) {
+      return;
+    }
     function onHashChange() {
       const r = parseHashRoute();
       if (r.section === null) {
         return;
       }
-      if (authSession?.oidc_enabled && !authSession.authenticated && r.section !== "home") {
+      if (
+        !externalAuth &&
+        authSession?.oidc_enabled &&
+        !authSession.authenticated &&
+        r.section !== "home"
+      ) {
         const { pathname, search } = window.location;
-        window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("home")}`);
+        replaceDashboardLocation(pathname, search, appSectionToHash("home"));
         setSection("home");
         setAgentAppDetailId(null);
         setExpandedServer(null);
@@ -793,7 +836,7 @@ export default function App() {
         return current;
       }
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("servers")}`);
+      replaceDashboardLocation(pathname, search, appSectionToHash("servers"));
       return null;
     });
     setExpandedTool((current) => {
@@ -804,7 +847,7 @@ export default function App() {
         return current;
       }
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("tools")}`);
+      replaceDashboardLocation(pathname, search, appSectionToHash("tools"));
       return null;
     });
     setExpandedToolGroup((current) => {
@@ -815,7 +858,7 @@ export default function App() {
         return current;
       }
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("tool_groups")}`);
+      replaceDashboardLocation(pathname, search, appSectionToHash("tool_groups"));
       return null;
     });
     setExpandedPromptGroup((current) => {
@@ -826,7 +869,7 @@ export default function App() {
         return current;
       }
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("prompt_groups")}`);
+      replaceDashboardLocation(pathname, search, appSectionToHash("prompt_groups"));
       return null;
     });
     setExpandedPrompt((current) => {
@@ -837,7 +880,7 @@ export default function App() {
         return current;
       }
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("prompts")}`);
+      replaceDashboardLocation(pathname, search, appSectionToHash("prompts"));
       return null;
     });
     setAgentAppDetailId((current) => {
@@ -848,7 +891,7 @@ export default function App() {
         return current;
       }
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("agent_apps")}`);
+      replaceDashboardLocation(pathname, search, appSectionToHash("agent_apps"));
       return null;
     });
   }
@@ -858,6 +901,29 @@ export default function App() {
     setLoadState("checking_session");
     setErrorMessage("");
     try {
+      if (externalAuth) {
+        const token = resolveExternalAuthToken();
+        if (token === null) {
+          throw new EmbedAuthMissingError(
+            "Missing authentication token — pass token to <MCPGatewayDashboard /> or set localStorage tenant_id_token",
+          );
+        }
+        const claims = parseEmbedClaims(token);
+        getExternalAuthHeaders();
+        setAuthSession({
+          authenticated: true,
+          oidc_enabled: true,
+          email: claims.email,
+          sub: claims.sub,
+        });
+        setLoadState("loading");
+        const overviewRes = await api.overview();
+        const payload = await fetchDashboardPanelsAfterOverview(overviewRes);
+        applyDashboardPayload(payload);
+        setLoadState("ready");
+        return;
+      }
+
       const authRes = await api.authStatus();
       setAuthSession(authRes);
 
@@ -874,7 +940,7 @@ export default function App() {
       const hashSection = parseAppSectionFromHash();
       if (hashSection !== null && hashSection !== "home") {
         const { pathname, search } = window.location;
-        window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("home")}`);
+        replaceDashboardLocation(pathname, search, appSectionToHash("home"));
         setSection("home");
         setAgentAppDetailId(null);
         setExpandedServer(null);
@@ -1088,11 +1154,12 @@ export default function App() {
   const diagnostics = data.diagnostics;
   const agentApps = data.agentApps;
   const needsDashboardAuth =
-    authSession !== null && authSession.oidc_enabled && !authSession.authenticated;
+    !externalAuth && authSession !== null && authSession.oidc_enabled && !authSession.authenticated;
   const dashboardSignOutHref =
-    authSession?.oidc_enabled && authSession.authenticated
+    !externalAuth && authSession?.oidc_enabled && authSession.authenticated
       ? (overview?.oidc_logout_path ?? authSession.logout_path)
       : undefined;
+  const embedSignedInEmail = externalAuth ? authSession?.email?.trim() : undefined;
   const currentSectionMeta = sectionMeta[section];
 
   function setBusy(key: string, value: boolean) {
@@ -1454,7 +1521,7 @@ export default function App() {
     if (expandedServer === server.name) {
       setExpandedServer(null);
       const { pathname, search } = window.location;
-      window.history.replaceState(null, "", `${pathname}${search}${appSectionToHash("servers")}`);
+      replaceDashboardLocation(pathname, search, appSectionToHash("servers"));
     }
   }
 
@@ -1521,7 +1588,7 @@ export default function App() {
         setFeedback({ tone: "success", message: `Tool group ${name} created.` });
       }
       closeToolGroupModal();
-      window.location.hash = editing ? toolGroupDetailHash(editing) : toolGroupDetailHash(name);
+      setDashboardLocationHash(editing ? toolGroupDetailHash(editing) : toolGroupDetailHash(name));
     } catch (error) {
       if (maybeRedirectDashboardAuth(error)) {
         return;
@@ -1575,7 +1642,7 @@ export default function App() {
         setFeedback({ tone: "success", message: `Prompt group ${name} created.` });
       }
       closePromptGroupModal();
-      window.location.hash = editing ? promptGroupDetailHash(editing) : promptGroupDetailHash(name);
+      setDashboardLocationHash(editing ? promptGroupDetailHash(editing) : promptGroupDetailHash(name));
     } catch (error) {
       if (maybeRedirectDashboardAuth(error)) {
         return;
@@ -1709,7 +1776,7 @@ export default function App() {
       });
       closeAgentAppModal();
       await loadDashboardData(true);
-      window.location.hash = appAgentAppDetailHash(res.app.id);
+      setDashboardLocationHash(appAgentAppDetailHash(res.app.id));
       setFeedback({
         tone: "success",
         message: `${res.app.name} created. Copy the client secret from the dialog — it will not be shown again.`,
@@ -2677,9 +2744,15 @@ export default function App() {
   const showNavSidebar = dashboardReady && !needsDashboardAuth;
 
   return (
-    <Box sx={{ display: "flex", minHeight: "100vh", bgcolor: "background.default" }}>
+    <Box sx={{ display: "flex", minHeight: externalAuth ? "100%" : "100vh", bgcolor: "background.default" }}>
       {showNavSidebar ? (
-        <NavSidebar active={section} onSelect={selectSection} signOutHref={dashboardSignOutHref} />
+        <NavSidebar
+          active={section}
+          onSelect={selectSection}
+          signOutHref={dashboardSignOutHref}
+          embedMode={externalAuth}
+          signedInEmail={embedSignedInEmail}
+        />
       ) : null}
       <Box
         component="main"
@@ -2890,7 +2963,7 @@ export default function App() {
                         <Button
                           variant="outlined"
                           onClick={() => {
-                            window.location.hash = appSectionToHash("servers");
+                            setDashboardLocationHash(appSectionToHash("servers"));
                           }}
                         >
                           ← All servers
@@ -2912,7 +2985,7 @@ export default function App() {
                         <Button
                           variant="contained"
                           onClick={() => {
-                            window.location.hash = appSectionToHash("servers");
+                            setDashboardLocationHash(appSectionToHash("servers"));
                           }}
                         >
                           Back to all servers
@@ -2958,12 +3031,12 @@ export default function App() {
                               tabIndex={0}
                               aria-label={`Open server ${server.name}`}
                               onClick={() => {
-                                window.location.hash = serverDetailHash(server.name);
+                                setDashboardLocationHash(serverDetailHash(server.name));
                               }}
                               onKeyDown={(e) => {
                                 if (e.key === "Enter" || e.key === " ") {
                                   e.preventDefault();
-                                  window.location.hash = serverDetailHash(server.name);
+                                  setDashboardLocationHash(serverDetailHash(server.name));
                                 }
                               }}
                               elevation={0}
@@ -3036,7 +3109,7 @@ export default function App() {
                     <Button
                       variant="outlined"
                       onClick={() => {
-                        window.location.hash = appSectionToHash("tools");
+                        setDashboardLocationHash(appSectionToHash("tools"));
                       }}
                     >
                       ← All tools
@@ -3054,7 +3127,7 @@ export default function App() {
                       <Button
                         variant="contained"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("tools");
+                          setDashboardLocationHash(appSectionToHash("tools"));
                         }}
                       >
                         Back to all tools
@@ -3108,12 +3181,12 @@ export default function App() {
                             tabIndex={0}
                             aria-label={`Open tool ${tool.name}`}
                             onClick={() => {
-                              window.location.hash = toolDetailHash(tool.canonical_name);
+                              setDashboardLocationHash(toolDetailHash(tool.canonical_name));
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
-                                window.location.hash = toolDetailHash(tool.canonical_name);
+                                setDashboardLocationHash(toolDetailHash(tool.canonical_name));
                               }
                             }}
                             elevation={0}
@@ -3187,7 +3260,7 @@ export default function App() {
                       <Button
                         variant="outlined"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("tool_groups");
+                          setDashboardLocationHash(appSectionToHash("tool_groups"));
                         }}
                       >
                         ← All tool groups
@@ -3208,7 +3281,7 @@ export default function App() {
                       <Button
                         variant="contained"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("tool_groups");
+                          setDashboardLocationHash(appSectionToHash("tool_groups"));
                         }}
                       >
                         Back to all tool groups
@@ -3243,12 +3316,12 @@ export default function App() {
                           tabIndex={0}
                           aria-label={`Open tool group ${group.name}`}
                           onClick={() => {
-                            window.location.hash = toolGroupDetailHash(group.name);
+                            setDashboardLocationHash(toolGroupDetailHash(group.name));
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              window.location.hash = toolGroupDetailHash(group.name);
+                              setDashboardLocationHash(toolGroupDetailHash(group.name));
                             }
                           }}
                           elevation={0}
@@ -3325,7 +3398,7 @@ export default function App() {
                       <Button
                         variant="outlined"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("prompt_groups");
+                          setDashboardLocationHash(appSectionToHash("prompt_groups"));
                         }}
                       >
                         ← All prompt groups
@@ -3346,7 +3419,7 @@ export default function App() {
                       <Button
                         variant="contained"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("prompt_groups");
+                          setDashboardLocationHash(appSectionToHash("prompt_groups"));
                         }}
                       >
                         Back to all prompt groups
@@ -3381,12 +3454,12 @@ export default function App() {
                           tabIndex={0}
                           aria-label={`Open prompt group ${group.name}`}
                           onClick={() => {
-                            window.location.hash = promptGroupDetailHash(group.name);
+                            setDashboardLocationHash(promptGroupDetailHash(group.name));
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              window.location.hash = promptGroupDetailHash(group.name);
+                              setDashboardLocationHash(promptGroupDetailHash(group.name));
                             }
                           }}
                           elevation={0}
@@ -3462,7 +3535,7 @@ export default function App() {
                     <Button
                       variant="outlined"
                       onClick={() => {
-                        window.location.hash = appSectionToHash("prompts");
+                        setDashboardLocationHash(appSectionToHash("prompts"));
                       }}
                     >
                       ← All prompts
@@ -3480,7 +3553,7 @@ export default function App() {
                       <Button
                         variant="contained"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("prompts");
+                          setDashboardLocationHash(appSectionToHash("prompts"));
                         }}
                       >
                         Back to all prompts
@@ -3522,12 +3595,12 @@ export default function App() {
                             tabIndex={0}
                             aria-label={`Open prompt ${prompt.name}`}
                             onClick={() => {
-                              window.location.hash = promptDetailHash(prompt.canonical_name);
+                              setDashboardLocationHash(promptDetailHash(prompt.canonical_name));
                             }}
                             onKeyDown={(e) => {
                               if (e.key === "Enter" || e.key === " ") {
                                 e.preventDefault();
-                                window.location.hash = promptDetailHash(prompt.canonical_name);
+                                setDashboardLocationHash(promptDetailHash(prompt.canonical_name));
                               }
                             }}
                             elevation={0}
@@ -3644,7 +3717,7 @@ export default function App() {
                       <Button
                         variant="outlined"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("agent_apps");
+                          setDashboardLocationHash(appSectionToHash("agent_apps"));
                         }}
                       >
                         ← All apps
@@ -3666,7 +3739,7 @@ export default function App() {
                       <Button
                         variant="contained"
                         onClick={() => {
-                          window.location.hash = appSectionToHash("agent_apps");
+                          setDashboardLocationHash(appSectionToHash("agent_apps"));
                         }}
                       >
                         Back to all apps
@@ -3702,12 +3775,12 @@ export default function App() {
                           tabIndex={0}
                           aria-label={`Open ${app.name}`}
                           onClick={() => {
-                            window.location.hash = appAgentAppDetailHash(app.id);
+                            setDashboardLocationHash(appAgentAppDetailHash(app.id));
                           }}
                           onKeyDown={(e) => {
                             if (e.key === "Enter" || e.key === " ") {
                               e.preventDefault();
-                              window.location.hash = appAgentAppDetailHash(app.id);
+                              setDashboardLocationHash(appAgentAppDetailHash(app.id));
                             }
                           }}
                           elevation={0}

@@ -44,6 +44,17 @@ func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 			return
 		}
 
+		if sess, ok := s.validOIDCBearerFromRequest(c); ok {
+			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+				Authenticated: true,
+				OIDCEnabled:   true,
+				LogoutPath:    logoutPath,
+				Email:         sess.Email,
+				Sub:           sess.Sub,
+			})
+			return
+		}
+
 		c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
 			Authenticated: false,
 			OIDCEnabled:   true,
