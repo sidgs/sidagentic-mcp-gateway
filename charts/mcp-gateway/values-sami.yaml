@@ -1,0 +1,43 @@
+env:
+  SERVER_MODE: enterprise
+  OTEL_ENABLED: "true"
+  MCP_SERVER_INIT_REQ_TIMEOUT_SEC: "10"
+  HTTP_PATH_PREFIX: /api/v1/sami-mcp-gateway
+  DEFAULT_TENANT_ID: sami
+  HTTP_PORT: "8080"
+  # Cognito OIDC dashboard session store (recommended with multiple replicas)
+  # REDIS_URL: redis://redis-master.svc.cluster.local:6379/0
+  OIDC_SESSION_TTL_SECONDS: "259200"
+  # Optional: OAuth2 scopes for dashboard login (comma/space-separated); empty = openid email profile. "openid" is added if missing.
+  # OIDC_SCOPES: "openid email profile aws.cognito.signin.user.admin phone"
+  # After OIDC success: absolute https URL or root-relative path (must start with /, not //). Omit for gateway root (/ or HTTP_PATH_PREFIX/).
+  # POST_LOGIN_REDIRECT_URL: "https://app.example/path"
+  COGNITO_ISSUER_URL: "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_cm67IPc0S"
+  COGNITO_REGION: "us-east-1"
+  REDIS_URL: "redis://sami-redis:6379/0"
+  OIDC_SESSION_TTL_SECONDS: "259200"
+  OIDC_SCOPES: "email openid phone profile"
+  # Optional: fixed OAuth2 authorize redirect_uri for Cognito (https; must match app client callback URLs exactly). Use when X-Forwarded-Proto is unreliable behind CDNs.
+  COGNITO_REDIRECT_URI: "https://apps.mysami.io/api/v1/sami-mcp-gateway/auth/callback"
+  POST_LOGIN_REDIRECT_URL: "/apps/mcp-gateway-dashboard/#/home"
+  # COGNITO_REDIRECT_URI: "https://apps.sidglobal.cloud/api/v1/sami-mcp-gateway/auth/callback"
+  PUBLIC_URL_SCHEME: "https"
+
+secrets:
+  COGNITO_CLIENT_SECRET: "ouv4hqv7qqbni0ut26f9k6p9jodlo4fkgi1i0dac91bepll4cj4"
+  COGNITO_CLIENT_ID: "3odadqtieuojk7cgoiiqaivcar"
+  FOO: "bar"
+  GLOBAL_MCP_API_KEY: "1234567890"
+  DATABASE_URL: postgresql://sami-saas-prod-user:PkxF5Nn6KVbd@pgdb.apps.mysami.io:5432/sami-mcp-db
+
+
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations: {}
+  hosts:
+    - host: apps.mysami.io
+      paths:
+        - path: /api/v1/sami-mcp-gateway
+          pathType: Prefix
+  tls: []

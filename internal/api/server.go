@@ -50,7 +50,7 @@ type ServerOptions struct {
 	MCPService    *mcp.MCPService
 	ConfigService *config.ServerConfigService
 
-	// GlobalMCPAPIKey is required for enterprise global MCP (/mcp, /sse, /message): send as X-API-Key or Authorization: Bearer <key>.
+	// GlobalMCPAPIKey is required for global MCP (/mcp, /sse, /message) and /api/v0 REST access in all modes.
 	GlobalMCPAPIKey string
 	UserService      *user.UserService
 	ToolGroupService  *toolgroup.ToolGroupService
@@ -87,6 +87,13 @@ type ServerOptions struct {
 
 	// DashboardEmbedAllowedOrigins is a comma-separated list of browser origins allowed to call /dashboard/* with Bearer auth (embed mode).
 	DashboardEmbedAllowedOrigins string
+
+	// PlatformJWTSecret is the HS256 signing key for platform-issued UI JWTs (JWT_SECRET env).
+	PlatformJWTSecret string
+	// PlatformJWTAud optionally validates the aud claim on platform JWTs (default sami-cms).
+	PlatformJWTAud string
+	// PlatformJWTAllowUnsigned allows alg=none platform JWTs when true (JWT_USE_UNSIGNED env).
+	PlatformJWTAllowUnsigned bool
 }
 
 // Server represents the SAMI MCP Gateway registry server that handles MCP proxy and API requests
@@ -148,6 +155,11 @@ type Server struct {
 
 	// dashboardEmbedAllowedOrigins lists browser origins permitted for cross-origin embed dashboard API calls.
 	dashboardEmbedAllowedOrigins []string
+
+	// platformJWTSecret verifies HS256 platform UI JWTs; separate from agent-app JWT signing.
+	platformJWTSecret string
+	platformJWTAud      string
+	platformJWTAllowUnsigned bool
 }
 
 // dashboardOAuthSessionResult is the dashboard-facing terminal state for an
@@ -214,6 +226,11 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		return nil, fmt.Errorf("PublicURLScheme: %w", errPS)
 	}
 
+	platformJWTAud := strings.TrimSpace(opts.PlatformJWTAud)
+	if platformJWTAud == "" {
+		platformJWTAud = defaultPlatformJWTAud
+	}
+
 	s := &Server{
 		mcpProxyServer:        opts.MCPProxyServer,
 		sseMcpProxyServer:     opts.SseMcpProxyServer,
@@ -237,6 +254,9 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		oidcSessionStore:      sessionStore,
 		oidcSessionMaxTTL:     maxTTL,
 		dashboardEmbedAllowedOrigins: parseDashboardEmbedAllowedOrigins(opts.DashboardEmbedAllowedOrigins),
+		platformJWTSecret:            strings.TrimSpace(opts.PlatformJWTSecret),
+		platformJWTAud:               platformJWTAud,
+		platformJWTAllowUnsigned:     opts.PlatformJWTAllowUnsigned,
 	}
 
 	// Set up the router after the server is fully initialized
@@ -254,6 +274,12 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 	}
 	if publicScheme != "" {
 		log.Printf("[server] PUBLIC_URL_SCHEME override: %s (public MCP/dashboard URLs)\n", publicScheme)
+	}
+	if strings.TrimSpace(opts.PlatformJWTSecret) != "" {
+		log.Printf("[server] platform UI JWT auth enabled (JWT_SECRET is set, aud=%s)\n", platformJWTAud)
+	}
+	if opts.PlatformJWTAllowUnsigned {
+		log.Printf("[server] platform UI JWT auth: unsigned tokens allowed (JWT_USE_UNSIGNED=true)\n")
 	}
 
 	return s, nil
@@ -286,31 +312,49 @@ func (s *Server) GetMode() (model.ServerMode, error) {
 }
 
 // BootstrapServerIfUninitialized persists server mode for the tenant when no initialized
-// config exists yet. For enterprise modes it also creates the bootstrap admin user.
-// If the server is already initialized, it returns created=false and does nothing (idempotent).
-func (s *Server) BootstrapServerIfUninitialized(ctx context.Context, mode model.ServerMode) (created bool, enterpriseAdminToken string, err error) {
-	createdFlag, err := s.configService.Init(ctx, mode)
+// config exists yet. If the server is already initialized, it returns created=false.
+func (s *Server) BootstrapServerIfUninitialized(ctx context.Context, mode model.ServerMode) (created bool, err error) {
+	return s.configService.Init(ctx, mode)
+}
+
+// resolveTenantConfig returns initialized server config for the request tenant.
+// When the default tenant is already initialized, other tenants are bootstrapped
+// automatically on first access using the same server mode.
+func (s *Server) resolveTenantConfig(ctx context.Context) (model.ServerConfig, error) {
+	cfg, err := s.configService.GetConfig(ctx)
 	if err != nil {
-		return false, "", err
+		return model.ServerConfig{}, err
 	}
-	if !createdFlag {
-		return false, "", nil
+	if cfg.Initialized {
+		return cfg, nil
 	}
-	if model.IsEnterpriseMode(mode) {
-		admin, err := s.userService.CreateAdminUser(ctx)
-		if err != nil {
-			return false, "", fmt.Errorf("failed to create bootstrap admin user: %w", err)
-		}
-		return true, admin.AccessToken, nil
+
+	defaultTenant := strings.TrimSpace(s.defaultTenantID)
+	if defaultTenant == "" {
+		defaultTenant = tenant.DefaultID
 	}
-	return true, "", nil
+	if tenant.MustFromContext(ctx) == defaultTenant {
+		return cfg, nil
+	}
+
+	defCfg, err := s.configService.GetConfig(tenant.WithContext(context.Background(), defaultTenant))
+	if err != nil {
+		return model.ServerConfig{}, err
+	}
+	if !defCfg.Initialized {
+		return cfg, nil
+	}
+
+	if _, err := s.BootstrapServerIfUninitialized(ctx, defCfg.Mode); err != nil {
+		return model.ServerConfig{}, err
+	}
+	return s.configService.GetConfig(ctx)
 }
 
 // InitDev initializes the server configuration in the Development mode.
-// This method does not create an admin user because that is irrelevant in dev mode.
 func (s *Server) InitDev() error {
 	ctx := tenant.WithContext(context.Background(), s.defaultTenantID)
-	_, _, err := s.BootstrapServerIfUninitialized(ctx, model.ModeDev)
+	_, err := s.BootstrapServerIfUninitialized(ctx, model.ModeDev)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server config in dev mode: %w", err)
 	}

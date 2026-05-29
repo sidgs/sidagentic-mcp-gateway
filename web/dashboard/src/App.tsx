@@ -31,6 +31,7 @@ import {
   resolveExternalAuthToken,
 } from "@/lib/embedAuth";
 import {
+  isComponentMode,
   isExternalAuthMode,
   resolveDefaultAppSection,
   usesHashRouting,
@@ -83,6 +84,7 @@ import { CopyButton } from "@/components/CopyButton";
 import { EmptyStateCard } from "@/components/EmptyStateCard";
 import { HomePage } from "@/components/HomePage";
 import { NavSidebar } from "@/components/NavSidebar";
+import { NavTabs } from "@/components/NavTabs";
 import { SectionCard } from "@/components/SectionCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { monospaceFontFamily } from "@/theme";
@@ -223,11 +225,19 @@ function maybeRedirectDashboardAuth(error: unknown): boolean {
   return false;
 }
 
+function coerceComponentSection(section: AppSection): AppSection {
+  if (isComponentMode() && section === "home") {
+    const fallback = resolveDefaultAppSection();
+    return fallback === "home" ? "servers" : fallback;
+  }
+  return section;
+}
+
 function resolveInitialAppSection(): AppSection {
   if (usesHashRouting()) {
-    return parseHashRoute().section ?? resolveDefaultAppSection();
+    return coerceComponentSection(parseHashRoute().section ?? resolveDefaultAppSection());
   }
-  return resolveDefaultAppSection();
+  return coerceComponentSection(resolveDefaultAppSection());
 }
 
 const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
@@ -634,10 +644,14 @@ function createInitialPromptGroupForm(): PromptGroupFormState {
 
 export default function App() {
   const externalAuth = isExternalAuthMode();
+  const componentMode = isComponentMode();
   const [section, setSection] = useState<AppSection>(resolveInitialAppSection);
   const [authSession, setAuthSession] = useState<DashboardAuthStatusResponse | null>(null);
 
   const selectSection = useCallback((next: AppSection) => {
+    if (componentMode && next === "home") {
+      return;
+    }
     if (
       !externalAuth &&
       authSession?.oidc_enabled &&
@@ -654,7 +668,7 @@ export default function App() {
     if (usesHashRouting()) {
       setDashboardLocationHash(appSectionToHash(next));
     }
-  }, [authSession, externalAuth]);
+  }, [authSession, componentMode, externalAuth]);
 
   const [loadState, setLoadState] = useState<LoadState>("checking_session");
   const [errorMessage, setErrorMessage] = useState("");
@@ -1159,7 +1173,8 @@ export default function App() {
     !externalAuth && authSession?.oidc_enabled && authSession.authenticated
       ? (overview?.oidc_logout_path ?? authSession.logout_path)
       : undefined;
-  const embedSignedInEmail = externalAuth ? authSession?.email?.trim() : undefined;
+  const embedSignedInEmail =
+    externalAuth && !componentMode ? authSession?.email?.trim() : undefined;
   const currentSectionMeta = sectionMeta[section];
 
   function setBusy(key: string, value: boolean) {
@@ -2741,11 +2756,18 @@ export default function App() {
   }
 
   const dashboardReady = loadState === "ready";
-  const showNavSidebar = dashboardReady && !needsDashboardAuth;
+  const showNav = dashboardReady && !needsDashboardAuth;
 
   return (
-    <Box sx={{ display: "flex", minHeight: externalAuth ? "100%" : "100vh", bgcolor: "background.default" }}>
-      {showNavSidebar ? (
+    <Box
+      sx={{
+        display: "flex",
+        flexDirection: componentMode ? "column" : "row",
+        minHeight: externalAuth ? "100%" : "100vh",
+        bgcolor: "background.default",
+      }}
+    >
+      {showNav && !componentMode ? (
         <NavSidebar
           active={section}
           onSelect={selectSection}
@@ -2761,17 +2783,20 @@ export default function App() {
           minWidth: 0,
           overflowX: "auto",
           ...(dashboardReady
-            ? { p: "18px" }
+            ? { p: componentMode ? "12px 18px 18px" : "18px" }
             : {
                 display: "flex",
                 flexDirection: "column",
                 alignItems: "center",
                 justifyContent: "center",
                 p: 2,
-                minHeight: "100vh",
+                minHeight: componentMode ? "100%" : "100vh",
               }),
         }}
       >
+        {showNav && componentMode ? (
+          <NavTabs active={section} onSelect={selectSection} />
+        ) : null}
         {dashboardReady ? (
         <Stack component="header" direction={{ xs: "column", lg: "row" }} spacing={2} sx={{ mb: 2 }}>
           {section === "home" ? (
@@ -2909,7 +2934,7 @@ export default function App() {
 
         {loadState === "ready" ? (
           <div className="flex flex-col gap-[14px]">
-            {section === "home" ? (
+            {!componentMode && section === "home" ? (
               <HomePage
                 overview={overview}
                 auth={authSession ?? undefined}
@@ -3875,62 +3900,6 @@ export default function App() {
                       <strong>{diagnostics.database}</strong>
                     </div>
                   </div>
-                  {diagnostics.admin_access_token_masked ? (
-                    <Box
-                      sx={{
-                        mt: 2,
-                        p: 2,
-                        borderRadius: 2,
-                        bgcolor: "action.hover",
-                        border: 1,
-                        borderColor: "divider",
-                      }}
-                    >
-                      <Typography variant="subtitle2" sx={{ mb: 1 }}>
-                        Admin API token (masked)
-                      </Typography>
-                      <Typography
-                        variant="body2"
-                        component="code"
-                        sx={{ display: "block", fontFamily: "monospace", mb: 1.5, wordBreak: "break-all" }}
-                      >
-                        {diagnostics.admin_access_token_masked}
-                      </Typography>
-                      <Box
-                        component="ul"
-                        sx={{
-                          m: 0,
-                          pl: 2.5,
-                          "& li": { mb: 0.75 },
-                          typography: "caption",
-                          color: "text.secondary",
-                        }}
-                      >
-                        <li>
-                          The full secret is not shown. Send it as{" "}
-                          <Box component="code" sx={{ fontSize: "0.85em" }}>
-                            Authorization: Bearer …
-                          </Box>{" "}
-                          on{" "}
-                          <Box component="code" sx={{ fontSize: "0.85em" }}>
-                            /api/v0/…
-                          </Box>{" "}
-                          requests in enterprise mode.
-                        </li>
-                        <li>
-                          Call{" "}
-                          <Box component="code" sx={{ fontSize: "0.85em" }}>
-                            POST …/init
-                          </Box>{" "}
-                          with enterprise mode; the JSON response includes{" "}
-                          <Box component="code" sx={{ fontSize: "0.85em" }}>
-                            admin_access_token
-                          </Box>
-                          . If your deployment logs bootstrap on first start, check server output.
-                        </li>
-                      </Box>
-                    </Box>
-                  ) : null}
                 </SectionCard>
 
                 <SectionCard title="Runtime details" subtitle="System information">

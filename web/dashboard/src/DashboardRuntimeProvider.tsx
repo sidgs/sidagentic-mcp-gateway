@@ -13,6 +13,10 @@ function normalizeHttpPathPrefix(prefix: string): string {
   return trimmed.replace(/\/$/, "");
 }
 
+function sanitizeComponentDefaultSection(section: AppSection): AppSection {
+  return section === "home" ? "servers" : section;
+}
+
 export interface DashboardRuntimeProviderProps {
   children: ReactNode;
   mode: DashboardHostMode;
@@ -40,7 +44,12 @@ export function DashboardRuntimeProvider({
     token: token?.trim() || undefined,
     tenantId: tenantId?.trim() || undefined,
     httpPathPrefix: normalizeHttpPathPrefix(httpPathPrefix ?? envPrefix),
-    defaultSection: mode === "standalone" ? "home" : defaultSection,
+    defaultSection:
+      mode === "standalone"
+        ? "home"
+        : mode === "component"
+          ? sanitizeComponentDefaultSection(defaultSection)
+          : defaultSection,
   });
 
   useEffect(() => () => setDashboardRuntimeConfig(null), []);

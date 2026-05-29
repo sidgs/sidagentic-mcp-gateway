@@ -193,8 +193,6 @@ export interface DashboardDiagnosticsResponse {
   tool_count: number;
   prompt_count: number;
   resource_count: number;
-  /** First/last few characters only; enterprise mode when dashboard is available. */
-  admin_access_token_masked?: string;
   empty_state?: DashboardEmptyState;
 }
 

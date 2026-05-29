@@ -89,17 +89,13 @@ resources:
 
 # This is to setup the liveness and readiness probes more information can be found here: https://kubernetes.io/docs/tasks/configure-pod-container/configure-liveness-readiness-startup-probes/
 livenessProbe:
-  httpGet:
-    path: /api/v1/sami-mcp-gateway/health
+  tcpSocket:
     port: http
+  initialDelaySeconds: 65
 readinessProbe:
-  httpGet:
-    path: /api/v1/sami-mcp-gateway/health
+  tcpSocket:
     port: http
-  periodSeconds: 120
-  initialDelaySeconds: 30
-  timeoutSeconds: 10
-  failureThreshold: 3
+  initialDelaySeconds: 60
 
 # This section is for setting up autoscaling more information can be found here: https://kubernetes.io/docs/concepts/workloads/autoscaling/
 autoscaling:

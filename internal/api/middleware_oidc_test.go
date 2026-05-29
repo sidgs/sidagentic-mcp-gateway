@@ -66,6 +66,32 @@ func TestRequireDashboardModeOrOIDC_BlocksEnterpriseWithoutOIDC(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, w.Code)
 }
 
+func TestRequireDashboardModeOrOIDC_AllowsEnterpriseWithPlatformJWT(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{httpPathPrefix: "/p", platformJWTSecret: "secret", platformJWTAud: defaultPlatformJWTAud}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Set("mode", model.ModeEnterprise)
+	s.requireDashboardModeOrOIDC()(c)
+	require.False(t, c.IsAborted())
+}
+
+func TestRequireOIDCSessionIfEnabled_RequiresPlatformJWTWhenOIDCDisabled(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s := &Server{
+		httpPathPrefix:    "/pfx",
+		platformJWTSecret: testPlatformJWTSecret,
+		platformJWTAud:    defaultPlatformJWTAud,
+	}
+	w := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(w)
+	c.Request = httptest.NewRequest(http.MethodGet, "/pfx/dashboard/overview", nil)
+	c.Request.Header.Set("Accept", "application/json")
+	s.requireOIDCSessionIfEnabled()(c)
+	require.True(t, c.IsAborted())
+	require.Equal(t, http.StatusUnauthorized, w.Code)
+}
+
 func TestRequireDashboardModeOrOIDC_AlwaysAllowsDev(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s := &Server{}

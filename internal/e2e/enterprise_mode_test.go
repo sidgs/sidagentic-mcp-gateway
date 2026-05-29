@@ -39,22 +39,23 @@ func TestE2E_EnterpriseMode_Unauthenticated_Returns401(t *testing.T) {
 	}
 }
 
-func TestE2E_EnterpriseMode_RegularUser_CannotWrite(t *testing.T) {
+func TestE2E_EnterpriseMode_InvalidCredentials_Returns401(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
 	writeOps := []struct {
 		method, path string
 		body         any
+		token        string
 	}{
-		{http.MethodPost, "/api/v0/servers", map[string]any{"name": "x", "transport": "stdio", "command": "echo"}},
-		{http.MethodPost, "/api/v0/tool-groups", map[string]any{"name": "g"}},
-		{http.MethodPost, "/api/v0/users", map[string]any{"username": "u"}},
+		{http.MethodPost, "/api/v0/servers", map[string]any{"name": "x", "transport": "stdio", "command": "echo"}, "wrong-key"},
+		{http.MethodPost, "/api/v0/tool-groups", map[string]any{"name": "g"}, "wrong-key"},
+		{http.MethodPost, "/api/v0/users", map[string]any{"username": "u"}, "wrong-key"},
 	}
 	for _, op := range writeOps {
 		t.Run(fmt.Sprintf("%s %s", op.method, op.path), func(t *testing.T) {
-			resp := env.do(t, op.method, op.path, op.body, env.userToken)
+			resp := env.do(t, op.method, op.path, op.body, op.token)
 			defer drain(resp)
-			assert.Equal(t, http.StatusForbidden, resp.StatusCode)
+			assert.Equal(t, http.StatusUnauthorized, resp.StatusCode)
 		})
 	}
 }
@@ -64,11 +65,11 @@ func TestE2E_EnterpriseMode_RegularUser_CannotWrite(t *testing.T) {
 // -----------------------------------------------------------------------
 
 // TestE2E_EnterpriseMode_McpProxy_RequiresGlobalKey verifies that global /mcp rejects
-// user/admin bearer tokens and accepts X-API-Key GLOBAL_MCP_API_KEY.
+// invalid credentials and accepts X-API-Key GLOBAL_MCP_API_KEY.
 func TestE2E_EnterpriseMode_McpProxy_RequiresGlobalKey(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
-	for _, token := range []string{"", env.userToken, env.adminToken} {
+	for _, token := range []string{"", "wrong-key"} {
 		c, err := client.NewStreamableHttpClient(env.tenantMCPURL("/mcp"), transport.WithHTTPHeaders(map[string]string{
 			"Authorization": "Bearer " + token,
 		}))
@@ -79,7 +80,7 @@ func TestE2E_EnterpriseMode_McpProxy_RequiresGlobalKey(t *testing.T) {
 				ClientInfo:      mcp.Implementation{Name: "e2e", Version: "1.0"},
 			},
 		})
-		require.Error(t, err, "user/admin token must not authenticate global MCP")
+		require.Error(t, err, "invalid credentials must not authenticate global MCP")
 		_ = c.Close()
 	}
 
@@ -103,8 +104,8 @@ func TestE2E_EnterpriseMode_McpProxy_GlobalKeyFullTenantAccess(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
 	// Register two independent server instances so we can test cross-server scoping.
-	registerEverythingServerAs(t, env, "svc-a", env.adminToken)
-	registerEverythingServerAs(t, env, "svc-b", env.adminToken)
+	registerEverythingServerAs(t, env, "svc-a")
+	registerEverythingServerAs(t, env, "svc-b")
 
 	c := newMCPProxyClient(t, env)
 	qa := tenant.QualifyProxyName(tenant.DefaultID, "svc-a__echo")
@@ -233,7 +234,7 @@ func TestE2E_EnterpriseMode_McpProxy_StripsInboundHeadersForUpstreamCalls(t *tes
 		"description": "Header scrub regression server",
 		"transport":   "streamable_http",
 		"url":         upstreamHTTP.URL,
-	}, env.adminToken)
+	}, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 

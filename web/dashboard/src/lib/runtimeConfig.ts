@@ -20,6 +20,11 @@ export function getDashboardRuntimeConfig(): DashboardRuntimeConfig | null {
   return activeConfig;
 }
 
+/** React library component — embedded inside a parent app with top-tab navigation. */
+export function isComponentMode(): boolean {
+  return activeConfig?.mode === "component";
+}
+
 /** Hosted embed SPA or React component — uses Bearer token auth instead of OIDC cookies. */
 export function isExternalAuthMode(): boolean {
   const cfg = activeConfig;

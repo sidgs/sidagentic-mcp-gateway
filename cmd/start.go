@@ -57,7 +57,7 @@ const (
 	// AgentAppJWTSigningKeyEnvVar sets the HS256 key for agent-app Bearer tokens (client_credentials). Empty disables JWT mint and Bearer JWT MCP auth.
 	AgentAppJWTSigningKeyEnvVar = "AGENT_APP_JWT_SIGNING_KEY"
 
-	// GlobalMCPAPIKeyEnvVar is required in enterprise mode for authenticating to the global MCP proxy (/mcp, /sse).
+	// GlobalMCPAPIKeyEnvVar is required in all modes for MCP proxy and REST API authentication.
 	GlobalMCPAPIKeyEnvVar = "GLOBAL_MCP_API_KEY"
 
 	// Cognito / OIDC (optional dashboard login)
@@ -81,6 +81,13 @@ const (
 
 	// DashboardEmbedAllowedOriginsEnvVar is a comma-separated list of browser origins allowed to call /dashboard/* cross-origin (embed mode).
 	DashboardEmbedAllowedOriginsEnvVar = "DASHBOARD_EMBED_ALLOWED_ORIGINS"
+
+	// JWTSecretEnvVar is the HS256 key for platform-issued UI JWTs on /dashboard/* routes.
+	JWTSecretEnvVar = "JWT_SECRET"
+	// PlatformJWTAudEnvVar validates the aud claim on platform UI JWTs. Empty uses default sami-cms.
+	PlatformJWTAudEnvVar = "PLATFORM_JWT_AUD"
+	// JWTUseUnsignedEnvVar allows alg=none platform UI JWTs when true (default true).
+	JWTUseUnsignedEnvVar = "JWT_USE_UNSIGNED"
 )
 
 const (
@@ -121,7 +128,7 @@ var startServerCmd = &cobra.Command{
 	Long: "Starts the SAMI MCP Gateway HTTP Registry and the MCP Gateway\n\n" +
 		"The server is started in development mode by default, which is ideal for running sami-mcp-gateway locally.\n" +
 		"Teams & Enterprises should run sami-mcp-gateway in enterprise mode.\n" +
-		"If the database is not yet initialized, startup completes initialization automatically for the selected mode; on first enterprise startup the bootstrap admin access token is printed once to stdout.\n\n" +
+		"If the database is not yet initialized, startup completes initialization automatically for the selected mode.\n\n" +
 		"By default, this command creates a SQLite database file in the current directory (if it doesn't already exist).\n" +
 		"You can also supply a custom DSN in the DATABASE_URL environment variable.\n" +
 		"eg: export DATABASE_URL='postgres://user:password@localhost:5432/sami-mcp-gateway'\n" +
@@ -265,6 +272,22 @@ func isTelemetryEnabled(desiredServerMode model.ServerMode) (bool, error) {
 	}
 
 	return telemetryEnabled, nil
+}
+
+func parseEnvBoolDefault(envVar string, defaultVal bool) bool {
+	raw := strings.TrimSpace(os.Getenv(envVar))
+	if raw == "" {
+		return defaultVal
+	}
+	switch strings.ToLower(raw) {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		log.Printf("[server] %s=%q is not a boolean; using default %t\n", envVar, raw, defaultVal)
+		return defaultVal
+	}
 }
 
 // getDefaultTenantID returns the tenant id used when a request has no X-Tenant-ID header.
@@ -713,26 +736,23 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		CognitoOAuthRedirectURI: strings.TrimSpace(os.Getenv(CognitoRedirectURIEnvVar)),
 		DefaultTenantID:      defaultTenantID,
 		DashboardEmbedAllowedOrigins: strings.TrimSpace(os.Getenv(DashboardEmbedAllowedOriginsEnvVar)),
+		PlatformJWTSecret:          strings.TrimSpace(os.Getenv(JWTSecretEnvVar)),
+		PlatformJWTAud:             strings.TrimSpace(os.Getenv(PlatformJWTAudEnvVar)),
+		PlatformJWTAllowUnsigned:   parseEnvBoolDefault(JWTUseUnsignedEnvVar, true),
 	}
 	s, err := api.NewServer(opts)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %v", err)
 	}
 
-	// Ensure server config exists (idempotent). First startup creates dev or enterprise row,
-	// matching POST /init behavior for enterprise (bootstrap admin user + token).
+	// Ensure server config exists (idempotent). First startup creates dev or enterprise row.
 	ctxInit := tenant.WithContext(context.Background(), defaultTenantID)
-	created, bootstrapAdminToken, err := s.BootstrapServerIfUninitialized(ctxInit, desiredServerMode)
+	created, err := s.BootstrapServerIfUninitialized(ctxInit, desiredServerMode)
 	if err != nil {
 		return fmt.Errorf("failed to initialize server: %w", err)
 	}
 	if created {
-		if bootstrapAdminToken != "" {
-			log.Printf("[server] enterprise bootstrap complete (first run)")
-			cmd.Printf("\nBootstrap admin access token (save securely; shown once): %s\n\n", bootstrapAdminToken)
-		} else {
-			log.Printf("[server] first-time initialization complete (%s mode)", desiredServerMode)
-		}
+		log.Printf("[server] first-time initialization complete (%s mode)", desiredServerMode)
 	}
 
 	mode, err := s.GetMode()
@@ -746,9 +766,9 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		)
 	}
 
-	if model.IsEnterpriseMode(mode) && globalMCPAPIKey == "" {
+	if globalMCPAPIKey == "" {
 		return fmt.Errorf(
-			"enterprise mode requires %s to be set for global MCP proxy access (/mcp, /sse)",
+			"%s is required for MCP proxy and REST API access (/mcp, /sse, /api/v0)",
 			GlobalMCPAPIKeyEnvVar,
 		)
 	}

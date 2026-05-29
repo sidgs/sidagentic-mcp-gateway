@@ -120,3 +120,39 @@ func TestInitIdempotent(t *testing.T) {
 		t.Errorf("Expected mode to remain %v, got %v", model.ModeDev, config.Mode)
 	}
 }
+
+func TestInitExistingUninitializedRow(t *testing.T) {
+	setup := testhelpers.SetupServerConfigTest(t)
+	defer setup.Cleanup()
+
+	setup.CreateTestServerConfig(model.ModeDev, false)
+
+	svc := NewServerConfigService(setup.DB)
+
+	config, err := svc.GetConfig(context.Background())
+	testhelpers.AssertNoError(t, err)
+	if config.Initialized {
+		t.Error("Expected config to be uninitialized before Init")
+	}
+
+	created, err := svc.Init(context.Background(), model.ModeEnterprise)
+	testhelpers.AssertNoError(t, err)
+	if !created {
+		t.Error("Expected config to be updated from uninitialized row")
+	}
+
+	config, err = svc.GetConfig(context.Background())
+	testhelpers.AssertNoError(t, err)
+	if !config.Initialized {
+		t.Error("Expected config to be initialized after Init")
+	}
+	if config.Mode != model.ModeEnterprise {
+		t.Errorf("Expected mode to be %v, got %v", model.ModeEnterprise, config.Mode)
+	}
+
+	created, err = svc.Init(context.Background(), model.ModeEnterprise)
+	testhelpers.AssertNoError(t, err)
+	if created {
+		t.Error("Expected second Init to be a no-op")
+	}
+}

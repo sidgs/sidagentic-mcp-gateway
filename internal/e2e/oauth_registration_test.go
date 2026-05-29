@@ -163,7 +163,7 @@ func startOAuthRegistration(t *testing.T, env *e2eEnv, upstreamURL string, force
 		"url":                upstreamURL,
 		"oauth_redirect_uri": "http://127.0.0.1:9999/oauth/callback",
 		"oauth_scopes":       []string{"mcp.read"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusAccepted, resp.StatusCode)
 
@@ -220,7 +220,7 @@ func TestE2E_DevMode_RegisterOAuthHTTPServerAndInvokeTool(t *testing.T) {
 	require.NotNil(t, completeResult.Server)
 	assert.Equal(t, "oauthsrv", completeResult.Server.Name)
 
-	listToolsResp := env.do(t, http.MethodGet, "/api/v0/tools", nil, "")
+	listToolsResp := env.do(t, http.MethodGet, "/api/v0/tools", nil, env.globalMCPAPIKey)
 	defer drain(listToolsResp)
 	require.Equal(t, http.StatusOK, listToolsResp.StatusCode)
 	var tools []map[string]any
@@ -231,7 +231,7 @@ func TestE2E_DevMode_RegisterOAuthHTTPServerAndInvokeTool(t *testing.T) {
 		invokeResp := env.do(t, http.MethodPost, "/api/v0/tools/invoke", map[string]any{
 			"name": "oauthsrv__echo",
 			"msg":  msg,
-		}, "")
+		}, env.globalMCPAPIKey)
 		defer drain(invokeResp)
 		require.Equal(t, http.StatusOK, invokeResp.StatusCode)
 
@@ -282,7 +282,7 @@ func TestE2E_DevMode_ForceReRegisterOAuthServer(t *testing.T) {
 	defer drain(secondComplete)
 	require.Equal(t, http.StatusCreated, secondComplete.StatusCode)
 
-	listServersResp := env.do(t, http.MethodGet, "/api/v0/servers", nil, "")
+	listServersResp := env.do(t, http.MethodGet, "/api/v0/servers", nil, env.globalMCPAPIKey)
 	defer drain(listServersResp)
 	require.Equal(t, http.StatusOK, listServersResp.StatusCode)
 
@@ -313,14 +313,14 @@ func TestE2E_DevMode_PublicHTTPServerAfterOAuthDoesNotReceiveAuthorizationHeader
 		"description": "Public upstream MCP server",
 		"transport":   "streamable_http",
 		"url":         publicUpstream.server.URL + "/mcp",
-	}, "")
+	}, env.globalMCPAPIKey)
 	defer drain(publicRegisterResp)
 	require.Equal(t, http.StatusCreated, publicRegisterResp.StatusCode)
 
 	invokeResp := env.do(t, http.MethodPost, "/api/v0/tools/invoke", map[string]any{
 		"name": "publicsrv__echo",
 		"msg":  "hello public",
-	}, "")
+	}, env.globalMCPAPIKey)
 	defer drain(invokeResp)
 	require.Equal(t, http.StatusOK, invokeResp.StatusCode)
 

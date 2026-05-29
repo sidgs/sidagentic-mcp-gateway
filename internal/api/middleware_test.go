@@ -9,9 +9,9 @@ import (
 	"github.com/gin-gonic/gin"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/internal/service/config"
-	"sami.io/mcpgateway/internal/service/user"
+	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/testhelpers"
-	"sami.io/mcpgateway/pkg/types"
+	"strings"
 	"gorm.io/gorm"
 )
 
@@ -82,80 +82,107 @@ func TestRequireInitialized(t *testing.T) {
 	}
 }
 
-func TestVerifyUserAuthForAPIAccess(t *testing.T) {
+func TestRequireInitialized_AutoBootstrapsNonDefaultTenant(t *testing.T) {
 	gin.SetMode(gin.TestMode)
+
 	setup := testhelpers.SetupTestDB(t)
 	defer setup.Cleanup()
 	testDB := setup.DB
+	configService := config.NewServerConfigService(testDB)
 
-	userService := user.NewUserService(testDB)
+	const defaultTenant = "sid-agentic"
+	const otherTenant = "bian-demo"
+
+	_, err := configService.Init(tenant.WithContext(context.Background(), defaultTenant), model.ModeEnterprise)
+	if err != nil {
+		t.Fatalf("Setup default tenant config failed: %v", err)
+	}
+
+	server := &Server{
+		configService:   configService,
+		defaultTenantID: defaultTenant,
+	}
+	router := gin.New()
+	router.Use(func(c *gin.Context) {
+		tid := strings.TrimSpace(c.GetHeader(tenant.HeaderName))
+		if tid == "" {
+			tid = defaultTenant
+		}
+		c.Request = c.Request.WithContext(tenant.WithContext(c.Request.Context(), tid))
+	})
+	router.Use(server.requireInitialized())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "success"})
+	})
+
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	req.Header.Set(tenant.HeaderName, otherTenant)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Expected status %d, got %d body=%s", http.StatusOK, w.Code, w.Body.String())
+	}
+
+	otherCfg, err := configService.GetConfig(tenant.WithContext(context.Background(), otherTenant))
+	if err != nil {
+		t.Fatalf("GetConfig for other tenant failed: %v", err)
+	}
+	if !otherCfg.Initialized {
+		t.Fatal("expected other tenant to be auto-initialized")
+	}
+	if otherCfg.Mode != model.ModeEnterprise {
+		t.Fatalf("expected enterprise mode, got %v", otherCfg.Mode)
+	}
+}
+	gin.SetMode(gin.TestMode)
+
+	const globalKey = "unit-test-global-mcp-key"
 
 	tests := []struct {
 		name           string
-		mode           model.ServerMode
+		serverKey      string
+		xApiKey        string
 		authHeader     string
-		setupUser      func() error
 		expectedStatus int
-		expectedBody   string
 	}{
 		{
-			name:           "dev mode - no auth required",
-			mode:           model.ModeDev,
-			authHeader:     "",
-			setupUser:      func() error { return nil },
+			name:           "valid x-api-key",
+			serverKey:      globalKey,
+			xApiKey:        globalKey,
 			expectedStatus: http.StatusOK,
-			expectedBody:   "",
 		},
 		{
-			name:       "enterprise mode - valid token",
-			mode:       model.ModeEnterprise,
-			authHeader: "Bearer test-token",
-			setupUser: func() error {
-				_, err := userService.CreateAdminUser(context.Background())
-				if err != nil {
-					return err
-				}
-				var u model.User
-				err = testDB.Where("username = ?", "admin").First(&u).Error
-				if err != nil {
-					return err
-				}
-				u.AccessToken = "test-token"
-				return testDB.Save(&u).Error
-			},
+			name:           "valid bearer same as key",
+			serverKey:      globalKey,
+			authHeader:     "Bearer " + globalKey,
 			expectedStatus: http.StatusOK,
-			expectedBody:   "",
 		},
 		{
-			name:           "enterprise mode - missing token",
-			mode:           model.ModeEnterprise,
-			authHeader:     "",
-			setupUser:      func() error { return nil },
+			name:           "missing credentials",
+			serverKey:      globalKey,
 			expectedStatus: http.StatusUnauthorized,
-			expectedBody:   `{"error":"missing access token"}`,
+		},
+		{
+			name:           "global key not configured",
+			serverKey:      "",
+			expectedStatus: http.StatusServiceUnavailable,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := tt.setupUser()
-			if err != nil {
-				t.Fatalf("Setup user failed: %v", err)
-			}
-
 			router := gin.New()
-			router.Use(func(c *gin.Context) {
-				if tt.mode != "" {
-					c.Set("mode", tt.mode)
-				}
-			})
-			server := &Server{userService: userService}
+			server := &Server{globalMcpAPIKey: tt.serverKey}
 			router.Use(server.verifyUserAuthForAPIAccess())
 			router.GET("/test", func(c *gin.Context) {
 				c.JSON(http.StatusOK, gin.H{"status": "success"})
 			})
 
 			req := httptest.NewRequest(http.MethodGet, "/test", nil)
+			if tt.xApiKey != "" {
+				req.Header.Set("X-API-Key", tt.xApiKey)
+			}
 			if tt.authHeader != "" {
 				req.Header.Set("Authorization", tt.authHeader)
 			}
@@ -166,9 +193,6 @@ func TestVerifyUserAuthForAPIAccess(t *testing.T) {
 			if w.Code != tt.expectedStatus {
 				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
 			}
-			if tt.expectedBody != "" && w.Body.String() != tt.expectedBody {
-				t.Errorf("Expected body %s, got %s", tt.expectedBody, w.Body.String())
-			}
 		})
 	}
 }
@@ -176,76 +200,19 @@ func TestVerifyUserAuthForAPIAccess(t *testing.T) {
 func TestRequireAdminUser(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	testDB := testhelpers.SetupTestDB(t).DB
-	userService := user.NewUserService(testDB)
+	router := gin.New()
+	server := &Server{}
+	router.Use(server.requireAdminUser())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"status": "success"})
+	})
 
-	tests := []struct {
-		name           string
-		mode           model.ServerMode
-		user           any
-		expectedStatus int
-		expectedBody   string
-	}{
-		{
-			name:           "dev mode - no admin check required",
-			mode:           model.ModeDev,
-			user:           nil,
-			expectedStatus: http.StatusOK,
-			expectedBody:   "",
-		},
-		{
-			name: "enterprise mode - admin user",
-			mode: model.ModeEnterprise,
-			user: &model.User{
-				Model:    gorm.Model{ID: 1},
-				Username: "admin",
-				Role:     types.UserRoleAdmin,
-			},
-			expectedStatus: http.StatusOK,
-			expectedBody:   "",
-		},
-		{
-			name: "enterprise mode - regular user",
-			mode: model.ModeEnterprise,
-			user: &model.User{
-				Model:    gorm.Model{ID: 1},
-				Username: "user",
-				Role:     types.UserRoleUser,
-			},
-			expectedStatus: http.StatusForbidden,
-			expectedBody:   `{"error":"user is not authorized to perform this action"}`,
-		},
-	}
+	req := httptest.NewRequest(http.MethodGet, "/test", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
 
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			router := gin.New()
-			router.Use(func(c *gin.Context) {
-				if tt.mode != "" {
-					c.Set("mode", tt.mode)
-				}
-				if tt.user != nil {
-					c.Set("user", tt.user)
-				}
-			})
-			server := &Server{userService: userService}
-			router.Use(server.requireAdminUser())
-			router.GET("/test", func(c *gin.Context) {
-				c.JSON(http.StatusOK, gin.H{"status": "success"})
-			})
-
-			req := httptest.NewRequest(http.MethodGet, "/test", nil)
-			w := httptest.NewRecorder()
-
-			router.ServeHTTP(w, req)
-
-			if w.Code != tt.expectedStatus {
-				t.Errorf("Expected status %d, got %d", tt.expectedStatus, w.Code)
-			}
-			if tt.expectedBody != "" && w.Body.String() != tt.expectedBody {
-				t.Errorf("Expected body %s, got %s", tt.expectedBody, w.Body.String())
-			}
-		})
+	if w.Code != http.StatusOK {
+		t.Errorf("Expected status %d, got %d", http.StatusOK, w.Code)
 	}
 }
 
@@ -353,43 +320,29 @@ func TestCheckAuthForMcpProxyAccess(t *testing.T) {
 		expectedStatus int
 	}{
 		{
-			name:           "dev mode - no auth required",
+			name:           "valid x-api-key",
 			mode:           model.ModeDev,
-			serverKey:      "",
-			xApiKey:        "",
-			authHeader:     "",
-			expectedStatus: http.StatusOK,
-		},
-		{
-			name:           "enterprise - valid x-api-key",
-			mode:           model.ModeEnterprise,
 			serverKey:      globalKey,
 			xApiKey:        globalKey,
-			authHeader:     "",
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "enterprise - valid bearer same as key",
+			name:           "valid bearer same as key",
 			mode:           model.ModeEnterprise,
 			serverKey:      globalKey,
-			xApiKey:        "",
 			authHeader:     "Bearer " + globalKey,
 			expectedStatus: http.StatusOK,
 		},
 		{
-			name:           "enterprise - missing credentials",
+			name:           "missing credentials",
 			mode:           model.ModeEnterprise,
 			serverKey:      globalKey,
-			xApiKey:        "",
-			authHeader:     "",
 			expectedStatus: http.StatusUnauthorized,
 		},
 		{
-			name:           "enterprise - global key not configured",
-			mode:           model.ModeEnterprise,
+			name:           "global key not configured",
+			mode:           model.ModeDev,
 			serverKey:      "",
-			xApiKey:        "",
-			authHeader:     "",
 			expectedStatus: http.StatusServiceUnavailable,
 		},
 	}
@@ -433,36 +386,16 @@ func TestMiddlewareIntegration(t *testing.T) {
 	testDB := setup.DB
 
 	configService := config.NewServerConfigService(testDB)
-	userService := user.NewUserService(testDB)
 
-	// Setup config
 	_, err := configService.Init(context.Background(), model.ModeEnterprise)
 	if err != nil {
 		t.Fatalf("Setup config failed: %v", err)
 	}
 
-	// Setup user
-	_, err = userService.CreateAdminUser(context.Background())
-	if err != nil {
-		t.Fatalf("Setup user failed: %v", err)
-	}
-
-	// Update user with known token and admin role
-	var u model.User
-	err = testDB.Where("username = ?", "admin").First(&u).Error
-	if err != nil {
-		t.Fatalf("Failed to find admin user: %v", err)
-	}
-	u.AccessToken = "valid-token"
-	u.Role = types.UserRoleAdmin
-	err = testDB.Save(&u).Error
-	if err != nil {
-		t.Fatalf("Failed to save admin user: %v", err)
-	}
-
+	const globalKey = "unit-test-global-mcp-key"
 	server := &Server{
-		configService: configService,
-		userService:   userService,
+		configService:   configService,
+		globalMcpAPIKey: globalKey,
 	}
 	router := gin.New()
 	router.Use(server.requireInitialized())
@@ -473,7 +406,7 @@ func TestMiddlewareIntegration(t *testing.T) {
 	})
 
 	req := httptest.NewRequest(http.MethodGet, "/admin", nil)
-	req.Header.Set("Authorization", "Bearer valid-token")
+	req.Header.Set("X-API-Key", globalKey)
 	w := httptest.NewRecorder()
 
 	router.ServeHTTP(w, req)

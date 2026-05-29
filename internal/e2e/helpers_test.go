@@ -9,7 +9,7 @@
 //   - Tool groups: CRUD, effective-tools, included-servers, excluded-tools
 //   - Tool/prompt operations scoped to a tool group
 //   - Dev mode vs Enterprise mode (auth, permissions, enterprise-only endpoints)
-//   - MCP proxy: enterprise global API key + agent-app credentials for group routes
+//   - MCP proxy: GLOBAL_MCP_API_KEY + agent-app credentials for group routes
 package e2e_test
 
 import (
@@ -73,12 +73,10 @@ type renderedPromptResult struct {
 // Test environment
 // -----------------------------------------------------------------------
 
-// e2eEnv holds a running SAMI MCP Gateway httptest server and associated tokens.
+// e2eEnv holds a running SAMI MCP Gateway httptest server and associated credentials.
 type e2eEnv struct {
 	baseURL         string
-	adminToken      string // populated only in enterprise mode
-	userToken       string // populated only in enterprise mode (regular user)
-	globalMCPAPIKey string // enterprise global MCP key (empty in dev)
+	globalMCPAPIKey string
 	db              *gorm.DB
 }
 
@@ -118,7 +116,6 @@ func decodeJSON(t *testing.T, r *http.Response, target any) {
 // SQLite DB, initialised in the requested mode.
 // HTTP routes are at the host root (HTTP_PATH_PREFIX is unset). To test a
 // prefixed deployment, set HTTP_PATH_PREFIX before start and use baseURL+prefix in requests.
-// In enterprise mode, env.adminToken and env.userToken are set.
 // The server is shut down via t.Cleanup.
 func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 	t.Helper()
@@ -157,16 +154,15 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 	pgSvc, err := promptgroup.NewPromptGroupService(db, mcpService)
 	require.NoError(t, err)
 
-	globalKey := ""
-	if mode == model.ModeEnterprise {
-		globalKey = e2eGlobalMCPAPIKey
+	env := &e2eEnv{
+		globalMCPAPIKey: e2eGlobalMCPAPIKey,
 	}
 
 	apiServer, err := api.NewServer(&api.ServerOptions{
 		MCPProxyServer:     mcpProxy,
 		SseMcpProxyServer:  sseMcpProxy,
 		MCPService:         mcpService,
-		GlobalMCPAPIKey:    globalKey,
+		GlobalMCPAPIKey:    e2eGlobalMCPAPIKey,
 		AgentAppService:    agentapp.New(db, "e2e-agent-app-jwt-signing-key-secret-min-len!!"),
 		ConfigService:      cfgSvc,
 		DashboardService:   dashboard.NewService(db, false),
@@ -177,21 +173,12 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 	})
 	require.NoError(t, err)
 
-	env := &e2eEnv{}
-
 	switch mode {
 	case model.ModeDev:
 		require.NoError(t, apiServer.InitDev())
 	case model.ModeEnterprise:
-		env.globalMCPAPIKey = e2eGlobalMCPAPIKey
 		_, err = cfgSvc.Init(context.Background(), model.ModeEnterprise)
 		require.NoError(t, err)
-		adminUser, err := usrSvc.CreateAdminUser(context.Background())
-		require.NoError(t, err)
-		env.adminToken = adminUser.AccessToken
-		regularUser, err := usrSvc.CreateUser(context.Background(), &model.User{Username: "regularuser"})
-		require.NoError(t, err)
-		env.userToken = regularUser.AccessToken
 	default:
 		t.Fatalf("unsupported server mode: %s", mode)
 	}
@@ -214,14 +201,14 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 
 // registerEverythingServer registers @modelcontextprotocol/server-everything
 // as a stdio upstream named "everything" via the REST API.
-func registerEverythingServer(t *testing.T, env *e2eEnv, token string) {
+func registerEverythingServer(t *testing.T, env *e2eEnv) {
 	t.Helper()
-	registerEverythingServerAs(t, env, "everything", token)
+	registerEverythingServerAs(t, env, "everything")
 }
 
 // registerEverythingServerAs registers @modelcontextprotocol/server-everything
 // under a custom name, allowing multiple instances with different names.
-func registerEverythingServerAs(t *testing.T, env *e2eEnv, name string, token string) {
+func registerEverythingServerAs(t *testing.T, env *e2eEnv, name string) {
 	t.Helper()
 	body := map[string]any{
 		"name":        name,
@@ -230,7 +217,7 @@ func registerEverythingServerAs(t *testing.T, env *e2eEnv, name string, token st
 		"command":     "npx",
 		"args":        []string{"-y", "@modelcontextprotocol/server-everything", "stdio"},
 	}
-	resp := env.do(t, http.MethodPost, "/api/v0/servers", body, token)
+	resp := env.do(t, http.MethodPost, "/api/v0/servers", body, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusCreated, resp.StatusCode, "register server-everything as %q", name)
 }
@@ -265,11 +252,10 @@ func (env *e2eEnv) tenantMCPURL(suffix string) string {
 // newMCPProxyClient creates an initialized StreamableHTTP MCP client on the global /mcp endpoint.
 func newMCPProxyClient(t *testing.T, env *e2eEnv) *client.Client {
 	t.Helper()
-	opts := []transport.StreamableHTTPCOption{}
-	if env.globalMCPAPIKey != "" {
-		opts = append(opts, transport.WithHTTPHeaders(map[string]string{
+	opts := []transport.StreamableHTTPCOption{
+		transport.WithHTTPHeaders(map[string]string{
 			"X-API-Key": env.globalMCPAPIKey,
-		}))
+		}),
 	}
 	c, err := client.NewStreamableHttpClient(env.tenantMCPURL("/mcp"), opts...)
 	require.NoError(t, err)

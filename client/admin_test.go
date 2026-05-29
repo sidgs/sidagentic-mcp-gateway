@@ -13,11 +13,10 @@ func TestInitServer(t *testing.T) {
 
 	t.Run("successful initialization", func(t *testing.T) {
 		expectedResponse := InitServerResponse{
-			AdminAccessToken: "admin-token-123",
+			Status: "Server initialized successfully",
 		}
 
 		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			// Verify request method and path
 			if r.Method != http.MethodPost {
 				t.Errorf("Expected POST method, got %s", r.Method)
 			}
@@ -25,13 +24,11 @@ func TestInitServer(t *testing.T) {
 				t.Errorf("Expected path /init, got %s", r.URL.Path)
 			}
 
-			// Verify content type
 			contentType := r.Header.Get("Content-Type")
 			if contentType != "application/json" {
 				t.Errorf("Expected Content-Type application/json, got %s", contentType)
 			}
 
-			// Verify request body
 			var requestBody struct {
 				Mode string `json:"mode"`
 			}
@@ -42,7 +39,6 @@ func TestInitServer(t *testing.T) {
 				t.Errorf("Expected mode 'production' (for backward compatibility), got %s", requestBody.Mode)
 			}
 
-			// Return success response
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusOK)
 			_ = json.NewEncoder(w).Encode(expectedResponse)
@@ -55,8 +51,8 @@ func TestInitServer(t *testing.T) {
 			t.Fatalf("Unexpected error: %v", err)
 		}
 
-		if response.AdminAccessToken != expectedResponse.AdminAccessToken {
-			t.Errorf("Expected AdminAccessToken %s, got %s", expectedResponse.AdminAccessToken, response.AdminAccessToken)
+		if response.Status != expectedResponse.Status {
+			t.Errorf("Expected Status %s, got %s", expectedResponse.Status, response.Status)
 		}
 	})
 
@@ -84,7 +80,6 @@ func TestInitServer(t *testing.T) {
 	})
 
 	t.Run("network error", func(t *testing.T) {
-		// Use an invalid URL to simulate network error
 		client := NewClient("http://invalid-url-that-does-not-exist", "", &http.Client{})
 		response, err := client.InitServer()
 
@@ -147,11 +142,10 @@ func TestInitServer(t *testing.T) {
 	})
 }
 
-func TestInitServerWithAccessToken(t *testing.T) {
+func TestInitServerWithoutAuthHeader(t *testing.T) {
 	t.Parallel()
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify that no Authorization header is set (init doesn't require auth)
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
 			t.Errorf("Expected no Authorization header for init, got %s", authHeader)
@@ -159,18 +153,17 @@ func TestInitServerWithAccessToken(t *testing.T) {
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(InitServerResponse{AdminAccessToken: "admin-token"})
+		_ = json.NewEncoder(w).Encode(InitServerResponse{Status: "Server initialized successfully"})
 	}))
 	defer server.Close()
 
-	// Test with access token (should be ignored for init)
 	client := NewClient(server.URL, "some-token", &http.Client{})
 	response, err := client.InitServer()
 	if err != nil {
 		t.Fatalf("Unexpected error: %v", err)
 	}
 
-	if response.AdminAccessToken != "admin-token" {
-		t.Errorf("Expected AdminAccessToken 'admin-token', got %s", response.AdminAccessToken)
+	if response.Status != "Server initialized successfully" {
+		t.Errorf("Expected Status 'Server initialized successfully', got %s", response.Status)
 	}
 }

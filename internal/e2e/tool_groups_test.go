@@ -17,14 +17,14 @@ import (
 
 func TestE2E_DevMode_ToolGroup_Create_Get_List_Delete(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	// Create
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
 		"name":           "echogroup",
 		"description":    "Only echo tool",
 		"included_tools": []string{"everything__echo"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 
@@ -33,7 +33,7 @@ func TestE2E_DevMode_ToolGroup_Create_Get_List_Delete(t *testing.T) {
 	assert.Contains(t, createResp, "streamable_http_endpoint")
 
 	// Get
-	resp = env.do(t, http.MethodGet, "/api/v0/tool-groups/echogroup", nil, "")
+	resp = env.do(t, http.MethodGet, "/api/v0/tool-groups/echogroup", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var getResp map[string]any
@@ -41,7 +41,7 @@ func TestE2E_DevMode_ToolGroup_Create_Get_List_Delete(t *testing.T) {
 	assert.Equal(t, "echogroup", getResp["name"])
 
 	// List
-	resp = env.do(t, http.MethodGet, "/api/v0/tool-groups", nil, "")
+	resp = env.do(t, http.MethodGet, "/api/v0/tool-groups", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var groups []map[string]any
@@ -50,12 +50,12 @@ func TestE2E_DevMode_ToolGroup_Create_Get_List_Delete(t *testing.T) {
 	assert.Equal(t, "echogroup", groups[0]["name"])
 
 	// Delete
-	resp = env.do(t, http.MethodDelete, "/api/v0/tool-groups/echogroup", nil, "")
+	resp = env.do(t, http.MethodDelete, "/api/v0/tool-groups/echogroup", nil, env.globalMCPAPIKey)
 	require.Equal(t, http.StatusNoContent, resp.StatusCode)
 	drain(resp)
 
 	// Verify deletion
-	resp = env.do(t, http.MethodGet, "/api/v0/tool-groups/echogroup", nil, "")
+	resp = env.do(t, http.MethodGet, "/api/v0/tool-groups/echogroup", nil, env.globalMCPAPIKey)
 	assert.Equal(t, http.StatusNotFound, resp.StatusCode)
 	drain(resp)
 }
@@ -69,13 +69,13 @@ func TestE2E_DevMode_ToolGroup_Create_Get_List_Delete(t *testing.T) {
 // group, not all globally registered tools.
 func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_ListTools(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
 		"name":             "scoped-tools-group",
 		"security_option": "open",
 		"included_tools":   []string{"everything__echo"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
 
@@ -97,13 +97,13 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_ListTools(t *testing.T) {
 // expected name and a non-empty description.
 func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_GetTool(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
 		"name":             "get-tool-group",
 		"security_option": "open",
 		"included_tools":   []string{"everything__echo"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
 
@@ -129,13 +129,13 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_GetTool(t *testing.T) {
 // response content.
 func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_InvokeTool(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
 		"name":             "invoke-tool-group",
 		"security_option": "open",
 		"included_tools":   []string{"everything__echo"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
 
@@ -161,16 +161,16 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_InvokeTool(t *testing.T) {
 // that the expected server-everything prompts are still accessible.
 func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_ListPrompts(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
 		"name":           "prompts-group",
 		"included_tools": []string{"everything__echo"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
 
-	resp = env.do(t, http.MethodGet, "/api/v0/prompts", nil, "")
+	resp = env.do(t, http.MethodGet, "/api/v0/prompts", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var prompts []map[string]any
@@ -185,16 +185,16 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_ListPrompts(t *testing.T) {
 // group setup.
 func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_GetPrompt(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
 		"name":           "get-prompt-group",
 		"included_tools": []string{"everything__echo"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
 
-	resp = env.do(t, http.MethodGet, "/api/v0/prompt?name=everything__simple-prompt", nil, "")
+	resp = env.do(t, http.MethodGet, "/api/v0/prompt?name=everything__simple-prompt", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var prompt map[string]any
@@ -207,19 +207,19 @@ func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_GetPrompt(t *testing.T) {
 // tool group setup, mirroring the global render test.
 func TestE2E_DevMode_ToolGroup_ViaGroupEndpoint_RenderPrompt(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	resp := env.do(t, http.MethodPost, "/api/v0/tool-groups", map[string]any{
 		"name":           "render-prompt-group",
 		"included_tools": []string{"everything__echo"},
-	}, "")
+	}, env.globalMCPAPIKey)
 	require.Equal(t, http.StatusCreated, resp.StatusCode)
 	drain(resp)
 
 	resp = env.do(t, http.MethodPost, "/api/v0/prompts/render", map[string]any{
 		"name":      "everything__simple-prompt",
 		"arguments": map[string]string{},
-	}, "")
+	}, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 	var rendered renderedPromptResult

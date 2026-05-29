@@ -14,7 +14,7 @@ export interface MCPGatewayDashboardProps {
   tenantId?: string;
   /** Gateway HTTP path prefix (e.g. `/api/v1/sami-mcp-gateway`). */
   httpPathPrefix?: string;
-  /** Initial section when the URL hash is absent. Defaults to `servers`. */
+  /** Initial section when the URL hash is absent. Defaults to `servers`. Cannot be `home`. */
   defaultSection?: AppSection;
   className?: string;
   style?: CSSProperties;

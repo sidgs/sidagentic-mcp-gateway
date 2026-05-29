@@ -36,11 +36,13 @@ You can enable enterprise mode in three ways:
   </Tab>
 </Tabs>
 
-## Initialize the server once
+## First boot and bootstrap admin
 
-After the first boot in enterprise mode, run `sami-mcp-gateway init-server` once from your client machine to create the initial admin identity and authenticate your CLI.
+On first start in enterprise mode, the server **initializes itself automatically**: it persists the enterprise config, creates the bootstrap admin user, and prints the admin access token once to server logs (stdout). Save that token securely — it is shown only on first bootstrap.
 
-For the exact bootstrap flow and command details, see:
+To authenticate your CLI without copying the token from logs, you can optionally run `init-server` from your client machine. That command calls `POST /init` and saves the registry URL and token to `~/.sami-mcp-gateway.conf`.
+
+For bootstrap details and CLI workflow, see:
 
 - [Access and governance overview](/governance/overview)
 - [Enterprise operations](/reference/cli-enterprise)
@@ -95,7 +97,7 @@ docker stop sami-mcp-gateway-server
 | Authentication | Disabled | Required for Users & MCP clients |
 | Access control (ACLs) | Disabled | Enabled |
 | OpenTelemetry metrics | Disabled (opt-in) | Enabled by default |
-| Server initialization | Automatic | Manual (`init-server`) |
+| Server initialization | Automatic on first start | Automatic on first start (bootstrap admin token logged once) |
 
 <Info>
   Even in enterprise mode, you can override metrics with `OTEL_ENABLED=false` if needed, though that is not the recommended default for shared deployments.

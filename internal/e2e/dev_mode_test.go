@@ -16,9 +16,9 @@ import (
 
 func TestE2E_DevMode_ListTools(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
-	resp := env.do(t, http.MethodGet, "/api/v0/tools", nil, "")
+	resp := env.do(t, http.MethodGet, "/api/v0/tools", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -33,9 +33,9 @@ func TestE2E_DevMode_ListTools(t *testing.T) {
 
 func TestE2E_DevMode_GetTool(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
-	resp := env.do(t, http.MethodGet, "/api/v0/tool?name=everything__echo", nil, "")
+	resp := env.do(t, http.MethodGet, "/api/v0/tool?name=everything__echo", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -46,13 +46,13 @@ func TestE2E_DevMode_GetTool(t *testing.T) {
 
 func TestE2E_DevMode_InvokeTool(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	body := map[string]any{
 		"name":    "everything__echo",
 		"message": "hello from e2e test",
 	}
-	resp := env.do(t, http.MethodPost, "/api/v0/tools/invoke", body, "")
+	resp := env.do(t, http.MethodPost, "/api/v0/tools/invoke", body, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -69,9 +69,9 @@ func TestE2E_DevMode_InvokeTool(t *testing.T) {
 
 func TestE2E_DevMode_ListPrompts(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
-	resp := env.do(t, http.MethodGet, "/api/v0/prompts", nil, "")
+	resp := env.do(t, http.MethodGet, "/api/v0/prompts", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -85,9 +85,9 @@ func TestE2E_DevMode_ListPrompts(t *testing.T) {
 
 func TestE2E_DevMode_GetPrompt(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
-	resp := env.do(t, http.MethodGet, "/api/v0/prompt?name=everything__simple-prompt", nil, "")
+	resp := env.do(t, http.MethodGet, "/api/v0/prompt?name=everything__simple-prompt", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -98,13 +98,13 @@ func TestE2E_DevMode_GetPrompt(t *testing.T) {
 
 func TestE2E_DevMode_RenderPrompt(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	body := map[string]any{
 		"name":      "everything__simple-prompt",
 		"arguments": map[string]string{},
 	}
-	resp := env.do(t, http.MethodPost, "/api/v0/prompts/render", body, "")
+	resp := env.do(t, http.MethodPost, "/api/v0/prompts/render", body, env.globalMCPAPIKey)
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
 
@@ -126,7 +126,7 @@ func TestE2E_DevMode_RenderPrompt(t *testing.T) {
 func TestE2E_DevMode_NotFound_DeregisterMissingServer(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 
-	resp := env.do(t, http.MethodDelete, "/api/v0/servers/nonexistent-server", nil, "")
+	resp := env.do(t, http.MethodDelete, "/api/v0/servers/nonexistent-server", nil, env.globalMCPAPIKey)
 	defer drain(resp)
 
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)

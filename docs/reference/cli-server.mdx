@@ -13,7 +13,7 @@ Starts the Mcpgateway HTTP server and MCP gateway.
 sami-mcp-gateway start [flags]
 ```
 
-The server listens on port `8080` by default and exposes the MCP proxy at `/mcp`. On first run in development mode, it automatically initializes itself — no additional setup is needed.
+The server listens on port `8080` by default and exposes the MCP proxy at `/mcp`. On first run, it automatically initializes itself for the selected mode — no additional setup is needed. In enterprise mode on a fresh database, the bootstrap admin access token is printed once to server logs (stdout).
 
 ### Flags
 
@@ -22,7 +22,7 @@ The server listens on port `8080` by default and exposes the MCP proxy at `/mcp`
 </ParamField>
 
 <ParamField body="--enterprise" type="boolean" default="false">
-  Start the server in enterprise mode, which enables access control, authenticated clients, and user management. Equivalent to setting `SERVER_MODE=enterprise`. When using this flag on a fresh database, the server will print a reminder to run `init-server` before it can be used.
+  Start the server in enterprise mode, which enables access control, authenticated clients, and user management. Equivalent to setting `SERVER_MODE=enterprise`. On a fresh database, the server auto-initializes on first start and prints the bootstrap admin access token once to stdout.
 </ParamField>
 
 ### Environment variables
@@ -61,13 +61,13 @@ DATABASE_URL="postgres://user:password@localhost:5432/sami-mcp-gateway" sami-mcp
 
 ## `init-server`
 
-Initializes the Mcpgateway server when running in enterprise mode. Run it once, from your local machine, after the server has started.
+Initializes the Mcpgateway server when running in enterprise mode. This is optional when the server has already auto-initialized on first start — use it to call `POST /init` and save credentials to your local CLI config without copying the bootstrap token from server logs.
 
 ```bash
 sami-mcp-gateway init-server [--registry <url>]
 ```
 
-`init-server` creates the first admin user and stores the registry URL and token in `~/.sami-mcp-gateway.conf`, authenticating your CLI as admin.
+`init-server` creates the first admin user (if the server is not yet initialized) and stores the registry URL and token in `~/.sami-mcp-gateway.conf`, authenticating your CLI as admin.
 
 For the full enterprise bootstrap flow, see [Enterprise operations](/reference/cli-enterprise) and [Access and governance overview](/governance/overview).
 

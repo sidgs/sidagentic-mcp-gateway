@@ -476,9 +476,6 @@ func (s *Server) validOIDCBearerFromRequest(c *gin.Context) (*oidcServerSession,
 	}
 
 	email := strings.TrimSpace(claims.Email)
-	if email == "" {
-		email = strings.TrimSpace(idTok.Email)
-	}
 
 	return &oidcServerSession{
 		ExpiresAt: sessionExpiry(idTok),
@@ -487,7 +484,8 @@ func (s *Server) validOIDCBearerFromRequest(c *gin.Context) (*oidcServerSession,
 	}, true
 }
 
-// requireDashboardModeOrOIDC allows the dashboard when the server is in dev mode, or when OIDC is enabled.
+// requireDashboardModeOrOIDC allows the dashboard in dev mode, when OIDC login is enabled,
+// or when platform UI JWT auth (JWT_SECRET) is configured for embed mode.
 func (s *Server) requireDashboardModeOrOIDC() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		modeVal, exists := c.Get("mode")
@@ -504,7 +502,7 @@ func (s *Server) requireDashboardModeOrOIDC() gin.HandlerFunc {
 			c.Next()
 			return
 		}
-		if s.oidcConfigured() {
+		if s.oidcConfigured() || s.platformJWTConfigured() {
 			c.Next()
 			return
 		}
@@ -512,18 +510,15 @@ func (s *Server) requireDashboardModeOrOIDC() gin.HandlerFunc {
 	}
 }
 
-// requireOIDCSessionIfEnabled redirects unauthenticated browser clients to /login when OIDC is enabled.
+// requireOIDCSessionIfEnabled gates dashboard JSON routes when OIDC login or platform JWT auth is enabled.
+// Accepts Cognito cookie/bearer or platform HS256 bearer (JWT_SECRET).
 func (s *Server) requireOIDCSessionIfEnabled() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if !s.oidcConfigured() {
+		if !s.oidcConfigured() && !s.platformJWTConfigured() {
 			c.Next()
 			return
 		}
-		if _, ok := s.validOIDCSessionFromRequest(c); ok {
-			c.Next()
-			return
-		}
-		if _, ok := s.validOIDCBearerFromRequest(c); ok {
+		if _, ok := s.validDashboardUserFromRequest(c); ok {
 			c.Next()
 			return
 		}

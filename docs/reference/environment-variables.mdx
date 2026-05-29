@@ -101,7 +101,7 @@ When the server starts it resolves the database connection in this order:
   | Mode | Behaviour |
   |---|---|
   | `development` | No authentication enforced. All MCP clients have full access to all registered servers. Ideal for local use. |
-  | `enterprise` | Strict access control, user management, and observability features. Requires running `sami-mcp-gateway init-server` after the first start. |
+  | `enterprise` | Strict access control, user management, and observability features. Auto-initializes on first start; bootstrap admin access token is printed once to server logs. Optionally run `sami-mcp-gateway init-server` to save CLI credentials locally. |
 
   <Note>
     The value `production` is accepted for backward compatibility but is deprecated. Use `enterprise` instead.

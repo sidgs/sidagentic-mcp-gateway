@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"errors"
 	"fmt"
 
 	"sami.io/mcpgateway/cmd/config"
@@ -26,19 +25,12 @@ func init() {
 
 func runInitServer(cmd *cobra.Command, args []string) error {
 	fmt.Println("Initializing the SAMI MCP Gateway Server in Enterprise Mode...")
-	resp, err := apiClient.InitServer()
-	if err != nil {
+	if _, err := apiClient.InitServer(); err != nil {
 		return fmt.Errorf("failed to initialize the server: %w", err)
 	}
 
-	if resp.AdminAccessToken == "" {
-		return errors.New("server initialization failed: no admin access token received")
-	}
-
-	// Create new client configuration
 	cfg := &config.ClientConfig{
 		RegistryURL: apiClient.BaseURL(),
-		AccessToken: resp.AdminAccessToken,
 	}
 	if err := config.Save(cfg); err != nil {
 		return fmt.Errorf("failed to create client configuration: %w", err)
@@ -48,7 +40,8 @@ func runInitServer(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return fmt.Errorf("failed to get client configuration path: %w", err)
 	}
-	fmt.Println("Your Admin access token has been saved to", cfgPath)
+	fmt.Println("Server initialized. Registry URL saved to", cfgPath)
+	fmt.Println("Use GLOBAL_MCP_API_KEY as X-API-Key or Authorization: Bearer <key> for /api/v0 and MCP access.")
 
 	fmt.Println("All done!")
 	return nil

@@ -11,7 +11,7 @@ import (
 )
 
 type InitServerResponse struct {
-	AdminAccessToken string `json:"admin_access_token"`
+	Status string `json:"status"`
 }
 
 // InitServer sends a request to initialize the server in enterprise mode

@@ -8,26 +8,17 @@ import (
 	"strings"
 
 	"github.com/gin-gonic/gin"
+	"sami.io/mcpgateway/internal/mcpgatewayctx"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/apierrors"
 	"sami.io/mcpgateway/pkg/types"
 )
 
-func ownerScopeKeyFromUser(u *model.User) string {
-	return "user:" + strconv.FormatUint(uint64(u.ID), 10)
-}
-
 func (s *Server) agentAppOwnerScopeFromAPIUser(c *gin.Context) (string, error) {
-	mode := c.MustGet("mode").(model.ServerMode)
-	if mode == model.ModeDev {
-		return "dev:api", nil
+	if mcpgatewayctx.GlobalMCPAPIKeyAuth(c.Request.Context()) {
+		return "global:api", nil
 	}
-	uVal, ok := c.Get("user")
-	if !ok {
-		return "", fmt.Errorf("unauthenticated")
-	}
-	u := uVal.(*model.User)
-	return ownerScopeKeyFromUser(u), nil
+	return "", fmt.Errorf("unauthenticated")
 }
 
 func agentAppModelToPublic(a *model.AgentApp) (types.AgentAppPublic, error) {
@@ -296,8 +287,11 @@ func (s *Server) rotateAgentAppSecretHandler() gin.HandlerFunc {
 }
 
 func agentAppOwnerScopeFromDashboard(s *Server, c *gin.Context) (string, error) {
-	if sess, ok := s.validOIDCSessionFromRequest(c); ok {
-		return "oidc:" + sess.Sub, nil
+	if sess, ok := s.validDashboardUserFromRequest(c); ok {
+		if sess.Source == dashboardAuthCognitoCookie {
+			return "oidc:" + sess.Sub, nil
+		}
+		return "ui:" + sess.Sub, nil
 	}
 	mode := c.MustGet("mode").(model.ServerMode)
 	if mode == model.ModeDev {

@@ -152,6 +152,5 @@ type DashboardDiagnosticsResponse struct {
 	ToolCount                int                  `json:"tool_count"`
 	PromptCount              int                  `json:"prompt_count"`
 	ResourceCount            int                  `json:"resource_count"`
-	AdminAccessTokenMasked   string               `json:"admin_access_token_masked,omitempty"`
 	EmptyState               *DashboardEmptyState `json:"empty_state,omitempty"`
 }

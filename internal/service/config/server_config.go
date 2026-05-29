@@ -36,8 +36,9 @@ func (s *ServerConfigService) GetConfig(ctx context.Context) (model.ServerConfig
 }
 
 // Init initializes the server configuration in the database.
-// It is an idempotent operation. It returns true if the config was created.
-// If the config already exists, it returns false and does nothing else.
+// It is an idempotent operation. It returns true if the config was created or
+// updated from an uninitialized row. If the config is already initialized, it
+// returns false and does nothing else.
 func (s *ServerConfigService) Init(ctx context.Context, mode model.ServerMode) (bool, error) {
 	tid := tenant.MustFromContext(ctx)
 	config, err := s.GetConfig(ctx)
@@ -45,14 +46,17 @@ func (s *ServerConfigService) Init(ctx context.Context, mode model.ServerMode) (
 		return false, err
 	}
 	if config.Initialized {
-		// Config already exists, do nothing
 		return false, nil
 	}
-	// No config exists, create one
-	config = model.ServerConfig{
-		TenantID:    tid,
-		Mode:        mode,
-		Initialized: true,
+	if config.ID == 0 {
+		config = model.ServerConfig{
+			TenantID:    tid,
+			Mode:        mode,
+			Initialized: true,
+		}
+		return true, s.db.WithContext(ctx).Create(&config).Error
 	}
-	return true, s.db.WithContext(ctx).Create(&config).Error
+	config.Mode = mode
+	config.Initialized = true
+	return true, s.db.WithContext(ctx).Save(&config).Error
 }

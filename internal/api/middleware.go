@@ -54,7 +54,7 @@ func (s *Server) tenantMiddleware() gin.HandlerFunc {
 // requireInitialized is middleware to reject requests to certain routes if the server is not initialized
 func (s *Server) requireInitialized() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		cfg, err := s.configService.GetConfig(c.Request.Context())
+		cfg, err := s.resolveTenantConfig(c.Request.Context())
 		if err != nil || !cfg.Initialized {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "server is not initialized"})
 			return
@@ -87,79 +87,51 @@ func (s *Server) requireDashboardMode() gin.HandlerFunc {
 	}
 }
 
-// verifyUserAuthForAPIAccess is middleware that checks for a valid user token if the server is in enterprise mode.
-// this middleware doesn't care about the role of the user, it just verifies that they're authenticated.
+func (s *Server) authenticateGlobalMCPAPIKey(c *gin.Context) bool {
+	if s.globalMcpAPIKey == "" {
+		return false
+	}
+
+	apiKey := strings.TrimSpace(c.GetHeader("X-API-Key"))
+	if apiKey != "" && constantTimeStringEqual(apiKey, s.globalMcpAPIKey) {
+		nextCtx := mcpgatewayctx.WithGlobalMCPAPIKeyAuth(c.Request.Context(), true)
+		c.Request = c.Request.WithContext(nextCtx)
+		return true
+	}
+
+	authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+	const bearerPrefix = "Bearer "
+	if len(authHeader) > len(bearerPrefix) && strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
+		tok := strings.TrimSpace(authHeader[len(bearerPrefix):])
+		if tok != "" && constantTimeStringEqual(tok, s.globalMcpAPIKey) {
+			nextCtx := mcpgatewayctx.WithGlobalMCPAPIKeyAuth(c.Request.Context(), true)
+			c.Request = c.Request.WithContext(nextCtx)
+			return true
+		}
+	}
+
+	return false
+}
+
+// verifyUserAuthForAPIAccess requires GLOBAL_MCP_API_KEY as X-API-Key or Authorization: Bearer <key>.
 func (s *Server) verifyUserAuthForAPIAccess() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mode, exists := c.Get("mode")
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server mode not found in context"})
-			return
-		}
-		m, ok := mode.(model.ServerMode)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "invalid server mode in context"})
-			return
-		}
-		if m == model.ModeDev {
-			// no auth is required in case of dev mode
+		if s.authenticateGlobalMCPAPIKey(c) {
 			c.Next()
 			return
 		}
-
-		authHeader := c.GetHeader("Authorization")
-		token := strings.TrimPrefix(authHeader, "Bearer ")
-		if token == "" {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing access token"})
+		if s.globalMcpAPIKey == "" {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "global MCP is not configured (set GLOBAL_MCP_API_KEY)"})
 			return
 		}
-
-		// Verify that the token is valid and corresponds to a user
-		authenticatedUser, err := s.userService.GetUserByAccessToken(c.Request.Context(), token)
-		if err != nil {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid access token: " + err.Error()})
-			return
-		}
-
-		// Store user in context for potential role checks in subsequent handlers
-		c.Set("user", authenticatedUser)
-		c.Next()
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid global MCP credentials"})
 	}
 }
 
-// requireAdminUser is middleware that ensures the authenticated user has an admin role when in enterprise mode.
-// It assumes that verifyUserAuthForAPIAccess middleware has already run and set the user in context.
+// requireAdminUser is retained for route grouping; GLOBAL_MCP_API_KEY already grants full API access.
 func (s *Server) requireAdminUser() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		mode, exists := c.Get("mode")
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "server mode not found in context"})
-			return
-		}
-		m, ok := mode.(model.ServerMode)
-		if !ok {
-			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": "invalid server mode in context"})
-			return
-		}
-		if m == model.ModeDev {
-			// no admin check is required in dev mode
-			c.Next()
-			return
-		}
-
-		authenticatedUser, exists := c.Get("user")
-		if !exists {
-			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "user is not authenticated"})
-			return
-		}
-
-		u, ok := authenticatedUser.(*model.User)
-		if ok && u.Role == types.UserRoleAdmin {
-			c.Next()
-			return
-		}
-
-		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"error": "user is not authorized to perform this action"})
+		c.Next()
 	}
 }
 
@@ -206,8 +178,7 @@ func constantTimeStringEqual(a, b string) bool {
 }
 
 // checkAuthForMcpProxyAccess gates the global MCP proxy (/mcp, /sse, /message).
-// In development mode, no authentication is required.
-// In enterprise mode, clients must send GLOBAL_MCP_API_KEY as X-API-Key or Authorization: Bearer <key>.
+// Clients must send GLOBAL_MCP_API_KEY as X-API-Key or Authorization: Bearer <key>.
 func (s *Server) checkAuthForMcpProxyAccess() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mode, exists := c.Get("mode")
@@ -224,36 +195,14 @@ func (s *Server) checkAuthForMcpProxyAccess() gin.HandlerFunc {
 		ctx := context.WithValue(c.Request.Context(), "mode", m)
 		c.Request = c.Request.WithContext(ctx)
 
-		if m == model.ModeDev {
+		if s.authenticateGlobalMCPAPIKey(c) {
 			c.Next()
 			return
 		}
-
 		if s.globalMcpAPIKey == "" {
 			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "global MCP is not configured (set GLOBAL_MCP_API_KEY)"})
 			return
 		}
-
-		apiKey := strings.TrimSpace(c.GetHeader("X-API-Key"))
-		if apiKey != "" && constantTimeStringEqual(apiKey, s.globalMcpAPIKey) {
-			nextCtx := mcpgatewayctx.WithGlobalMCPAPIKeyAuth(c.Request.Context(), true)
-			c.Request = c.Request.WithContext(nextCtx)
-			c.Next()
-			return
-		}
-
-		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
-		const bearerPrefix = "Bearer "
-		if len(authHeader) > len(bearerPrefix) && strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
-			tok := strings.TrimSpace(authHeader[len(bearerPrefix):])
-			if tok != "" && constantTimeStringEqual(tok, s.globalMcpAPIKey) {
-				nextCtx := mcpgatewayctx.WithGlobalMCPAPIKeyAuth(c.Request.Context(), true)
-				c.Request = c.Request.WithContext(nextCtx)
-				c.Next()
-				return
-			}
-		}
-
 		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid global MCP credentials"})
 	}
 }

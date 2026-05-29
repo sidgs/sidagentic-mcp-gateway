@@ -2,23 +2,11 @@ package api
 
 import (
 	"net/http"
-	"strings"
 
 	"github.com/gin-gonic/gin"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/types"
 )
-
-func maskBearerToken(token string) string {
-	t := strings.TrimSpace(token)
-	if t == "" {
-		return ""
-	}
-	if len(t) <= 8 {
-		return "••••••••"
-	}
-	return t[:4] + "…" + t[len(t)-4:]
-}
 
 func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
@@ -26,6 +14,22 @@ func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 		logoutPath := OIDCUIRootRelativePath(s.httpPathPrefix, "logout")
 
 		if !s.oidcConfigured() {
+			if s.platformJWTConfigured() {
+				if sess, ok := s.validPlatformBearerFromRequest(c); ok {
+					c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+						Authenticated: true,
+						OIDCEnabled:   false,
+						Email:         sess.Email,
+						Sub:           sess.Sub,
+					})
+					return
+				}
+				c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+					Authenticated: false,
+					OIDCEnabled:   false,
+				})
+				return
+			}
 			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
 				Authenticated: true,
 				OIDCEnabled:   false,
@@ -33,18 +37,7 @@ func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 			return
 		}
 
-		if sess, ok := s.validOIDCSessionFromRequest(c); ok {
-			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
-				Authenticated: true,
-				OIDCEnabled:   true,
-				LogoutPath:    logoutPath,
-				Email:         sess.Email,
-				Sub:           sess.Sub,
-			})
-			return
-		}
-
-		if sess, ok := s.validOIDCBearerFromRequest(c); ok {
+		if sess, ok := s.validDashboardUserFromRequest(c); ok {
 			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
 				Authenticated: true,
 				OIDCEnabled:   true,
@@ -130,16 +123,6 @@ func (s *Server) dashboardDiagnosticsHandler() gin.HandlerFunc {
 		if err != nil {
 			handleServiceError(c, err)
 			return
-		}
-		if model.IsEnterpriseMode(mode) {
-			admin, err := s.userService.GetBootstrapAdminUser(c.Request.Context())
-			if err != nil {
-				handleServiceError(c, err)
-				return
-			}
-			if admin != nil && admin.AccessToken != "" {
-				resp.AdminAccessTokenMasked = maskBearerToken(admin.AccessToken)
-			}
 		}
 		c.JSON(http.StatusOK, resp)
 	}

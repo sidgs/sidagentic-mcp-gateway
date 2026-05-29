@@ -9,6 +9,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 BIN_PATH="${BIN_PATH:-$ROOT_DIR/bin/sami-mcp-gateway}"
 PORT="${PORT:-9101}"
+GLOBAL_MCP_API_KEY="${GLOBAL_MCP_API_KEY:-test-api-error-responses-global-key}"
 BASE_URL="http://127.0.0.1:${PORT}"
 API_BASE_URL="${BASE_URL}/api/v0"
 
@@ -285,6 +286,7 @@ ensure_fresh_binary
 log "Starting isolated SAMI MCP Gateway server on port ${PORT}"
 (
   cd "$TMP_DIR"
+  export GLOBAL_MCP_API_KEY
   exec "$BIN_PATH" start --enterprise --port "$PORT"
 ) >"$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
@@ -302,13 +304,7 @@ if [[ "$init_status" != "200" ]]; then
   exit 1
 fi
 
-ADMIN_TOKEN="$(extract_json_string_field "admin_access_token" "$init_body")"
-if [[ -z "$ADMIN_TOKEN" ]]; then
-  FAILED=1
-  echo "ERROR: init response did not contain admin_access_token" >&2
-  echo "Body: ${init_body}" >&2
-  exit 1
-fi
+API_TOKEN="$GLOBAL_MCP_API_KEY"
 
 # Dashboard must stay hidden in enterprise mode.
 assert_status \
@@ -347,7 +343,7 @@ assert_status \
   "/api/v0/servers" \
   "400" \
   "invalid server name" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"bad__server","transport":"stdio","command":"echo"}'
 
 assert_status \
@@ -356,7 +352,7 @@ assert_status \
   "/api/v0/servers" \
   "400" \
   "must be a valid http or https url" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"bad-http-url","transport":"streamable_http","url":"http:///missing-host"}'
 
 assert_status \
@@ -365,7 +361,7 @@ assert_status \
   "/api/v0/servers" \
   "400" \
   "cannot unmarshal" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"bad-oauth-scopes","transport":"streamable_http","url":"https://example.com/mcp","oauth_scopes":"mcp.read"}'
 
 log "register oauth server without redirect uri returns machine-readable oauth-required code"
@@ -374,7 +370,7 @@ wait_for_health "${OAUTH_MOCK_URL}/healthz"
 oauth_required_result="$(request \
   "POST" \
   "/api/v0/servers" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   "{\"name\":\"oauth-no-redirect\",\"transport\":\"streamable_http\",\"url\":\"${OAUTH_MOCK_URL}/mcp\"}")"
 oauth_required_status="$(printf "%s" "$oauth_required_result" | sed -n '1p')"
 oauth_required_body="$(printf "%s" "$oauth_required_result" | sed -n '2,$p')"
@@ -398,7 +394,7 @@ assert_status \
   "/api/v0/upstream_oauth/sessions/test-session/complete" \
   "400" \
   "unexpected EOF" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{'
 
 assert_status \
@@ -407,7 +403,7 @@ assert_status \
   "/api/v0/upstream_oauth/sessions/test-session/complete" \
   "400" \
   "session_id, code and state are required" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{}'
 
 assert_status \
@@ -416,7 +412,7 @@ assert_status \
   "/api/v0/upstream_oauth/sessions/ghost-session/complete" \
   "404" \
   "upstream OAuth session not found" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"code":"abc123","state":"xyz789"}'
 
 assert_status \
@@ -425,7 +421,7 @@ assert_status \
   "/api/v0/tool?name=invalid-name" \
   "400" \
   "does not contain a __ separator" \
-  "$ADMIN_TOKEN"
+  "$API_TOKEN"
 
 assert_status \
   "get tool returns not found for valid canonical name" \
@@ -433,7 +429,7 @@ assert_status \
   "/api/v0/tool?name=noserver__notool" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN"
+  "$API_TOKEN"
 
 assert_status \
   "invoke tool rejects invalid canonical name" \
@@ -441,7 +437,7 @@ assert_status \
   "/api/v0/tools/invoke" \
   "400" \
   "does not contain a __ separator" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"invalid-name"}'
 
 assert_status \
@@ -450,7 +446,7 @@ assert_status \
   "/api/v0/prompt?name=invalid-name" \
   "400" \
   "does not contain a __ separator" \
-  "$ADMIN_TOKEN"
+  "$API_TOKEN"
 
 assert_status \
   "get prompt returns not found for valid canonical name" \
@@ -458,7 +454,7 @@ assert_status \
   "/api/v0/prompt?name=noserver__noprompt" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN"
+  "$API_TOKEN"
 
 assert_status \
   "get resource rejects invalid mcpj uri" \
@@ -466,7 +462,7 @@ assert_status \
   "/api/v0/resources/get" \
   "400" \
   "not a valid SAMI MCP Gateway resource URI" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"uri":"not-a-mcpj-uri"}'
 
 assert_status \
@@ -475,7 +471,7 @@ assert_status \
   "/api/v0/resources/get" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"uri":"mcpj://res/ghost-server/ZmlsZTovL2Zvby50eHQ"}'
 
 assert_status \
@@ -484,7 +480,7 @@ assert_status \
   "/api/v0/resources/read" \
   "400" \
   "not a valid SAMI MCP Gateway resource URI" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"uri":"not-a-mcpj-uri"}'
 
 assert_status \
@@ -493,7 +489,7 @@ assert_status \
   "/api/v0/resources/read" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"uri":"mcpj://res/ghost-server/ZmlsZTovL2Zvby50eHQ"}'
 
 assert_status \
@@ -502,7 +498,7 @@ assert_status \
   "/api/v0/tool-groups" \
   "400" \
   "invalid group name" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"-bad-group","included_tools":["ghost__tool"]}'
 
 assert_status \
@@ -511,7 +507,7 @@ assert_status \
   "/api/v0/tool-groups" \
   "400" \
   "at least one tool" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"empty-group"}'
 
 assert_status \
@@ -520,7 +516,7 @@ assert_status \
   "/api/v0/tool-groups/ghost-group" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN"
+  "$API_TOKEN"
 
 assert_status \
   "update tool group returns not found when group is missing" \
@@ -528,7 +524,7 @@ assert_status \
   "/api/v0/tool-groups/ghost-group" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"ghost-group","description":"updated"}'
 
 assert_status \
@@ -537,7 +533,7 @@ assert_status \
   "/api/v0/clients" \
   "400" \
   "invalid access token" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"bad-client","access_token":"invalid token with spaces"}'
 
 assert_status \
@@ -546,7 +542,7 @@ assert_status \
   "/api/v0/clients" \
   "201" \
   "" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"name":"good-client"}'
 
 assert_status \
@@ -555,7 +551,7 @@ assert_status \
   "/api/v0/clients/good-client" \
   "400" \
   "invalid access token" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"access_token":"invalid token with spaces"}'
 
 assert_status \
@@ -564,7 +560,7 @@ assert_status \
   "/api/v0/clients/ghost-client" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"access_token":"validtoken12345"}'
 
 assert_status \
@@ -573,7 +569,7 @@ assert_status \
   "/api/v0/users" \
   "400" \
   "invalid access token" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"username":"bad-user","access_token":"bad token"}'
 
 assert_status \
@@ -582,7 +578,7 @@ assert_status \
   "/api/v0/users" \
   "201" \
   "" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"username":"alice","access_token":"validtoken12345"}'
 
 assert_status \
@@ -591,7 +587,7 @@ assert_status \
   "/api/v0/users/alice" \
   "400" \
   "invalid access token" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"username":"alice","access_token":"bad token"}'
 
 assert_status \
@@ -600,7 +596,7 @@ assert_status \
   "/api/v0/users/ghost" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN" \
+  "$API_TOKEN" \
   '{"username":"ghost","access_token":"validtoken67890"}'
 
 assert_status \
@@ -609,7 +605,7 @@ assert_status \
   "/api/v0/users/ghost" \
   "404" \
   "not found" \
-  "$ADMIN_TOKEN"
+  "$API_TOKEN"
 
 assert_status \
   "delete admin user rejects invalid operation" \
@@ -617,6 +613,6 @@ assert_status \
   "/api/v0/users/admin" \
   "400" \
   "cannot delete an admin user" \
-  "$ADMIN_TOKEN"
+  "$API_TOKEN"
 
 log "All API error response checks passed"

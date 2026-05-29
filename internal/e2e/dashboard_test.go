@@ -29,7 +29,7 @@ func TestDashboardRootServedInDevMode(t *testing.T) {
 func TestDashboardRootHiddenInEnterpriseMode(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
-	resp := env.do(t, http.MethodGet, "/", nil, env.adminToken)
+	resp := env.do(t, http.MethodGet, "/", nil, "")
 	defer drain(resp)
 
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -38,7 +38,7 @@ func TestDashboardRootHiddenInEnterpriseMode(t *testing.T) {
 func TestDashboardAPIHiddenInEnterpriseMode(t *testing.T) {
 	env := setupE2EServer(t, model.ModeEnterprise)
 
-	resp := env.do(t, http.MethodGet, "/dashboard/overview", nil, env.adminToken)
+	resp := env.do(t, http.MethodGet, "/dashboard/overview", nil, "")
 	defer drain(resp)
 
 	require.Equal(t, http.StatusNotFound, resp.StatusCode)
@@ -68,7 +68,7 @@ func TestDashboardAPIEmptyStates(t *testing.T) {
 
 func TestDashboardAPIValidJSON(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	paths := []string{
 		"/dashboard/overview",
@@ -329,7 +329,7 @@ func TestDashboardMutationsAndProxyExposure(t *testing.T) {
 
 func TestDashboardToolGroupsCRUDAndValidation(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
-	registerEverythingServer(t, env, "")
+	registerEverythingServer(t, env)
 
 	listResp := env.do(t, http.MethodGet, "/dashboard/tool-groups", nil, "")
 	defer drain(listResp)
