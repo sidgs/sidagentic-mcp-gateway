@@ -34,7 +34,7 @@ type ManagedSession struct {
 // SessionManager manages persistent connections to MCP servers configured in stateful mode.
 type SessionManager struct {
 	mu       sync.RWMutex
-	sessions map[string]*ManagedSession // key: tenant::serverName
+	sessions map[string]*ManagedSession // key: tenant__serverName
 
 	idleTimeoutSec    int
 	initReqTimeoutSec int

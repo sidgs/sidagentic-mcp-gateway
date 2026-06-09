@@ -23,7 +23,7 @@ const (
 	DefaultID = "sami"
 
 	// ProxyNameSep separates tenant id from the canonical tool name in the MCP proxy.
-	ProxyNameSep = "::"
+	ProxyNameSep = "__"
 )
 
 var validTenantID = regexp.MustCompile(`^[a-zA-Z0-9_-]+$`)
@@ -40,6 +40,18 @@ func Validate(id string) error {
 		return fmt.Errorf("tenant id must match %s: %w", validTenantID, apierrors.ErrInvalidInput)
 	}
 	return nil
+}
+
+// PresentID returns a trimmed, validated tenant id when one is present.
+func PresentID(id string) (string, bool) {
+	id = strings.TrimSpace(id)
+	if id == "" {
+		return "", false
+	}
+	if err := Validate(id); err != nil {
+		return "", false
+	}
+	return id, true
 }
 
 // WithContext returns a context that carries tenantID for downstream DB and services.
@@ -63,35 +75,54 @@ func MustFromContext(ctx context.Context) string {
 	return DefaultID
 }
 
-// QualifyProxyName prefixes the canonical MCP name (e.g. server__tool) for the global proxy registry.
+// QualifyProxyName prefixes the canonical MCP name (e.g. server__tool) only when tenantID is present.
 func QualifyProxyName(tenantID, canonicalName string) string {
-	return tenantID + ProxyNameSep + canonicalName
+	id, ok := PresentID(tenantID)
+	if !ok {
+		return canonicalName
+	}
+	return id + ProxyNameSep + canonicalName
 }
 
-// SplitProxyToolName splits "tenant::server__tool". If there is no tenant prefix, qualified is false
-// and rest is the full name (legacy canonical form).
+// SplitProxyToolName splits "tenant__server__tool" when an explicit tenant prefix is present.
+// If there is no tenant prefix, qualified is false and rest is the full name (canonical form).
 func SplitProxyToolName(full string) (tenantID, rest string, qualified bool) {
-	if !strings.Contains(full, ProxyNameSep) {
+	idx := strings.Index(full, ProxyNameSep)
+	if idx <= 0 {
 		return "", full, false
 	}
-	tenantID, rest, ok := strings.Cut(full, ProxyNameSep)
-	if !ok || tenantID == "" {
+	candidate := full[:idx]
+	id, ok := PresentID(candidate)
+	if !ok {
 		return "", full, false
 	}
-	return tenantID, rest, true
+	remainder := full[idx+len(ProxyNameSep):]
+	if remainder == "" || !strings.Contains(remainder, ProxyNameSep) {
+		return "", full, false
+	}
+	return id, remainder, true
 }
 
 // SessionKey combines tenant and server name for session manager map keys.
 func SessionKey(tenantID, serverName string) string {
-	return tenantID + ProxyNameSep + serverName
+	if id, ok := PresentID(tenantID); ok {
+		return id + ProxyNameSep + serverName
+	}
+	return serverName
 }
 
 // ToolGroupMapKey combines tenant and tool group name for in-memory maps.
 func ToolGroupMapKey(tenantID, groupName string) string {
-	return tenantID + ProxyNameSep + groupName
+	if id, ok := PresentID(tenantID); ok {
+		return id + ProxyNameSep + groupName
+	}
+	return groupName
 }
 
 // PromptGroupMapKey combines tenant and prompt group name so caches stay distinct from tool groups with the same display name.
 func PromptGroupMapKey(tenantID, groupName string) string {
-	return "pg" + ProxyNameSep + tenantID + ProxyNameSep + groupName
+	if id, ok := PresentID(tenantID); ok {
+		return "pg" + ProxyNameSep + id + ProxyNameSep + groupName
+	}
+	return "pg" + ProxyNameSep + groupName
 }

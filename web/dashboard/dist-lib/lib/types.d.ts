@@ -89,6 +89,9 @@ export interface DashboardToolGroup {
     name: string;
     description?: string;
     security_option: GroupSecurityOption;
+    included_tools: string[];
+    included_servers: string[];
+    excluded_tools: string[];
     tool_count: number;
     tools: DashboardToolGroupTool[];
     streamable_http_endpoint: string;
@@ -186,6 +189,8 @@ export interface DashboardCreateToolGroupInput {
     name: string;
     description?: string;
     tools: string[];
+    included_servers?: string[];
+    excluded_tools?: string[];
     security_option?: GroupSecurityOption;
 }
 export interface DashboardCreatePromptGroupInput {
@@ -197,6 +202,8 @@ export interface DashboardCreatePromptGroupInput {
 export interface DashboardUpdateToolGroupInput {
     description?: string;
     tools: string[];
+    included_servers?: string[];
+    excluded_tools?: string[];
     security_option?: GroupSecurityOption;
 }
 export interface DashboardUpdatePromptGroupInput {

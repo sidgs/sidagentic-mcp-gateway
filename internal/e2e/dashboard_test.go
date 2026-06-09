@@ -380,6 +380,63 @@ func TestDashboardToolGroupsCRUDAndValidation(t *testing.T) {
 	require.Empty(t, finalPayload["tool_groups"])
 }
 
+func TestDashboardToolGroupsServersAndExclusions(t *testing.T) {
+	env := setupE2EServer(t, model.ModeDev)
+	registerEverythingServer(t, env)
+
+	serverOnlyResp := env.do(t, http.MethodPost, "/dashboard/tool-groups", map[string]any{
+		"name":             "server-only",
+		"included_servers": []string{"everything"},
+	}, "")
+	defer drain(serverOnlyResp)
+	require.Equal(t, http.StatusCreated, serverOnlyResp.StatusCode)
+
+	var serverOnly map[string]any
+	decodeJSON(t, serverOnlyResp, &serverOnly)
+	require.Equal(t, "server-only", serverOnly["name"])
+	require.Greater(t, serverOnly["tool_count"].(float64), float64(0))
+	includedServers := serverOnly["included_servers"].([]any)
+	require.Len(t, includedServers, 1)
+	require.Equal(t, "everything", includedServers[0])
+
+	exclusionResp := env.do(t, http.MethodPost, "/dashboard/tool-groups", map[string]any{
+		"name":             "server-minus-one",
+		"included_servers": []string{"everything"},
+		"excluded_tools":   []string{"everything__get-sum"},
+	}, "")
+	defer drain(exclusionResp)
+	require.Equal(t, http.StatusCreated, exclusionResp.StatusCode)
+
+	var withExclusion map[string]any
+	decodeJSON(t, exclusionResp, &withExclusion)
+	require.Equal(t, float64(serverOnly["tool_count"].(float64)-1), withExclusion["tool_count"])
+
+	effective := withExclusion["tools"].([]any)
+	for _, item := range effective {
+		tool := item.(map[string]any)
+		require.NotEqual(t, "everything__get-sum", tool["canonical_name"])
+	}
+
+	updateResp := env.do(t, http.MethodPut, "/dashboard/tool-groups/server-minus-one", map[string]any{
+		"description":      "unchanged config",
+		"tools":            []string{},
+		"included_servers": []string{"everything"},
+		"excluded_tools":   []string{"everything__get-sum"},
+	}, "")
+	defer drain(updateResp)
+	require.Equal(t, http.StatusOK, updateResp.StatusCode)
+
+	var updated map[string]any
+	decodeJSON(t, updateResp, &updated)
+	require.Equal(t, "unchanged config", updated["description"])
+	updatedServers := updated["included_servers"].([]any)
+	require.Len(t, updatedServers, 1)
+	require.Equal(t, "everything", updatedServers[0])
+	updatedExcluded := updated["excluded_tools"].([]any)
+	require.Len(t, updatedExcluded, 1)
+	require.Equal(t, "everything__get-sum", updatedExcluded[0])
+}
+
 func TestDashboardRegisterServerHandlesOAuth(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 	upstream := newMockOAuthMCPServer(t)

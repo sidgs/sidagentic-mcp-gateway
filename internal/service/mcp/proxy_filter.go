@@ -25,11 +25,9 @@ func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 		reqTenant := tenant.MustFromContext(ctx)
 		var out []mcp.Tool
 		for _, tool := range tools {
-			tt, _, qual := tenant.SplitProxyToolName(tool.Name)
-			if !qual || tt != reqTenant {
-				continue
+			if devProxyToolMatches(ctx, tool.Name, reqTenant) {
+				out = append(out, tool)
 			}
-			out = append(out, tool)
 		}
 		return out
 	}
@@ -63,6 +61,18 @@ func ProxyToolFilter(ctx context.Context, tools []mcp.Tool) []mcp.Tool {
 	}
 
 	return nil
+}
+
+func devProxyToolMatches(ctx context.Context, toolName, reqTenant string) bool {
+	toolTenant, _, qual := tenant.SplitProxyToolName(toolName)
+	if qual {
+		return toolTenant == reqTenant
+	}
+	if _, hasTenant := tenant.FromContext(ctx); !hasTenant {
+		return false
+	}
+	_, _, ok := splitServerToolName(toolName)
+	return ok
 }
 
 func tenantQualifiedEnterpriseTools(ctx context.Context, tools []mcp.Tool) []mcp.Tool {

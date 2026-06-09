@@ -22,13 +22,16 @@ func TestMcpProxyToolFilter(t *testing.T) {
 		wantNames []string
 	}{
 		{
-			name: "development mode returns tenant-qualified tools only",
+			name: "development mode returns tenant-qualified and canonical tools for request tenant",
 			mode: model.ModeDev,
 			tools: []mcp.Tool{
 				{Name: tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
 				{Name: "deepwiki__search_wiki"},
 			},
-			wantNames: []string{tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time")},
+			wantNames: []string{
+				tenant.QualifyProxyName(tenant.DefaultID, "time__get_current_time"),
+				"deepwiki__search_wiki",
+			},
 		},
 		{
 			name: "enterprise global MCP key returns all well-formed tenant tools",

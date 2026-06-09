@@ -18,27 +18,59 @@ export function appSectionToHash(section: AppSection): string {
   return `#/${section}`;
 }
 
+export type ToolGroupFormMode = "create" | "edit" | null;
+
 export type HashRoute = {
   section: AppSection | null;
   agentAppId: number | null;
   serverName: string | null;
   toolGroupName: string | null;
+  toolGroupFormMode: ToolGroupFormMode;
+  toolGroupEditName: string | null;
   promptGroupName: string | null;
   toolCanonicalName: string | null;
   promptCanonicalName: string | null;
 };
 
 function decodeRouteSegment(parts: string[], fromIndex: number): string | null {
-  if (fromIndex >= parts.length) {
+  return decodeRouteSegmentRange(parts, fromIndex, parts.length);
+}
+
+function decodeRouteSegmentRange(parts: string[], fromIndex: number, toIndexExclusive: number): string | null {
+  if (fromIndex >= toIndexExclusive || fromIndex >= parts.length) {
     return null;
   }
-  const raw = parts.slice(fromIndex).join("/");
+  const raw = parts.slice(fromIndex, toIndexExclusive).join("/");
   try {
     const decoded = decodeURIComponent(raw);
     return decoded.length > 0 ? decoded : null;
   } catch {
     return null;
   }
+}
+
+function parseToolGroupSubroute(parts: string[]): Pick<
+  HashRoute,
+  "toolGroupName" | "toolGroupFormMode" | "toolGroupEditName"
+> {
+  if (parts.length < 2) {
+    return { toolGroupName: null, toolGroupFormMode: null, toolGroupEditName: null };
+  }
+  if (parts[1] === "new" && parts.length === 2) {
+    return { toolGroupName: null, toolGroupFormMode: "create", toolGroupEditName: null };
+  }
+  if (parts.length >= 3 && parts[parts.length - 1] === "edit") {
+    return {
+      toolGroupName: null,
+      toolGroupFormMode: "edit",
+      toolGroupEditName: decodeRouteSegmentRange(parts, 1, parts.length - 1),
+    };
+  }
+  return {
+    toolGroupName: decodeRouteSegment(parts, 1),
+    toolGroupFormMode: null,
+    toolGroupEditName: null,
+  };
 }
 
 /**
@@ -58,6 +90,8 @@ export function parseHashRoute(): HashRoute {
       agentAppId: null,
       serverName: null,
       toolGroupName: null,
+      toolGroupFormMode: null,
+      toolGroupEditName: null,
       promptGroupName: null,
       toolCanonicalName: null,
       promptCanonicalName: null,
@@ -74,7 +108,10 @@ export function parseHashRoute(): HashRoute {
   }
 
   const serverName = section === "servers" ? decodeRouteSegment(parts, 1) : null;
-  const toolGroupName = section === "tool_groups" ? decodeRouteSegment(parts, 1) : null;
+  const toolGroupRoute =
+    section === "tool_groups"
+      ? parseToolGroupSubroute(parts)
+      : { toolGroupName: null, toolGroupFormMode: null, toolGroupEditName: null };
   const promptGroupName = section === "prompt_groups" ? decodeRouteSegment(parts, 1) : null;
   const toolCanonicalName = section === "tools" ? decodeRouteSegment(parts, 1) : null;
   const promptCanonicalName = section === "prompts" ? decodeRouteSegment(parts, 1) : null;
@@ -83,7 +120,9 @@ export function parseHashRoute(): HashRoute {
     section,
     agentAppId: section === "agent_apps" ? agentAppId : null,
     serverName: section === "servers" ? serverName : null,
-    toolGroupName: section === "tool_groups" ? toolGroupName : null,
+    toolGroupName: section === "tool_groups" ? toolGroupRoute.toolGroupName : null,
+    toolGroupFormMode: section === "tool_groups" ? toolGroupRoute.toolGroupFormMode : null,
+    toolGroupEditName: section === "tool_groups" ? toolGroupRoute.toolGroupEditName : null,
     promptGroupName: section === "prompt_groups" ? promptGroupName : null,
     toolCanonicalName: section === "tools" ? toolCanonicalName : null,
     promptCanonicalName: section === "prompts" ? promptCanonicalName : null,
@@ -108,6 +147,16 @@ export function serverDetailHash(name: string): string {
 /** Bookmarkable hash with a tool group expanded (name is URL-encoded). */
 export function toolGroupDetailHash(name: string): string {
   return `#/tool_groups/${encodeURIComponent(name)}`;
+}
+
+/** Bookmarkable hash for creating a tool group. */
+export function toolGroupCreateHash(): string {
+  return "#/tool_groups/new";
+}
+
+/** Bookmarkable hash for editing a tool group (name is URL-encoded). */
+export function toolGroupEditHash(name: string): string {
+  return `#/tool_groups/${encodeURIComponent(name)}/edit`;
 }
 
 /** Bookmarkable hash with a prompt group expanded (name is URL-encoded). */

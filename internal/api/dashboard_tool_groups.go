@@ -12,17 +12,21 @@ import (
 )
 
 type dashboardToolGroupCreateRequest struct {
-	Name             string   `json:"name"`
-	Description      string   `json:"description"`
-	Tools            []string `json:"tools"`
-	SecurityOption   string   `json:"security_option,omitempty"`
+	Name            string   `json:"name"`
+	Description     string   `json:"description"`
+	Tools           []string `json:"tools"`
+	IncludedServers []string `json:"included_servers"`
+	ExcludedTools   []string `json:"excluded_tools"`
+	SecurityOption  string   `json:"security_option,omitempty"`
 }
 
-// dashboardToolGroupUpdateRequest is the JSON body for PUT /dashboard/tool-groups/:name (dashboard-only curated lists).
+// dashboardToolGroupUpdateRequest is the JSON body for PUT /dashboard/tool-groups/:name.
 type dashboardToolGroupUpdateRequest struct {
-	Description    string   `json:"description"`
-	Tools          []string `json:"tools"`
-	SecurityOption string   `json:"security_option,omitempty"`
+	Description     string   `json:"description"`
+	Tools           []string `json:"tools"`
+	IncludedServers []string `json:"included_servers"`
+	ExcludedTools   []string `json:"excluded_tools"`
+	SecurityOption  string   `json:"security_option,omitempty"`
 }
 
 type dashboardToolGroupTool struct {
@@ -36,6 +40,9 @@ type dashboardToolGroup struct {
 	Name                   string                   `json:"name"`
 	Description            string                   `json:"description,omitempty"`
 	SecurityOption         string                   `json:"security_option"`
+	IncludedTools          []string                 `json:"included_tools"`
+	IncludedServers        []string                 `json:"included_servers"`
+	ExcludedTools          []string                 `json:"excluded_tools"`
 	ToolCount              int                      `json:"tool_count"`
 	Tools                  []dashboardToolGroupTool `json:"tools"`
 	StreamableHTTPEndpoint string                   `json:"streamable_http_endpoint"`
@@ -46,6 +53,17 @@ type dashboardToolGroup struct {
 type dashboardToolGroupsResponse struct {
 	ToolGroups []dashboardToolGroup       `json:"tool_groups"`
 	EmptyState *types.DashboardEmptyState `json:"empty_state,omitempty"`
+}
+
+func marshalStringSliceJSON(items []string) (datatypes.JSON, error) {
+	if items == nil {
+		items = []string{}
+	}
+	b, err := json.Marshal(items)
+	if err != nil {
+		return nil, err
+	}
+	return datatypes.JSON(b), nil
 }
 
 func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
@@ -73,11 +91,7 @@ func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
 			resp.EmptyState = &types.DashboardEmptyState{
 				Title:       "No tool groups configured yet.",
 				Description: "Create a tool group to expose a focused subset of MCP tools.",
-				Commands: []string{
-					// fmt.Sprintf("%s create group --conf group.json", cliapp.ExecutableName),
-					// fmt.Sprintf("%s list groups", cliapp.ExecutableName),
-					// fmt.Sprintf("%s get group <group-name>", cliapp.ExecutableName),
-				},
+				Commands:    []string{},
 			}
 		}
 
@@ -110,24 +124,42 @@ func (s *Server) dashboardCreateToolGroupHandler() gin.HandlerFunc {
 			return
 		}
 
-		includedTools, err := json.Marshal(input.Tools)
+		includedTools, err := marshalStringSliceJSON(input.Tools)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tools payload"})
 			return
 		}
+		includedServers, err := marshalStringSliceJSON(input.IncludedServers)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid included_servers payload"})
+			return
+		}
+		excludedTools, err := marshalStringSliceJSON(input.ExcludedTools)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid excluded_tools payload"})
+			return
+		}
 
 		group := &model.ToolGroup{
-			Name:             input.Name,
-			Description:      input.Description,
-			SecurityOption:   input.SecurityOption,
-			IncludedTools:    includedTools,
+			Name:            input.Name,
+			Description:     input.Description,
+			SecurityOption:  input.SecurityOption,
+			IncludedTools:   includedTools,
+			IncludedServers: includedServers,
+			ExcludedTools:   excludedTools,
 		}
 		if err := s.toolGroupService.CreateToolGroup(c.Request.Context(), group); err != nil {
 			handleServiceError(c, err)
 			return
 		}
 
-		resp, err := s.buildDashboardToolGroup(c, *group)
+		created, err := s.toolGroupService.GetToolGroup(c.Request.Context(), group.Name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+
+		resp, err := s.buildDashboardToolGroup(c, *created)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -150,23 +182,28 @@ func (s *Server) dashboardUpdateToolGroupHandler() gin.HandlerFunc {
 			return
 		}
 
-		includedTools, err := json.Marshal(input.Tools)
+		includedTools, err := marshalStringSliceJSON(input.Tools)
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid tools payload"})
 			return
 		}
-		emptyArr, err := json.Marshal([]string{})
+		includedServers, err := marshalStringSliceJSON(input.IncludedServers)
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to encode empty server lists"})
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid included_servers payload"})
+			return
+		}
+		excludedTools, err := marshalStringSliceJSON(input.ExcludedTools)
+		if err != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid excluded_tools payload"})
 			return
 		}
 
 		group := &model.ToolGroup{
-			Description:      input.Description,
-			SecurityOption:   input.SecurityOption,
-			IncludedTools:    datatypes.JSON(includedTools),
-			IncludedServers:  datatypes.JSON(emptyArr),
-			ExcludedTools:    datatypes.JSON(emptyArr),
+			Description:     input.Description,
+			SecurityOption:  input.SecurityOption,
+			IncludedTools:   includedTools,
+			IncludedServers: includedServers,
+			ExcludedTools:   excludedTools,
 		}
 		if _, err := s.toolGroupService.UpdateToolGroup(c.Request.Context(), name, group); err != nil {
 			handleServiceError(c, err)
@@ -195,6 +232,17 @@ func (s *Server) dashboardDeleteToolGroupHandler() gin.HandlerFunc {
 		}
 		c.JSON(http.StatusOK, gin.H{"deleted": true})
 	}
+}
+
+func dashboardRawStringList(getter func() ([]string, error)) []string {
+	items, err := getter()
+	if err != nil {
+		return []string{}
+	}
+	if items == nil {
+		return []string{}
+	}
+	return items
 }
 
 func (s *Server) buildDashboardToolGroup(c *gin.Context, group model.ToolGroup) (dashboardToolGroup, error) {
@@ -233,6 +281,9 @@ func (s *Server) buildDashboardToolGroup(c *gin.Context, group model.ToolGroup) 
 		Name:                   group.Name,
 		Description:            group.Description,
 		SecurityOption:         types.NormalizeGroupSecurityOption(group.SecurityOption),
+		IncludedTools:          dashboardRawStringList(group.GetTools),
+		IncludedServers:        dashboardRawStringList(group.GetServers),
+		ExcludedTools:          dashboardRawStringList(group.GetExcludedTools),
 		ToolCount:              len(tools),
 		Tools:                  tools,
 		StreamableHTTPEndpoint: endpoints.StreamableHTTPEndpoint,
