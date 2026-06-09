@@ -127,6 +127,7 @@ func (m *MCPService) registerMcpServer(ctx context.Context, s *model.McpServer, 
 		}
 	}
 
+	m.notifyServerCatalogReload(ctx, s.Name)
 	return nil
 }
 
@@ -174,6 +175,7 @@ func (m *MCPService) DeregisterMcpServer(ctx context.Context, name string) error
 	// Close any stateful session associated with this server
 	m.sessionManager.CloseSessionForServer(s.TenantID, name)
 
+	m.notifyServerPurge(ctx, name)
 	return nil
 }
 
@@ -219,6 +221,7 @@ func (m *MCPService) EnableMcpServer(ctx context.Context, name string) ([]string
 	if _, err := m.EnableResources(ctx, name); err != nil {
 		return nil, nil, fmt.Errorf("failed to enable resources for server %s: %w", name, err)
 	}
+	m.notifyServerCatalogReload(ctx, name)
 	return toolsEnabled, promptsEnabled, nil
 }
 
@@ -243,6 +246,7 @@ func (m *MCPService) DisableMcpServer(ctx context.Context, name string) ([]strin
 	if _, err := m.DisableResources(ctx, name); err != nil {
 		return nil, nil, fmt.Errorf("failed to disable resources for server %s: %w", name, err)
 	}
+	m.notifyServerCatalogReload(ctx, name)
 	return toolsDisabled, promptsDisabled, nil
 }
 
@@ -389,5 +393,6 @@ func (m *MCPService) UpdateDashboardMcpServer(ctx context.Context, name string, 
 			return fmt.Errorf("failed to re-apply disabled state for server %s: %w", name, err)
 		}
 	}
+	m.notifyServerCatalogReload(ctx, name)
 	return nil
 }

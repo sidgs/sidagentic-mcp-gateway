@@ -17,7 +17,7 @@ import (
 )
 
 // PromptDeletionCallback is invoked when one or more prompts are removed from the global MCP proxy
-// (deregister server or disable). Names are tenant-qualified proxy names (tenant::server__prompt).
+// (deregister server or disable). Names are tenant-qualified proxy names (tenant__server__prompt).
 type PromptDeletionCallback func(qualifiedPromptNames ...string)
 
 // PromptAdditionCallback is invoked when a prompt is registered or re-enabled on the global MCP proxy.
@@ -103,6 +103,29 @@ func (m *MCPService) ListPromptsByServer(ctx context.Context, name string) ([]mo
 	}
 
 	return prompts, nil
+}
+
+// ResolveProxyPromptTenant returns the tenant and canonical prompt name for a proxy-registered prompt.
+// When the proxy name has no tenant prefix, tenant is resolved from the prompt's server record.
+func (m *MCPService) ResolveProxyPromptTenant(proxyName string) (tenantID, canonical string, err error) {
+	if tid, can, qual := tenant.SplitProxyToolName(proxyName); qual {
+		return tid, can, nil
+	}
+
+	canonical = proxyName
+	serverName, promptName, ok := splitServerPromptName(canonical)
+	if !ok {
+		return "", "", fmt.Errorf("prompt %s has unexpected name format", proxyName)
+	}
+
+	var prompt model.Prompt
+	if err := m.db.Joins("Server").Where("prompts.name = ? AND Server.name = ?", promptName, serverName).First(&prompt).Error; err != nil {
+		return "", "", fmt.Errorf("failed to resolve tenant for prompt %s: %w", proxyName, err)
+	}
+	if id, ok := tenant.PresentID(prompt.TenantID); ok {
+		return id, canonical, nil
+	}
+	return "", canonical, nil
 }
 
 // GetPrompt fetches a prompt from the database by its canonical name.
@@ -244,6 +267,7 @@ func (m *MCPService) setPromptsEnabled(ctx context.Context, entity string, enabl
 			} else {
 				m.mcpProxyServer.AddPrompt(mcpPrompt, m.mcpProxyPromptHandler)
 			}
+			m.trackPromptProxyName(proxyName)
 			m.notifyPromptAddition(proxyName)
 		} else {
 			if s.Transport == types.TransportSSE {
@@ -251,9 +275,11 @@ func (m *MCPService) setPromptsEnabled(ctx context.Context, entity string, enabl
 			} else {
 				m.mcpProxyServer.DeletePrompts(proxyName)
 			}
+			m.deletePromptProxyNames(proxyName)
 			m.notifyPromptDeletion(proxyName)
 		}
 
+		m.notifyServerCatalogReload(ctx, serverName)
 		return []string{entity}, nil
 	}
 
@@ -291,6 +317,7 @@ func (m *MCPService) setPromptsEnabled(ctx context.Context, entity string, enabl
 			} else {
 				m.mcpProxyServer.AddPrompt(mcpPrompt, m.mcpProxyPromptHandler)
 			}
+			m.trackPromptProxyName(proxyName)
 			m.notifyPromptAddition(proxyName)
 		} else {
 			if s.Transport == types.TransportSSE {
@@ -298,12 +325,14 @@ func (m *MCPService) setPromptsEnabled(ctx context.Context, entity string, enabl
 			} else {
 				m.mcpProxyServer.DeletePrompts(proxyName)
 			}
+			m.deletePromptProxyNames(proxyName)
 			m.notifyPromptDeletion(proxyName)
 		}
 
 		changedPromptNames = append(changedPromptNames, canonicalPromptName)
 	}
 
+	m.notifyServerCatalogReload(ctx, entity)
 	return changedPromptNames, nil
 }
 
@@ -336,6 +365,7 @@ func (m *MCPService) registerServerPrompts(ctx context.Context, s *model.McpServ
 			} else {
 				m.mcpProxyServer.AddPrompt(regPrompt, m.mcpProxyPromptHandler)
 			}
+			m.trackPromptProxyName(regPrompt.Name)
 			m.notifyPromptAddition(regPrompt.Name)
 		}
 	}
@@ -365,6 +395,7 @@ func (m *MCPService) deregisterServerPrompts(ctx context.Context, s *model.McpSe
 		m.mcpProxyServer.DeletePrompts(promptNames...)
 	}
 
+	m.deletePromptProxyNames(promptNames...)
 	m.notifyPromptDeletion(promptNames...)
 
 	return nil

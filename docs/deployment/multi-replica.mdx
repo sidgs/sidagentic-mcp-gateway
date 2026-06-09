@@ -1,0 +1,66 @@
+---
+title: "Multi-replica deployments"
+description: "Run multiple gateway pods with Postgres and Redis so in-memory MCP proxy state stays consistent across replicas."
+---
+
+When you scale SAMI MCP Gateway beyond a single pod, configuration lives in **PostgreSQL**, but MCP proxy state (global tools, tool groups, prompt groups, and SSE session caches) is held **in memory per pod**. Registry sync uses **Redis pub/sub** to signal peers after mutations so every pod reloads from Postgres.
+
+## Requirements
+
+- **PostgreSQL** for shared configuration ([database setup](/deployment/database))
+- **Redis** for registry sync (and optionally OIDC dashboard sessions)
+- **Two or more gateway replicas** behind a load balancer
+
+## Environment variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `REDIS_URL` | _(unset)_ | Redis connection URL (same instance as OIDC sessions is fine) |
+| `REGISTRY_SYNC_ENABLED` | `true` when `REDIS_URL` is set, else `false` | Enable cross-pod registry sync |
+| `REGISTRY_SYNC_CHANNEL` | `mcp-gateway:registry:v1` | Redis pub/sub channel for sync events |
+| `REGISTRY_SYNC_RECONCILE_INTERVAL_SEC` | `300` | Optional periodic full local reconcile; set `0` to disable |
+
+Redis is wired **independently of Cognito/OIDC**. You can enable registry sync without dashboard login.
+
+## Startup logs
+
+With sync enabled:
+
+```text
+[server] registry sync: Redis enabled (channel=mcp-gateway:registry:v1, origin=hostname:pid)
+[server] registry sync: periodic reconcile every 300s
+```
+
+With sync disabled (single replica or no Redis):
+
+```text
+[server] registry sync: disabled (single-replica)
+```
+
+## What gets synchronized
+
+| Mutation | Event | Subscriber action |
+|----------|-------|-------------------|
+| Tool group create/update | `tool_group.reload` | Reload group MCP servers from DB |
+| Tool group delete | `tool_group.delete` | Drop in-memory servers + invalidate SSE cache |
+| Prompt group create/update | `prompt_group.reload` | Reload group MCP servers from DB |
+| Prompt group delete | `prompt_group.delete` | Drop in-memory servers + invalidate SSE cache |
+| MCP server register/update/enable | `server.catalog_reload` | Reconcile global proxy catalog for server |
+| MCP server deregister | `server.purge` | Remove server from global proxy |
+| Periodic safety net | _(local only)_ | Full catalog + all groups reconcile |
+
+Events carry only a small JSON signal; subscribers always **re-read Postgres** when applying changes.
+
+## Helm / Docker Compose
+
+Set `REDIS_URL` in your chart values or compose environment. The bundled `docker-compose.yaml` Redis service enables sync when `REDIS_URL` points at it.
+
+```yaml
+REDIS_URL: redis://redis:6379/0
+REGISTRY_SYNC_ENABLED: "true"
+```
+
+## Out of scope
+
+- Cross-pod **stateful upstream MCP sessions** remain per-pod.
+- Redis pub/sub is fire-and-forget (no guaranteed delivery). The optional reconcile ticker heals missed messages.

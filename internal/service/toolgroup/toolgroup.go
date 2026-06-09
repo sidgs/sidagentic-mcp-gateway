@@ -14,6 +14,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/registrysync"
 	"sami.io/mcpgateway/internal/service/mcp"
 	"sami.io/mcpgateway/pkg/apierrors"
 	"sami.io/mcpgateway/pkg/tenant"
@@ -34,12 +35,15 @@ type ToolGroupService struct {
 
 	mcpService *mcp.MCPService
 
-	// mcpServers key: tenant::groupName
+	// mcpServers key: tenant__groupName
 	mcpServers   map[string]*server.MCPServer
 	mcpServersMu sync.RWMutex
 
 	sseMcpServers   map[string]*server.MCPServer
 	sseMcpServerMu  sync.RWMutex
+
+	notifier registrysync.Notifier
+	originID string
 }
 
 func (s *ToolGroupService) dbTenant(ctx context.Context) *gorm.DB {
@@ -54,6 +58,7 @@ func NewToolGroupService(db *gorm.DB, mcpService *mcp.MCPService) (*ToolGroupSer
 		mcpServersMu:  sync.RWMutex{},
 		sseMcpServers: make(map[string]*server.MCPServer),
 		sseMcpServerMu: sync.RWMutex{},
+		notifier:       registrysync.NoopNotifier{},
 	}
 
 	mcpService.SetToolDeletionCallback(s.handleToolDeletion)
@@ -128,7 +133,34 @@ func (s *ToolGroupService) CreateToolGroup(ctx context.Context, group *model.Too
 	s.addToolGroupMCPServer(mapKey, mcpServer)
 	s.addToolGroupSseMCPServer(mapKey, sseMcpServer)
 
+	s.notifyToolGroupReload(ctx, group.TenantID, group.Name)
 	return nil
+}
+
+// SetRegistryNotifier configures cross-pod registry sync publishing.
+func (s *ToolGroupService) SetRegistryNotifier(n registrysync.Notifier) {
+	if n == nil {
+		s.notifier = registrysync.NoopNotifier{}
+		return
+	}
+	s.notifier = n
+}
+
+// SetOriginID sets the pod identity stamped on outbound sync events.
+func (s *ToolGroupService) SetOriginID(id string) {
+	s.originID = id
+}
+
+func (s *ToolGroupService) notifyToolGroupReload(ctx context.Context, tenantID, name string) {
+	if s.notifier != nil {
+		s.notifier.Notify(ctx, registrysync.ToolGroupReload(tenantID, name, s.originID))
+	}
+}
+
+func (s *ToolGroupService) notifyToolGroupDelete(ctx context.Context, tenantID, name string) {
+	if s.notifier != nil {
+		s.notifier.Notify(ctx, registrysync.ToolGroupDelete(tenantID, name, s.originID))
+	}
 }
 
 // UpdateToolGroup updates an existing tool group without causing any downtime for its MCP proxy servers.
@@ -225,6 +257,7 @@ func (s *ToolGroupService) UpdateToolGroup(ctx context.Context, name string, upd
 		return nil, fmt.Errorf("failed to update tool group in DB: %w", err)
 	}
 
+	s.notifyToolGroupReload(ctx, oldGroup.TenantID, name)
 	return oldGroup, nil
 }
 
@@ -285,6 +318,7 @@ func (s *ToolGroupService) DeleteToolGroup(ctx context.Context, name string) err
 	if err := s.dbTenant(ctx).Unscoped().Where("name = ?", name).Delete(&model.ToolGroup{}).Error; err != nil {
 		return fmt.Errorf("failed to delete toolgroup: %w", err)
 	}
+	s.notifyToolGroupDelete(ctx, group.TenantID, name)
 	return nil
 }
 
@@ -356,33 +390,69 @@ func (s *ToolGroupService) initToolGroupMCPServers() error {
 	}
 
 	for _, group := range groups {
-		mcpServer := s.newMCPServer(group.Name)
-		sseMcpServer := s.newSseMCPServer(group.Name)
-
 		gctx := tenant.WithContext(context.Background(), group.TenantID)
-		toolNames, err := group.ResolveEffectiveTools(gctx, s.mcpService)
-		if err != nil {
-			log.Printf(
-				"[ERROR] failed to resolve effective tools for tool group %s during startup; the tool group will be initialized as empty: %v",
-				group.Name,
-				err,
-			)
-			k := groupMapKey(group.TenantID, group.Name)
-			s.addToolGroupMCPServer(k, mcpServer)
-			s.addToolGroupSseMCPServer(k, sseMcpServer)
-			continue
+		if err := s.reloadGroupMCPServers(gctx, group.TenantID, group.Name); err != nil {
+			return err
 		}
+	}
+	return nil
+}
 
-		for _, name := range toolNames {
-			q := tenant.QualifyProxyName(group.TenantID, name)
+// ReloadFromDB rebuilds in-memory MCP servers for one tool group from Postgres.
+func (s *ToolGroupService) ReloadFromDB(ctx context.Context, tenantID, name string) error {
+	return s.reloadGroupMCPServers(ctx, tenantID, name)
+}
+
+// RemoveFromMemory drops in-memory MCP servers for a tool group without touching the database.
+func (s *ToolGroupService) RemoveFromMemory(tenantID, name string) {
+	s.deleteToolGroupMCPServers(groupMapKey(tenantID, name))
+}
+
+// ReloadAllFromDB rebuilds every tool group's in-memory MCP servers from Postgres.
+func (s *ToolGroupService) ReloadAllFromDB(ctx context.Context) error {
+	groups, err := s.ListAllToolGroupsForInit()
+	if err != nil {
+		return fmt.Errorf("failed to list tool groups from DB: %w", err)
+	}
+	for _, group := range groups {
+		gctx := tenant.WithContext(ctx, group.TenantID)
+		if err := s.reloadGroupMCPServers(gctx, group.TenantID, group.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *ToolGroupService) reloadGroupMCPServers(ctx context.Context, tenantID, name string) error {
+	group, err := s.GetToolGroup(ctx, name)
+	if err != nil {
+		if errors.Is(err, ErrToolGroupNotFound) {
+			s.RemoveFromMemory(tenantID, name)
+			return nil
+		}
+		return err
+	}
+
+	mcpServer := s.newMCPServer(group.Name)
+	sseMcpServer := s.newSseMCPServer(group.Name)
+
+	toolNames, err := group.ResolveEffectiveTools(ctx, s.mcpService)
+	if err != nil {
+		log.Printf(
+			"[ERROR] failed to resolve effective tools for tool group %s during reload; group starts empty: %v",
+			group.Name, err,
+		)
+	} else {
+		for _, toolName := range toolNames {
+			q := tenant.QualifyProxyName(group.TenantID, toolName)
 			tool, exists := s.mcpService.GetToolInstance(q)
 			if !exists {
 				continue
 			}
 
-			parentServer, err := s.mcpService.GetToolParentServer(gctx, name)
+			parentServer, err := s.mcpService.GetToolParentServer(ctx, toolName)
 			if err != nil {
-				return fmt.Errorf("failed to get parent MCP server of the tool %s: %w", name, err)
+				return fmt.Errorf("failed to get parent MCP server of the tool %s: %w", toolName, err)
 			}
 
 			if parentServer.Transport == types.TransportSSE {
@@ -391,12 +461,11 @@ func (s *ToolGroupService) initToolGroupMCPServers() error {
 				mcpServer.AddTool(tool, s.mcpService.MCPProxyToolCallHandler)
 			}
 		}
-
-		k := groupMapKey(group.TenantID, group.Name)
-		s.addToolGroupMCPServer(k, mcpServer)
-		s.addToolGroupSseMCPServer(k, sseMcpServer)
 	}
 
+	k := groupMapKey(tenantID, name)
+	s.addToolGroupMCPServer(k, mcpServer)
+	s.addToolGroupSseMCPServer(k, sseMcpServer)
 	return nil
 }
 
@@ -417,9 +486,12 @@ func (s *ToolGroupService) handleToolDeletion(tools ...string) {
 }
 
 func (s *ToolGroupService) handleToolAddition(newTool string) error {
-	toolTenant, canonicalTool, qual := tenant.SplitProxyToolName(newTool)
-	if !qual {
-		return fmt.Errorf("tool instance %s has unexpected name format", newTool)
+	toolTenant, canonicalTool, err := s.mcpService.ResolveProxyToolTenant(newTool)
+	if err != nil {
+		return err
+	}
+	if toolTenant == "" {
+		return fmt.Errorf("tool instance %s has no tenant context", newTool)
 	}
 	ctx := tenant.WithContext(context.Background(), toolTenant)
 

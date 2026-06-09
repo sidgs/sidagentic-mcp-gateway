@@ -7,6 +7,7 @@ import (
 
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"sami.io/mcpgateway/internal/registrysync"
 	"sami.io/mcpgateway/internal/telemetry"
 	"gorm.io/gorm"
 )
@@ -38,6 +39,14 @@ type MCPService struct {
 	// toolInstances keeps track of all the in-memory mcp.Tool instances, keyed by their unique names.
 	toolInstances map[string]mcp.Tool
 	mu            sync.RWMutex
+
+	// promptProxyNames and resourceProxyURIs track global proxy membership for purge/reconcile without DB.
+	promptProxyNames  map[string]struct{}
+	resourceProxyURIs map[string]struct{}
+	proxyCatalogMu    sync.RWMutex
+
+	notifier registrysync.Notifier
+	originID string
 
 	// toolDeletionCallback is a callback that gets invoked when one or more tools is removed
 	// (deregistered or disabled) from sami-mcp-gateway.
@@ -88,8 +97,12 @@ func NewMCPService(c *ServiceConfig) (*MCPService, error) {
 		mcpProxyServer:    c.McpProxyServer,
 		sseMcpProxyServer: c.SseMcpProxyServer,
 
-		toolInstances: make(map[string]mcp.Tool),
-		mu:            sync.RWMutex{},
+		toolInstances:     make(map[string]mcp.Tool),
+		mu:                sync.RWMutex{},
+		promptProxyNames:  make(map[string]struct{}),
+		resourceProxyURIs: make(map[string]struct{}),
+		proxyCatalogMu:    sync.RWMutex{},
+		notifier:          registrysync.NoopNotifier{},
 
 		// initialize the callbacks to NOOP functions
 		toolDeletionCallback: func(toolNames ...string) {},

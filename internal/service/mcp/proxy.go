@@ -53,6 +53,33 @@ func authorizeProxyServerAccess(ctx context.Context, serverName string) error {
 	return fmt.Errorf("missing MCP authentication")
 }
 
+func resolveProxyTenant(ctx context.Context, name, mismatchMsg string) (effectiveTenant, canonical string, lookupCtx context.Context, err error) {
+	prefixTenant, canonical, qualified := tenant.SplitProxyToolName(name)
+	if !qualified {
+		canonical = name
+	}
+
+	reqTenant, hasReqTenant := tenant.FromContext(ctx)
+	switch {
+	case qualified:
+		effectiveTenant = prefixTenant
+		if hasReqTenant && effectiveTenant != reqTenant {
+			return "", "", ctx, fmt.Errorf("%s: %w", mismatchMsg, apierrors.ErrInvalidInput)
+		}
+	case hasReqTenant:
+		effectiveTenant = reqTenant
+	default:
+		effectiveTenant = tenant.MustFromContext(ctx)
+	}
+
+	lookupCtx = ctx
+	if id, ok := tenant.PresentID(effectiveTenant); ok {
+		lookupCtx = tenant.WithContext(ctx, id)
+	}
+
+	return effectiveTenant, canonical, lookupCtx, nil
+}
+
 // MCPProxyToolCallHandler handles tool calls for the MCP proxy server
 // by forwarding the request to the appropriate upstream MCP server and
 // relaying the response back.
@@ -61,12 +88,11 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 	outcome := telemetry.ToolCallOutcomeSuccess
 
 	name := request.Params.Name
-	prefixTenant, canonicalToolName, qualified := tenant.SplitProxyToolName(name)
-	if !qualified {
-		canonicalToolName = name
-		prefixTenant = tenant.MustFromContext(ctx)
-	} else if prefixTenant != tenant.MustFromContext(ctx) {
-		return nil, fmt.Errorf("tool tenant does not match request tenant: %w", apierrors.ErrInvalidInput)
+	effectiveTenant, canonicalToolName, lookupCtx, err := resolveProxyTenant(
+		ctx, name, "tool tenant does not match request tenant",
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	serverName, toolName, ok := splitServerToolName(canonicalToolName)
@@ -82,7 +108,7 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 		m.metrics.RecordToolCall(ctx, serverName, toolName, outcome, time.Since(started))
 	}()
 
-	server, err := m.GetMcpServer(ctx, serverName)
+	server, err := m.GetMcpServer(lookupCtx, serverName)
 	if err != nil {
 		outcome = telemetry.ToolCallOutcomeError
 
@@ -90,7 +116,7 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 			"failed to get details about MCP server %s from DB: %w", serverName, err,
 		)
 	}
-	if server.TenantID != prefixTenant {
+	if id, ok := tenant.PresentID(effectiveTenant); ok && server.TenantID != id {
 		return nil, fmt.Errorf("tool tenant does not match server record: %w", apierrors.ErrInvalidInput)
 	}
 
@@ -157,12 +183,11 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 	outcome := telemetry.PromptCallOutcomeSuccess
 
 	name := request.Params.Name
-	prefixTenant, canonicalPromptName, qualified := tenant.SplitProxyToolName(name)
-	if !qualified {
-		canonicalPromptName = name
-		prefixTenant = tenant.MustFromContext(ctx)
-	} else if prefixTenant != tenant.MustFromContext(ctx) {
-		return nil, fmt.Errorf("prompt tenant does not match request tenant: %w", apierrors.ErrInvalidInput)
+	effectiveTenant, canonicalPromptName, lookupCtx, err := resolveProxyTenant(
+		ctx, name, "prompt tenant does not match request tenant",
+	)
+	if err != nil {
+		return nil, err
 	}
 
 	serverName, promptName, ok := splitServerPromptName(canonicalPromptName)
@@ -178,7 +203,7 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 		m.metrics.RecordPromptCall(ctx, serverName, promptName, outcome, time.Since(started))
 	}()
 
-	server, err := m.GetMcpServer(ctx, serverName)
+	server, err := m.GetMcpServer(lookupCtx, serverName)
 	if err != nil {
 		outcome = telemetry.PromptCallOutcomeError
 
@@ -186,7 +211,7 @@ func (m *MCPService) mcpProxyPromptHandler(ctx context.Context, request mcp.GetP
 			"failed to get details about MCP server %s from DB: %w", serverName, err,
 		)
 	}
-	if server.TenantID != prefixTenant {
+	if id, ok := tenant.PresentID(effectiveTenant); ok && server.TenantID != id {
 		return nil, fmt.Errorf("prompt tenant does not match server record: %w", apierrors.ErrInvalidInput)
 	}
 
@@ -284,6 +309,7 @@ func (m *MCPService) initMCPProxyServer() error {
 		} else {
 			m.mcpProxyServer.AddPrompt(prompt, m.mcpProxyPromptHandler)
 		}
+		m.trackPromptProxyName(prompt.Name)
 	}
 
 	var resources []model.Resource
@@ -307,6 +333,7 @@ func (m *MCPService) initMCPProxyServer() error {
 		} else {
 			m.mcpProxyServer.AddResource(resource, m.mcpProxyResourceHandler)
 		}
+		m.trackResourceProxyURI(resource.URI)
 	}
 
 	return nil

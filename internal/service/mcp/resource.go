@@ -244,14 +244,17 @@ func (m *MCPService) setResourcesEnabled(ctx context.Context, entity string, ena
 		} else {
 			m.mcpProxyServer.AddResource(mcpResource, m.mcpProxyResourceHandler)
 		}
+		m.trackResourceProxyURI(resource.URI)
 	} else {
 		if resource.Server.Transport == types.TransportSSE {
 			m.sseMcpProxyServer.DeleteResources(resource.URI)
 		} else {
 			m.mcpProxyServer.DeleteResources(resource.URI)
 		}
+		m.deleteResourceProxyURIs(resource.URI)
 	}
 
+	m.notifyServerCatalogReload(ctx, resource.Server.Name)
 	return []string{resource.URI}, nil
 }
 
@@ -283,17 +286,20 @@ func (m *MCPService) setServerResourcesEnabled(ctx context.Context, s *model.Mcp
 			} else {
 				m.mcpProxyServer.AddResource(mcpResource, m.mcpProxyResourceHandler)
 			}
+			m.trackResourceProxyURI(resources[i].URI)
 		} else {
 			if s.Transport == types.TransportSSE {
 				m.sseMcpProxyServer.DeleteResources(resources[i].URI)
 			} else {
 				m.mcpProxyServer.DeleteResources(resources[i].URI)
 			}
+			m.deleteResourceProxyURIs(resources[i].URI)
 		}
 
 		changedURIs = append(changedURIs, resources[i].URI)
 	}
 
+	m.notifyServerCatalogReload(ctx, s.Name)
 	return changedURIs, nil
 }
 
@@ -333,6 +339,7 @@ func (m *MCPService) registerServerResources(ctx context.Context, s *model.McpSe
 		} else {
 			m.mcpProxyServer.AddResource(resource, m.mcpProxyResourceHandler)
 		}
+		m.trackResourceProxyURI(resource.URI)
 	}
 
 	return nil
@@ -361,5 +368,6 @@ func (m *MCPService) deregisterServerResources(ctx context.Context, s *model.Mcp
 		m.mcpProxyServer.DeleteResources(resourceURIs...)
 	}
 
+	m.deleteResourceProxyURIs(resourceURIs...)
 	return nil
 }

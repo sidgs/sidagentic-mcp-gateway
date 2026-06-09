@@ -13,6 +13,7 @@ import (
 	mcpgo "github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/registrysync"
 	"sami.io/mcpgateway/internal/service/mcp"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/pkg/apierrors"
@@ -34,6 +35,9 @@ type PromptGroupService struct {
 	mcpServersMu    sync.RWMutex
 	sseMcpServers   map[string]*server.MCPServer
 	sseMcpServerMu  sync.RWMutex
+
+	notifier registrysync.Notifier
+	originID string
 }
 
 func (s *PromptGroupService) dbTenant(ctx context.Context) *gorm.DB {
@@ -49,6 +53,7 @@ func NewPromptGroupService(db *gorm.DB, mcpService *mcp.MCPService) (*PromptGrou
 		sseMcpServers:  make(map[string]*server.MCPServer),
 		mcpServersMu:   sync.RWMutex{},
 		sseMcpServerMu: sync.RWMutex{},
+		notifier:       registrysync.NoopNotifier{},
 	}
 
 	mcpService.SetPromptDeletionCallback(s.handlePromptDeletion)
@@ -118,7 +123,34 @@ func (s *PromptGroupService) CreatePromptGroup(ctx context.Context, group *model
 
 	k := groupMapKey(group.TenantID, group.Name)
 	s.addMCPServers(k, mcpSrv, sseSrv)
+	s.notifyPromptGroupReload(ctx, group.TenantID, group.Name)
 	return nil
+}
+
+// SetRegistryNotifier configures cross-pod registry sync publishing.
+func (s *PromptGroupService) SetRegistryNotifier(n registrysync.Notifier) {
+	if n == nil {
+		s.notifier = registrysync.NoopNotifier{}
+		return
+	}
+	s.notifier = n
+}
+
+// SetOriginID sets the pod identity stamped on outbound sync events.
+func (s *PromptGroupService) SetOriginID(id string) {
+	s.originID = id
+}
+
+func (s *PromptGroupService) notifyPromptGroupReload(ctx context.Context, tenantID, name string) {
+	if s.notifier != nil {
+		s.notifier.Notify(ctx, registrysync.PromptGroupReload(tenantID, name, s.originID))
+	}
+}
+
+func (s *PromptGroupService) notifyPromptGroupDelete(ctx context.Context, tenantID, name string) {
+	if s.notifier != nil {
+		s.notifier.Notify(ctx, registrysync.PromptGroupDelete(tenantID, name, s.originID))
+	}
 }
 
 // UpdatePromptGroup reconciles MCP servers with updated membership.
@@ -208,6 +240,7 @@ func (s *PromptGroupService) UpdatePromptGroup(ctx context.Context, name string,
 	if err := s.dbTenant(ctx).Model(&model.PromptGroup{}).Where("name = ?", name).Updates(updated).Error; err != nil {
 		return nil, fmt.Errorf("failed to update prompt group in DB: %w", err)
 	}
+	s.notifyPromptGroupReload(ctx, oldGroup.TenantID, name)
 	return oldGroup, nil
 }
 
@@ -266,6 +299,7 @@ func (s *PromptGroupService) DeletePromptGroup(ctx context.Context, name string)
 	if err := s.dbTenant(ctx).Unscoped().Where("name = ?", name).Delete(&model.PromptGroup{}).Error; err != nil {
 		return fmt.Errorf("failed to delete prompt group: %w", err)
 	}
+	s.notifyPromptGroupDelete(ctx, group.TenantID, name)
 	return nil
 }
 
@@ -330,26 +364,65 @@ func (s *PromptGroupService) initPromptGroupMCPServers() error {
 	}
 
 	for _, group := range groups {
-		mcpSrv := s.newMCPServer(group.Name)
-		sseSrv := s.newSseMCPServer(group.Name)
 		gctx := tenant.WithContext(context.Background(), group.TenantID)
-
-		names, err := group.ResolveEffectivePrompts(gctx, s.mcpService)
-		if err != nil {
-			log.Printf(
-				"[ERROR] failed to resolve effective prompts for prompt group %s during startup; group starts empty: %v",
-				group.Name, err,
-			)
-			s.addMCPServers(groupMapKey(group.TenantID, group.Name), mcpSrv, sseSrv)
-			continue
+		if err := s.reloadGroupMCPServers(gctx, group.TenantID, group.Name); err != nil {
+			return err
 		}
+	}
+	return nil
+}
 
+// ReloadFromDB rebuilds in-memory MCP servers for one prompt group from Postgres.
+func (s *PromptGroupService) ReloadFromDB(ctx context.Context, tenantID, name string) error {
+	return s.reloadGroupMCPServers(ctx, tenantID, name)
+}
+
+// RemoveFromMemory drops in-memory MCP servers for a prompt group without touching the database.
+func (s *PromptGroupService) RemoveFromMemory(tenantID, name string) {
+	s.deleteMCPServers(groupMapKey(tenantID, name))
+}
+
+// ReloadAllFromDB rebuilds every prompt group's in-memory MCP servers from Postgres.
+func (s *PromptGroupService) ReloadAllFromDB(ctx context.Context) error {
+	groups, err := s.ListAllPromptGroupsForInit()
+	if err != nil {
+		return fmt.Errorf("failed to list prompt groups from DB: %w", err)
+	}
+	for _, group := range groups {
+		gctx := tenant.WithContext(ctx, group.TenantID)
+		if err := s.reloadGroupMCPServers(gctx, group.TenantID, group.Name); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *PromptGroupService) reloadGroupMCPServers(ctx context.Context, tenantID, name string) error {
+	group, err := s.GetPromptGroup(ctx, name)
+	if err != nil {
+		if errors.Is(err, ErrPromptGroupNotFound) {
+			s.RemoveFromMemory(tenantID, name)
+			return nil
+		}
+		return err
+	}
+
+	mcpSrv := s.newMCPServer(group.Name)
+	sseSrv := s.newSseMCPServer(group.Name)
+
+	names, err := group.ResolveEffectivePrompts(ctx, s.mcpService)
+	if err != nil {
+		log.Printf(
+			"[ERROR] failed to resolve effective prompts for prompt group %s during reload; group starts empty: %v",
+			group.Name, err,
+		)
+	} else {
 		for _, pname := range names {
-			mcpPrompt, err := s.mcpService.QualifiedProxyPrompt(gctx, group.TenantID, pname)
+			mcpPrompt, err := s.mcpService.QualifiedProxyPrompt(ctx, group.TenantID, pname)
 			if err != nil {
 				continue
 			}
-			parent, err := s.mcpService.GetPromptParentServer(gctx, pname)
+			parent, err := s.mcpService.GetPromptParentServer(ctx, pname)
 			if err != nil {
 				return fmt.Errorf("failed to get parent MCP server of prompt %s: %w", pname, err)
 			}
@@ -359,9 +432,9 @@ func (s *PromptGroupService) initPromptGroupMCPServers() error {
 				mcpSrv.AddPrompt(mcpPrompt, s.mcpService.MCPProxyPromptHandler)
 			}
 		}
-
-		s.addMCPServers(groupMapKey(group.TenantID, group.Name), mcpSrv, sseSrv)
 	}
+
+	s.addMCPServers(groupMapKey(tenantID, name), mcpSrv, sseSrv)
 	return nil
 }
 
@@ -380,9 +453,12 @@ func (s *PromptGroupService) handlePromptDeletion(qualified ...string) {
 }
 
 func (s *PromptGroupService) handlePromptAddition(qualified string) error {
-	promptTenant, canonical, qual := tenant.SplitProxyToolName(qualified)
-	if !qual {
-		return fmt.Errorf("prompt %s has unexpected name format", qualified)
+	promptTenant, canonical, err := s.mcpService.ResolveProxyPromptTenant(qualified)
+	if err != nil {
+		return err
+	}
+	if promptTenant == "" {
+		return fmt.Errorf("prompt %s has no tenant context", qualified)
 	}
 	ctx := tenant.WithContext(context.Background(), promptTenant)
 

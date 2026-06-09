@@ -22,6 +22,8 @@ import (
 	"sami.io/mcpgateway/internal/api"
 	"sami.io/mcpgateway/internal/db"
 	"sami.io/mcpgateway/internal/migrations"
+	"sami.io/mcpgateway/internal/registrycoord"
+	"sami.io/mcpgateway/internal/registrysync"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/internal/service/agentapp"
 	"sami.io/mcpgateway/internal/service/config"
@@ -74,6 +76,11 @@ const (
 	RedisPasswordEnvVar  = "REDIS_PASSWORD"
 	RedisDBEnvVar        = "REDIS_DB"
 	OIDCSessionTTLEnvVar = "OIDC_SESSION_TTL_SECONDS"
+
+	// Registry sync (multi-replica in-memory proxy coherence)
+	RegistrySyncEnabledEnvVar           = "REGISTRY_SYNC_ENABLED"
+	RegistrySyncChannelEnvVar           = "REGISTRY_SYNC_CHANNEL"
+	RegistrySyncReconcileIntervalEnvVar = "REGISTRY_SYNC_RECONCILE_INTERVAL_SEC"
 	// OIDCScopesEnvVar sets OAuth2 scopes for the dashboard OIDC login flow (comma- or whitespace-separated). Empty uses server default (openid email profile). "openid" is added if omitted.
 	OIDCScopesEnvVar = "OIDC_SCOPES"
 	// PostLoginRedirectURLEnvVar is an optional absolute (https://…) or root-relative (/…) Location after OIDC callback success and after /logout.
@@ -458,6 +465,48 @@ func newRedisClientFromEnv() (*redis.Client, error) {
 	}), nil
 }
 
+type registrySyncConfig struct {
+	enabled              bool
+	channel              string
+	reconcileIntervalSec int
+}
+
+func getRegistrySyncConfig(redisAvailable bool) registrySyncConfig {
+	channel := strings.TrimSpace(os.Getenv(RegistrySyncChannelEnvVar))
+	if channel == "" {
+		channel = "mcp-gateway:registry:v1"
+	}
+
+	enabled := parseEnvBoolDefault(RegistrySyncEnabledEnvVar, redisAvailable)
+
+	reconcileIntervalSec := 300
+	if raw := strings.TrimSpace(os.Getenv(RegistrySyncReconcileIntervalEnvVar)); raw != "" {
+		sec, err := strconv.Atoi(raw)
+		if err != nil || sec < 0 {
+			log.Printf(
+				"[server] invalid %s=%q; using default %d (0 disables periodic reconcile)\n",
+				RegistrySyncReconcileIntervalEnvVar, raw, reconcileIntervalSec,
+			)
+		} else {
+			reconcileIntervalSec = sec
+		}
+	}
+
+	return registrySyncConfig{
+		enabled:              enabled,
+		channel:              channel,
+		reconcileIntervalSec: reconcileIntervalSec,
+	}
+}
+
+func generateOriginID() string {
+	host, err := os.Hostname()
+	if err != nil || host == "" {
+		host = "unknown"
+	}
+	return fmt.Sprintf("%s:%d", host, os.Getpid())
+}
+
 // getPostgresDSN constructs a Postgres DSN from individual Postgres-specific environment variables & files.
 // It is used to provide an alternative way to specify Postgres connection details
 // in case the user doesn't want to use a full DATABASE_URL.
@@ -542,10 +591,10 @@ func getSessionIdleTimeout() (int, error) {
 func runStartServer(cmd *cobra.Command, args []string) error {
 	_ = godotenv.Load()
 
-	var oidcRedis *redis.Client
+	var redisClient *redis.Client
 	defer func() {
-		if oidcRedis != nil {
-			if err := oidcRedis.Close(); err != nil {
+		if redisClient != nil {
+			if err := redisClient.Close(); err != nil {
 				log.Printf("[server] redis close: %v\n", err)
 			}
 		}
@@ -681,6 +730,11 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	redisClient, err = newRedisClientFromEnv()
+	if err != nil {
+		return err
+	}
+
 	oidcSettings, err := loadOIDCSettingsFromEnv()
 	if err != nil {
 		return err
@@ -695,13 +749,9 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		if err != nil {
 			return err
 		}
-		oidcRedis, err = newRedisClientFromEnv()
-		if err != nil {
-			return err
-		}
-		if oidcRedis != nil {
+		if redisClient != nil {
 			pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
-			pingErr := oidcRedis.Ping(pingCtx).Err()
+			pingErr := redisClient.Ping(pingCtx).Err()
 			cancel()
 			if pingErr != nil {
 				return fmt.Errorf("redis ping (OIDC sessions): %w", pingErr)
@@ -730,7 +780,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		HTTPPathPrefix:          strings.TrimSpace(os.Getenv(HTTPPathPrefixEnvVar)),
 		PublicURLScheme:         strings.TrimSpace(os.Getenv(PublicURLSchemeEnvVar)),
 		OIDC:                    oidcSettings,
-		OIDCRedis:            oidcRedis,
+		OIDCRedis:            redisClient,
 		OIDCSessionTTL:       oidcSessionTTL,
 		PostLoginRedirectURL: strings.TrimSpace(os.Getenv(PostLoginRedirectURLEnvVar)),
 		CognitoOAuthRedirectURI: strings.TrimSpace(os.Getenv(CognitoRedirectURIEnvVar)),
@@ -743,6 +793,73 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 	s, err := api.NewServer(opts)
 	if err != nil {
 		return fmt.Errorf("failed to create server: %v", err)
+	}
+
+	originID := generateOriginID()
+	syncCfg := getRegistrySyncConfig(redisClient != nil)
+	var registryNotifier registrysync.Notifier = registrysync.NoopNotifier{}
+	if syncCfg.enabled {
+		if redisClient == nil {
+			return fmt.Errorf(
+				"%s is true but Redis is not configured (set %s or %s)",
+				RegistrySyncEnabledEnvVar, RedisURLEnvVar, RedisAddrEnvVar,
+			)
+		}
+		pingCtx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+		pingErr := redisClient.Ping(pingCtx).Err()
+		cancel()
+		if pingErr != nil {
+			return fmt.Errorf("redis ping (registry sync): %w", pingErr)
+		}
+		registryNotifier = registrysync.NewRedisNotifier(redisClient, syncCfg.channel, originID)
+		log.Printf("[server] registry sync: Redis enabled (channel=%s, origin=%s)", syncCfg.channel, originID)
+	} else {
+		log.Printf("[server] registry sync: disabled (single-replica)")
+	}
+
+	mcpService.SetRegistryNotifier(registryNotifier)
+	mcpService.SetOriginID(originID)
+	toolGroupService.SetRegistryNotifier(registryNotifier)
+	toolGroupService.SetOriginID(originID)
+	promptGroupService.SetRegistryNotifier(registryNotifier)
+	promptGroupService.SetOriginID(originID)
+
+	registryCoordinator := registrycoord.NewCoordinator(
+		originID,
+		toolGroupService,
+		promptGroupService,
+		mcpService,
+		s,
+	)
+
+	var registrySyncCancel context.CancelFunc
+	if syncCfg.enabled {
+		registrySyncCtx, cancel := context.WithCancel(context.Background())
+		registrySyncCancel = cancel
+		go func() {
+			if err := registrysync.Subscribe(registrySyncCtx, redisClient, syncCfg.channel, func(ev registrysync.Event) {
+				registryCoordinator.Handle(registrySyncCtx, ev)
+			}); err != nil && !errors.Is(err, context.Canceled) {
+				log.Printf("[registrysync] subscriber stopped: %v", err)
+			}
+		}()
+		if syncCfg.reconcileIntervalSec > 0 {
+			go func() {
+				ticker := time.NewTicker(time.Duration(syncCfg.reconcileIntervalSec) * time.Second)
+				defer ticker.Stop()
+				for {
+					select {
+					case <-registrySyncCtx.Done():
+						return
+					case <-ticker.C:
+						if err := registryCoordinator.FullReload(registrySyncCtx); err != nil {
+							log.Printf("[registrysync] periodic reconcile: %v", err)
+						}
+					}
+				}
+			}()
+			log.Printf("[server] registry sync: periodic reconcile every %ds", syncCfg.reconcileIntervalSec)
+		}
 	}
 
 	// Ensure server config exists (idempotent). First startup creates dev or enterprise row.
@@ -793,6 +910,9 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 	httpServer.RegisterOnShutdown(func() {
 		log.Println("[server] Cancelling active connections...")
 		cancelRequests()
+		if registrySyncCancel != nil {
+			registrySyncCancel()
+		}
 	})
 
 	// Channel to receive OS signals

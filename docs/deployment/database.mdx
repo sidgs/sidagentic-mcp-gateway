@@ -102,3 +102,7 @@ When Mcpgateway starts, it resolves the database connection in this order:
 </Tip>
 
 The production Docker Compose file (`docker-compose.prod.yaml`) bundles a Postgres 17 container for convenience. For a real deployment, replace it with a managed database service and update the `DATABASE_URL` accordingly.
+
+## Multi-replica sync
+
+PostgreSQL is the source of truth for registry configuration, but each gateway pod keeps its own in-memory MCP proxies. When running **more than one replica**, also configure **Redis** (`REDIS_URL`) so registry sync can publish mutation signals across pods. See [Multi-replica deployments](/deployment/multi-replica) for `REGISTRY_SYNC_*` variables and behavior.

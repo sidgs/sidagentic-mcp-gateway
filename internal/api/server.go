@@ -117,10 +117,10 @@ type Server struct {
 	otelProviders *telemetry.Providers
 	metrics       telemetry.CustomMetrics
 
-	// groupSseServers caches SSE MCP sessions for tool groups (key tenant::group).
+	// groupSseServers caches SSE MCP sessions for tool groups (key tenant__group).
 	groupSseServers sync.Map
 
-	// promptGroupSseServers caches SSE sessions for prompt groups (key pg::tenant::group).
+	// promptGroupSseServers caches SSE sessions for prompt groups (key pg__tenant__group).
 	promptGroupSseServers sync.Map
 
 	// Lazy-cached OIDC issuer (Cognito or other OIDC-compliant IdP).
@@ -365,6 +365,16 @@ func (s *Server) InitDev() error {
 // This is useful for graceful shutdown support.
 func (s *Server) Router() http.Handler {
 	return s.router
+}
+
+// InvalidateToolGroupSSECache drops a cached SSE MCP session so clients reconnect with fresh tools.
+func (s *Server) InvalidateToolGroupSSECache(tenantID, groupName string) {
+	s.groupSseServers.Delete(tenant.ToolGroupMapKey(tenantID, groupName))
+}
+
+// InvalidatePromptGroupSSECache drops a cached SSE MCP session so clients reconnect with fresh prompts.
+func (s *Server) InvalidatePromptGroupSSECache(tenantID, groupName string) {
+	s.promptGroupSseServers.Delete(tenant.PromptGroupMapKey(tenantID, groupName))
 }
 
 // HTTPPathPrefix returns the configured path prefix (normalized), or "" if routes are at the host root.

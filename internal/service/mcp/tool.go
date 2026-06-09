@@ -97,6 +97,29 @@ func (m *MCPService) GetToolInstance(name string) (mcp.Tool, bool) {
 	return tool, exists
 }
 
+// ResolveProxyToolTenant returns the tenant and canonical tool name for a proxy-registered tool.
+// When the proxy name has no tenant prefix, tenant is resolved from the tool's server record.
+func (m *MCPService) ResolveProxyToolTenant(proxyName string) (tenantID, canonical string, err error) {
+	if tid, can, qual := tenant.SplitProxyToolName(proxyName); qual {
+		return tid, can, nil
+	}
+
+	canonical = proxyName
+	serverName, toolName, ok := splitServerToolName(canonical)
+	if !ok {
+		return "", "", fmt.Errorf("tool instance %s has unexpected name format", proxyName)
+	}
+
+	var tool model.Tool
+	if err := m.db.Joins("Server").Where("tools.name = ? AND Server.name = ?", toolName, serverName).First(&tool).Error; err != nil {
+		return "", "", fmt.Errorf("failed to resolve tenant for tool %s: %w", proxyName, err)
+	}
+	if id, ok := tenant.PresentID(tool.TenantID); ok {
+		return id, canonical, nil
+	}
+	return "", canonical, nil
+}
+
 // GetToolParentServer returns the MCP server that provides the given tool.
 // The input name must be the canonical tool name, ie, it must contain the server name prefix (eg- "server__tool").
 func (m *MCPService) GetToolParentServer(ctx context.Context, name string) (*model.McpServer, error) {
@@ -256,6 +279,7 @@ func (m *MCPService) setToolsEnabled(ctx context.Context, entity string, enabled
 			m.notifyToolDeletion(proxyName)
 		}
 
+		m.notifyServerCatalogReload(ctx, serverName)
 		return []string{entity}, nil
 	}
 
@@ -312,6 +336,7 @@ func (m *MCPService) setToolsEnabled(ctx context.Context, entity string, enabled
 		changedToolNames = append(changedToolNames, canonicalToolName)
 	}
 
+	m.notifyServerCatalogReload(ctx, entity)
 	return changedToolNames, nil
 }
 

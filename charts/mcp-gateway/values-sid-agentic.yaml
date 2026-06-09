@@ -7,6 +7,7 @@ env:
   DEFAULT_TENANT_ID: sid-agentic
   HTTP_PORT: "8080"
   # Cognito OIDC dashboard session store (recommended with multiple replicas)
+  # Redis: OIDC sessions + registry sync for multi-replica deployments (see REGISTRY_SYNC_* env vars)
   # REDIS_URL: redis://redis-master.svc.cluster.local:6379/0
   OIDC_SESSION_TTL_SECONDS: "259200"
   # Optional: OAuth2 scopes for dashboard login (comma/space-separated); empty = openid email profile. "openid" is added if missing.
