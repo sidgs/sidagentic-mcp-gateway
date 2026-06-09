@@ -301,9 +301,8 @@ function transportLabel(value?: string) {
 function serverConnectionTone(status: DashboardServer["status"]): "good" | "warn" | "bad" | "muted" {
   switch (status) {
     case "connected":
-      return "good";
     case "reachable":
-      return "warn";
+      return "good";
     case "failed":
       return "bad";
     default:
