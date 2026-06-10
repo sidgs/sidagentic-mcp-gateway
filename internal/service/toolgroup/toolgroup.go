@@ -403,6 +403,40 @@ func (s *ToolGroupService) ReloadFromDB(ctx context.Context, tenantID, name stri
 	return s.reloadGroupMCPServers(ctx, tenantID, name)
 }
 
+// ReloadGroupsForServer rebuilds in-memory MCP servers for every tool group in the tenant
+// that references the given MCP server. Returns the names of reloaded groups.
+func (s *ToolGroupService) ReloadGroupsForServer(ctx context.Context, tenantID, serverName string) ([]string, error) {
+	groups, err := s.ListAllToolGroupsForInit()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list tool groups: %w", err)
+	}
+
+	var reloaded []string
+	for i := range groups {
+		if groups[i].TenantID != tenantID {
+			continue
+		}
+		includedServers, err := groups[i].GetServers()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get included servers for group %s: %w", groups[i].Name, err)
+		}
+		includedTools, err := groups[i].GetTools()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get included tools for group %s: %w", groups[i].Name, err)
+		}
+		if !model.GroupReferencesServer(includedServers, includedTools, serverName) {
+			continue
+		}
+		gctx := tenant.WithContext(ctx, tenantID)
+		if err := s.reloadGroupMCPServers(gctx, tenantID, groups[i].Name); err != nil {
+			return nil, err
+		}
+		s.notifyToolGroupReload(gctx, tenantID, groups[i].Name)
+		reloaded = append(reloaded, groups[i].Name)
+	}
+	return reloaded, nil
+}
+
 // RemoveFromMemory drops in-memory MCP servers for a tool group without touching the database.
 func (s *ToolGroupService) RemoveFromMemory(tenantID, name string) {
 	s.deleteToolGroupMCPServers(groupMapKey(tenantID, name))

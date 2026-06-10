@@ -202,3 +202,33 @@ func (c *Client) setServerEnabled(name string, enabled bool) (*types.EnableDisab
 
 	return &result, nil
 }
+
+// ReregisterServer reconnects to an existing MCP server using stored configuration,
+// clears its catalog from the registry, and rebuilds tools, prompts, and resources from upstream.
+func (c *Client) ReregisterServer(name string) (*types.McpServer, error) {
+	u, err := c.constructAPIEndpoint("/servers/" + url.PathEscape(name) + "/reregister")
+	if err != nil {
+		return nil, fmt.Errorf("failed to construct reregister endpoint: %w", err)
+	}
+
+	req, err := c.newRequest(http.MethodPost, u, nil)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request: %w", err)
+	}
+
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("failed to send request to %s: %w", u, err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, c.parseErrorResponse(resp)
+	}
+
+	var server types.McpServer
+	if err := json.NewDecoder(resp.Body).Decode(&server); err != nil {
+		return nil, fmt.Errorf("failed to decode response: %w", err)
+	}
+	return &server, nil
+}

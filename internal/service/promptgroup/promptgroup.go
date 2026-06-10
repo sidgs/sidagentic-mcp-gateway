@@ -377,6 +377,40 @@ func (s *PromptGroupService) ReloadFromDB(ctx context.Context, tenantID, name st
 	return s.reloadGroupMCPServers(ctx, tenantID, name)
 }
 
+// ReloadGroupsForServer rebuilds in-memory MCP servers for every prompt group in the tenant
+// that references the given MCP server. Returns the names of reloaded groups.
+func (s *PromptGroupService) ReloadGroupsForServer(ctx context.Context, tenantID, serverName string) ([]string, error) {
+	groups, err := s.ListAllPromptGroupsForInit()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list prompt groups: %w", err)
+	}
+
+	var reloaded []string
+	for i := range groups {
+		if groups[i].TenantID != tenantID {
+			continue
+		}
+		includedServers, err := groups[i].GetServers()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get included servers for group %s: %w", groups[i].Name, err)
+		}
+		includedPrompts, err := groups[i].GetPrompts()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get included prompts for group %s: %w", groups[i].Name, err)
+		}
+		if !model.GroupReferencesServer(includedServers, includedPrompts, serverName) {
+			continue
+		}
+		gctx := tenant.WithContext(ctx, tenantID)
+		if err := s.reloadGroupMCPServers(gctx, tenantID, groups[i].Name); err != nil {
+			return nil, err
+		}
+		s.notifyPromptGroupReload(gctx, tenantID, groups[i].Name)
+		reloaded = append(reloaded, groups[i].Name)
+	}
+	return reloaded, nil
+}
+
 // RemoveFromMemory drops in-memory MCP servers for a prompt group without touching the database.
 func (s *PromptGroupService) RemoveFromMemory(tenantID, name string) {
 	s.deleteMCPServers(groupMapKey(tenantID, name))

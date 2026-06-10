@@ -332,6 +332,17 @@ func (m *MCPService) DashboardServerConfig(ctx context.Context, name string) (*t
 	return input, nil
 }
 
+// ReregisterMcpServer reconnects to the upstream MCP server using stored configuration,
+// clears the cached catalog from Postgres and in-memory proxies, and rebuilds tools,
+// prompts, and resources as if the server were newly registered.
+func (m *MCPService) ReregisterMcpServer(ctx context.Context, name string) error {
+	existing, err := m.GetMcpServer(ctx, name)
+	if err != nil {
+		return err
+	}
+	return m.rebuildServerCatalogFromUpstream(ctx, existing)
+}
+
 // UpdateDashboardMcpServer replaces connection configuration for an existing server, re-probes
 // the upstream MCP endpoint, and rebuilds tools, prompts, and resources. Server name and
 // transport cannot change. If the server was disabled, catalog entries are re-imported then the
@@ -344,11 +355,23 @@ func (m *MCPService) UpdateDashboardMcpServer(ctx context.Context, name string, 
 	if existing.Transport != updated.Transport {
 		return fmt.Errorf("cannot change MCP server transport: %w", apierrors.ErrInvalidInput)
 	}
-	wasEnabled := existing.Enabled
 
 	existing.Description = updated.Description
 	existing.SessionMode = updated.SessionMode
 	existing.Config = updated.Config
+
+	if err := m.dbTenant(ctx).Save(existing).Error; err != nil {
+		return fmt.Errorf("failed to update MCP server %s: %w", name, err)
+	}
+
+	return m.rebuildServerCatalogFromUpstream(ctx, existing)
+}
+
+// rebuildServerCatalogFromUpstream reconnects to upstream, clears catalog rows and proxy
+// entries for the server, and re-imports tools, prompts, and resources from upstream.
+func (m *MCPService) rebuildServerCatalogFromUpstream(ctx context.Context, existing *model.McpServer) error {
+	name := existing.Name
+	wasEnabled := existing.Enabled
 
 	if m.sessionManager != nil {
 		m.sessionManager.CloseSessionForServer(existing.TenantID, name)
@@ -370,21 +393,17 @@ func (m *MCPService) UpdateDashboardMcpServer(ctx context.Context, name string, 
 		return err
 	}
 
-	if err := m.dbTenant(ctx).Save(existing).Error; err != nil {
-		return fmt.Errorf("failed to update MCP server %s: %w", name, err)
-	}
-
 	if err := m.registerServerTools(ctx, existing, mcpClient); err != nil {
 		return err
 	}
 	if mcpClient.GetServerCapabilities().Prompts != nil {
 		if err := m.registerServerPrompts(ctx, existing, mcpClient); err != nil {
-			log.Printf("[WARN] failed to register prompts for MCP server %s after update: %v", name, err)
+			log.Printf("[WARN] failed to register prompts for MCP server %s after catalog rebuild: %v", name, err)
 		}
 	}
 	if mcpClient.GetServerCapabilities().Resources != nil {
 		if err := m.registerServerResources(ctx, existing, mcpClient); err != nil {
-			log.Printf("[WARN] failed to register resources for MCP server %s after update: %v", name, err)
+			log.Printf("[WARN] failed to register resources for MCP server %s after catalog rebuild: %v", name, err)
 		}
 	}
 

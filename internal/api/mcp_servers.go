@@ -274,6 +274,54 @@ func (s *Server) disableServerHandler() gin.HandlerFunc {
 	}
 }
 
+func (s *Server) reregisterServerHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Param("name")
+		ctx := c.Request.Context()
+
+		if err := s.mcpService.ReregisterMcpServer(ctx, name); err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		s.syncGroupsForServer(ctx, name)
+
+		server, err := s.mcpService.GetMcpServer(ctx, name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+
+		c.JSON(http.StatusOK, mcpServerToAPIResponse(server))
+	}
+}
+
+func mcpServerToAPIResponse(server *model.McpServer) *types.McpServer {
+	resp := &types.McpServer{
+		Name:        server.Name,
+		Transport:   string(server.Transport),
+		Enabled:     server.Enabled,
+		Description: server.Description,
+		SessionMode: string(server.SessionMode),
+	}
+	switch server.Transport {
+	case types.TransportStreamableHTTP:
+		if conf, err := server.GetStreamableHTTPConfig(); err == nil {
+			resp.URL = conf.URL
+		}
+	case types.TransportStdio:
+		if conf, err := server.GetStdioConfig(); err == nil {
+			resp.Command = conf.Command
+			resp.Args = conf.Args
+			resp.Env = conf.Env
+		}
+	case types.TransportSSE:
+		if conf, err := server.GetSSEConfig(); err == nil {
+			resp.URL = conf.URL
+		}
+	}
+	return resp
+}
+
 // getServerConfigsHandler returns the configurations of all registered MCP servers.
 // This is different from listServersHandler because it returns the complete configuration of each server
 // used to register them, including potentially sensitive information.

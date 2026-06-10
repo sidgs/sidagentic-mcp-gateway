@@ -193,6 +193,32 @@ func (s *Server) dashboardUpdateServerHandler() gin.HandlerFunc {
 			handleServiceError(c, err)
 			return
 		}
+		s.syncGroupsForServer(ctx, name)
+		updated, err := s.mcpService.GetMcpServer(ctx, name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, dashboardRegisterServerResponse{
+			Name:        updated.Name,
+			Transport:   string(updated.Transport),
+			Enabled:     updated.Enabled,
+			Description: updated.Description,
+		})
+	}
+}
+
+func (s *Server) dashboardReregisterServerHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Param("name")
+		ctx := c.Request.Context()
+
+		if err := s.mcpService.ReregisterMcpServer(ctx, name); err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		s.syncGroupsForServer(ctx, name)
+
 		updated, err := s.mcpService.GetMcpServer(ctx, name)
 		if err != nil {
 			handleServiceError(c, err)

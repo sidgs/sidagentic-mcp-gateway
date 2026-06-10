@@ -10,6 +10,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	mcpserver "github.com/mark3labs/mcp-go/server"
+	"sami.io/mcpgateway/internal/agentappauth"
 	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/internal/mcpgatewayctx"
@@ -198,6 +199,42 @@ func TestCheckAuthForGroupMcpProxyAccess_APIKeyAllowed(t *testing.T) {
 	r := gin.New()
 	r.Use(testTenantAndModeMiddleware(model.ModeEnterprise))
 	r.GET("/v0/groups/:name/mcp", env.s.checkAuthForGroupMcpProxyAccess(true), func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"ok": true})
+	})
+	req := httptest.NewRequest(http.MethodGet, "/v0/groups/tg/mcp", nil)
+	req.Header.Set("X-API-Key", app.ClientID)
+	w := httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	testhelpers.AssertEqual(t, http.StatusOK, w.Code)
+}
+
+func TestCheckAuthForGroupMcpProxyAccess_APIKeyInjectsToolGroupRoute(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	env := setupGroupMCPTestServer(t, "")
+	insertToolGroup(t, env.db, "tg", types.GroupSecurityAPIKey)
+	ctx := tenant.WithContext(context.Background(), tenant.DefaultID)
+	_, _, err := env.agentS.Create(ctx, "owner", "a1", "", []string{"tg"}, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var app model.AgentApp
+	if err := env.db.Where("name = ?", "a1").First(&app).Error; err != nil {
+		t.Fatal(err)
+	}
+
+	r := gin.New()
+	r.Use(testTenantAndModeMiddleware(model.ModeEnterprise))
+	r.GET("/v0/groups/:name/mcp", env.s.checkAuthForGroupMcpProxyAccess(true), func(c *gin.Context) {
+		group, ok := mcpgatewayctx.ToolGroupRoute(c.Request.Context())
+		if !ok || group != "tg" {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "missing tool group route in context"})
+			return
+		}
+		principal, ok := agentappauth.PrincipalFromContext(c.Request.Context())
+		if !ok || principal == nil || !principal.AllowsToolGroup("tg") {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "missing agent-app principal in context"})
+			return
+		}
 		c.JSON(http.StatusOK, gin.H{"ok": true})
 	})
 	req := httptest.NewRequest(http.MethodGet, "/v0/groups/tg/mcp", nil)

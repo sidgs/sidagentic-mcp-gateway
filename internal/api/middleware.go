@@ -284,7 +284,9 @@ func (s *Server) checkAuthForGroupMcpProxyAccess(toolGroup bool) gin.HandlerFunc
 			if !allowGroup(principal) {
 				return
 			}
-			nextCtx := agentappauth.WithPrincipal(c.Request.Context(), principal)
+			// ctx already carries mode + tool/prompt group route from injectMCPGroupRouteContext;
+			// merge the agent-app principal so ProxyToolFilter can authorize tool listing.
+			nextCtx := agentappauth.WithPrincipal(ctx, principal)
 			c.Request = c.Request.WithContext(nextCtx)
 			c.Next()
 		}

@@ -435,3 +435,61 @@ func TestDeregisterMcpServer_RemovesEntitiesOAuthStateAndSession(t *testing.T) {
 	assert.False(t, ok)
 	assert.False(t, service.sessionManager.HasSession(srv.Name))
 }
+
+func TestReregisterMcpServer_RebuildsCatalogFromUpstream(t *testing.T) {
+	db := setupTestDBForServerLifecycle(t)
+	service := newTestLifecycleService(t, db)
+
+	upstream := mcpserver.NewMCPServer(
+		"Upstream",
+		"0.1.0",
+		mcpserver.WithToolCapabilities(true),
+	)
+	upstream.AddTool(
+		mcp.NewTool("echo", mcp.WithString("msg")),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			msg, _ := request.GetArguments()["msg"].(string)
+			return mcp.NewToolResultText(msg), nil
+		},
+	)
+
+	httpServer := newUpstreamStreamableHTTPServer(t, upstream)
+	defer httpServer.Close()
+
+	srv, err := model.NewStreamableHTTPServer(
+		"catalog",
+		"Catalog server",
+		httpServer.URL,
+		"",
+		nil,
+		types.SessionModeStateless,
+	)
+	require.NoError(t, err)
+
+	testCtx := tenant.WithContext(context.Background(), tenant.DefaultID)
+	err = service.RegisterMcpServerWithOAuthSupport(testCtx, &types.RegisterServerInput{}, srv, false, "test")
+	require.NoError(t, err)
+
+	upstream.AddTool(
+		mcp.NewTool("ping", mcp.WithString("msg")),
+		func(ctx context.Context, request mcp.CallToolRequest) (*mcp.CallToolResult, error) {
+			return mcp.NewToolResultText("pong"), nil
+		},
+	)
+
+	require.NoError(t, service.ReregisterMcpServer(testCtx, "catalog"))
+
+	var toolCount int64
+	require.NoError(t, db.Model(&model.Tool{}).Count(&toolCount).Error)
+	assert.EqualValues(t, 2, toolCount)
+
+	tools, err := service.ListToolsByServer(testCtx, "catalog")
+	require.NoError(t, err)
+	require.Len(t, tools, 2)
+
+	names := make([]string, len(tools))
+	for i, tool := range tools {
+		names[i] = tool.Name
+	}
+	assert.ElementsMatch(t, []string{"catalog__echo", "catalog__ping"}, names)
+}

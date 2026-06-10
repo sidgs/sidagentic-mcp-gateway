@@ -45,7 +45,7 @@ With sync disabled (single replica or no Redis):
 | Tool group delete | `tool_group.delete` | Drop in-memory servers + invalidate SSE cache |
 | Prompt group create/update | `prompt_group.reload` | Reload group MCP servers from DB |
 | Prompt group delete | `prompt_group.delete` | Drop in-memory servers + invalidate SSE cache |
-| MCP server register/update/enable | `server.catalog_reload` | Reconcile global proxy catalog for server |
+| MCP server register/update/enable/reregister | `server.catalog_reload` | Reconcile global proxy catalog for server and reload dependent tool/prompt groups |
 | MCP server deregister | `server.purge` | Remove server from global proxy |
 | Periodic safety net | _(local only)_ | Full catalog + all groups reconcile |
 

@@ -131,6 +131,13 @@ export const api = {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
     }),
+  reregisterServer: (name: string) =>
+    requestJSON<DashboardRegisterServerResponse>(
+      `/dashboard/servers/${encodeURIComponent(name)}/reregister`,
+      {
+        method: "POST",
+      },
+    ),
   getOAuthSession: (sessionID: string) =>
     requestJSON<DashboardOAuthSessionResponse>(
       `/dashboard/oauth/session/${encodeURIComponent(sessionID)}`

@@ -377,6 +377,27 @@ func (s *Server) InvalidatePromptGroupSSECache(tenantID, groupName string) {
 	s.promptGroupSseServers.Delete(tenant.PromptGroupMapKey(tenantID, groupName))
 }
 
+// syncGroupsForServer reloads in-memory tool and prompt group proxies that reference the MCP server.
+func (s *Server) syncGroupsForServer(ctx context.Context, serverName string) {
+	tenantID := tenant.MustFromContext(ctx)
+	if reloaded, err := s.toolGroupService.ReloadGroupsForServer(ctx, tenantID, serverName); err != nil {
+		log.Printf("[api] reload tool groups for server %s/%s: %v", tenantID, serverName, err)
+	} else {
+		for _, groupName := range reloaded {
+			s.InvalidateToolGroupSSECache(tenantID, groupName)
+		}
+	}
+	if s.promptGroupService != nil {
+		if reloaded, err := s.promptGroupService.ReloadGroupsForServer(ctx, tenantID, serverName); err != nil {
+			log.Printf("[api] reload prompt groups for server %s/%s: %v", tenantID, serverName, err)
+		} else {
+			for _, groupName := range reloaded {
+				s.InvalidatePromptGroupSSECache(tenantID, groupName)
+			}
+		}
+	}
+}
+
 // HTTPPathPrefix returns the configured path prefix (normalized), or "" if routes are at the host root.
 func (s *Server) HTTPPathPrefix() string {
 	return s.httpPathPrefix
@@ -634,6 +655,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		adminAPI.POST("/servers", s.registerServerHandler())
 		adminAPI.POST("/upstream_oauth/sessions/:id/complete", s.completeUpstreamOAuthSessionHandler())
 		adminAPI.DELETE("/servers/:name", s.deregisterServerHandler())
+		adminAPI.POST("/servers/:name/reregister", s.reregisterServerHandler())
 		adminAPI.POST("/servers/:name/enable", s.enableServerHandler())
 		adminAPI.POST("/servers/:name/disable", s.disableServerHandler())
 
@@ -708,6 +730,7 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.POST("/servers", s.dashboardRegisterServerHandler())
 			dashboardAPI.GET("/servers/:name/config", s.dashboardGetServerConfigHandler())
 			dashboardAPI.PUT("/servers/:name", s.dashboardUpdateServerHandler())
+			dashboardAPI.POST("/servers/:name/reregister", s.dashboardReregisterServerHandler())
 			dashboardAPI.GET("/oauth/callback", s.dashboardOAuthCallbackHandler())
 			dashboardAPI.GET("/oauth/session/:id", s.dashboardOAuthSessionHandler())
 			dashboardAPI.DELETE("/servers/:name", s.dashboardDeleteServerHandler())

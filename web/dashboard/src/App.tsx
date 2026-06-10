@@ -1809,6 +1809,22 @@ export default function App() {
     }
   }
 
+  async function reregisterServer(server: DashboardServer) {
+    const confirmed = window.confirm(
+      `Re-register server "${server.name}"? This refreshes tools, prompts, and resources from upstream and resyncs dependent tool and prompt groups.`,
+    );
+    if (!confirmed) {
+      return;
+    }
+    await runMutation(
+      `server-reregister:${server.name}`,
+      async () => {
+        await api.reregisterServer(server.name);
+      },
+      `${server.name} re-registered.`,
+    );
+  }
+
   async function toggleToolEnabled(tool: DashboardTool) {
     const nextEnabled = !tool.enabled;
     await runMutation(
@@ -2955,6 +2971,14 @@ export default function App() {
               : server.enabled
                 ? "Disable"
                 : "Enable"}
+          </Button>
+          <Button
+            variant="outlined"
+            size="small"
+            disabled={isBusy(`server-reregister:${server.name}`)}
+            onClick={() => void reregisterServer(server)}
+          >
+            {isBusy(`server-reregister:${server.name}`) ? "Re-registering..." : "Re-register"}
           </Button>
           <IconButton
             aria-label="Delete server"

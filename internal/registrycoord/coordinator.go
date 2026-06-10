@@ -101,6 +101,22 @@ func (c *Coordinator) Handle(ctx context.Context, ev registrysync.Event) {
 		if err := c.mcpService.ReloadServerCatalogFromDB(gctx, ev.TenantID, ev.Name); err != nil {
 			log.Printf("[registrysync] server.catalog_reload %s/%s: %v", ev.TenantID, ev.Name, err)
 		}
+		if reloaded, err := c.toolGroups.ReloadGroupsForServer(gctx, ev.TenantID, ev.Name); err != nil {
+			log.Printf("[registrysync] server.catalog_reload tool groups %s/%s: %v", ev.TenantID, ev.Name, err)
+		} else if c.sseInvalidator != nil {
+			for _, groupName := range reloaded {
+				c.sseInvalidator.InvalidateToolGroupSSECache(ev.TenantID, groupName)
+			}
+		}
+		if c.promptGroups != nil {
+			if reloaded, err := c.promptGroups.ReloadGroupsForServer(gctx, ev.TenantID, ev.Name); err != nil {
+				log.Printf("[registrysync] server.catalog_reload prompt groups %s/%s: %v", ev.TenantID, ev.Name, err)
+			} else if c.sseInvalidator != nil {
+				for _, groupName := range reloaded {
+					c.sseInvalidator.InvalidatePromptGroupSSECache(ev.TenantID, groupName)
+				}
+			}
+		}
 	case registrysync.EventServerPurge:
 		if ev.TenantID == "" || ev.Name == "" {
 			return
