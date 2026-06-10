@@ -1,0 +1,67 @@
+---
+description: Enforce LLM-optimized MCP tool schemas, naming, and lifecycle documentation in Go code
+globs: internal/**/*.go
+alwaysApply: false
+---
+
+# MCP Tool Documentation & Schema Standards
+
+You must enforce strict, LLM-optimized schemas and human-readable lifecycle documentation whenever creating or modifying Model Context Protocol (MCP) tools. MCP definitions are a User Interface for AI agents; they must be optimized for machine comprehension, token efficiency, and runtime safety.
+
+Gateway clients and LLMs rely on tool metadata at discovery time. Undocumented tools degrade agent routing and are treated as defects in this repo (see `internal/e2e/tool_groups_test.go`).
+
+## Code generation rules
+
+1. **TOOL NAMES**: Use flat, service-prefixed snake_case (`{service}_{action}_{resource}`). Max 32 characters. Do not use dots, slashes, camelCase, or generic verbs like `run` or `execute`.
+2. **INTENT-DRIVEN DESCRIPTIONS**: The tool description must explicitly state *when* and *why* an LLM should invoke it, rather than just explaining *what* it does technically.
+3. **FLAT PRIMITIVES**: All tool arguments must be flattened. Never use deeply nested JSON objects, raw dictionaries, or generic types (like `object`).
+4. **STRICT SCHEMA BOUNDS**: Every argument must feature a descriptive `description`, clear data types, and explicit bounds (`enum`, `minimum`, `maximum`) wherever applicable.
+5. **LOGGING SAFETY**: Ensure all runtime errors and developer telemetry are strictly routed to standard error (`stderr`). Standard output (`stdout`) must remain purely reserved for valid JSON-RPC frames.
+
+## Required documentation
+
+Every MCP **tool** exposed via `mcp.NewTool` or `AddTool` must include a non-empty, intent-driven description:
+
+```go
+// ❌ BAD — no description; fails e2e expectations
+mcp.NewTool("echo", mcp.WithString("message", mcp.Required()))
+
+// ❌ BAD — technical-only description; no when/why for the LLM
+mcp.NewTool(
+  "echo",
+  mcp.WithDescription("Returns the input message"),
+  mcp.WithString("message", mcp.Required()),
+)
+
+// ✅ GOOD — intent-driven description + documented, bounded args
+mcp.NewTool(
+  "test_echo_message",
+  mcp.WithDescription("Use when the caller needs to verify connectivity or round-trip a message through the test server"),
+  mcp.WithString("message", mcp.Description("Text to echo back to the caller"), mcp.Required()),
+)
+```
+
+Apply the same standard to **prompts** and **resources**:
+
+```go
+mcp.WithResourceDescription("Use when the agent needs current server health before routing traffic")
+mcp.WithArgument("topic", mcp.ArgumentDescription("Topic to review in the status summary"), mcp.RequiredArgument())
+```
+
+## Input schema
+
+- Every tool argument in test/upstream servers should have a `description` (via `mcp.Description`, `mcp.ArgumentDescription`, or JSON-schema `description` fields).
+- Flatten arguments to primitives; avoid nested objects and generic `object` types.
+- Prefer explicit bounds: `enum` for fixed choices, `minimum`/`maximum` for numeric ranges, `required` for mandatory params.
+- Do not leave ambiguous optional params without docs.
+
+## Tests
+
+When adding or changing tools in e2e/integration tests:
+
+- Assert `assert.NotEmpty(t, tool.Description)` when verifying discovered tools.
+- Fix upstream test servers that register undocumented tools — do not weaken assertions.
+
+## Registration path
+
+`registerServerTools` stores upstream `tool.Description` as-is. Fixing docs at the MCP server source is required; the gateway does not invent descriptions.
