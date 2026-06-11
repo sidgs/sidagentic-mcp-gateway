@@ -153,6 +153,47 @@ Used with `sami-mcp-gateway register -c <file>`.
 | `env` | object | No | Environment variables injected into the server process. |
 | `session_mode` | string | No | Connection lifecycle: `"stateless"` (default) creates a new process per call; `"stateful"` keeps the process alive between calls. |
 
+### Register a REST / OpenAPI server
+
+Used with `sami-mcp-gateway register -c <file>` when exposing a REST API (not an MCP protocol server) through Mcpgateway.
+
+```json
+{
+  "name": "petstore",
+  "server_kind": "rest_openapi",
+  "transport": "rest",
+  "description": "Petstore REST API exposed as MCP tools",
+  "base_url": "https://petstore.example.com",
+  "openapi_spec_url": "https://petstore.example.com/openapi.json",
+  "excluded_operations": ["deletePet"],
+  "rest_auth": {
+    "type": "api_key",
+    "api_key_header": "X-API-Key",
+    "api_key_value": "${API_TOKEN}"
+  }
+}
+```
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `name` | string | Yes | Unique name for this server in Mcpgateway. |
+| `server_kind` | string | Yes | Must be `"rest_openapi"` or `"rest_endpoint"`. |
+| `transport` | string | Yes | Must be `"rest"`. |
+| `base_url` | string | Yes | Base URL of the upstream REST API. |
+| `openapi_spec_url` | string | Conditional | URL to fetch the OpenAPI 3 spec (`rest_openapi` only). |
+| `openapi_spec` | string | Conditional | Inline OpenAPI 3 YAML/JSON (`rest_openapi` only). Provide exactly one of `openapi_spec_url` or `openapi_spec`. |
+| `excluded_operations` | string array | No | OpenAPI `operationId` values to skip when synthesizing tools. |
+| `rest_auth.type` | string | No | Upstream auth: `none`, `api_key`, `basic`, `bearer`, or `oauth` (default `none`). |
+| `rest_auth.api_key_header` | string | No | Header name for API key auth. |
+| `rest_auth.api_key_query` | string | No | Query parameter name for API key auth. |
+| `rest_auth.api_key_value` | string | No | API key value. |
+| `rest_auth.username` / `rest_auth.password` | string | No | Basic auth credentials. |
+| `bearer_token` | string | No | Shorthand for bearer auth when `rest_auth.type` is omitted. |
+
+For a single manually defined REST operation, use `server_kind: "rest_endpoint"` with `method`, `path`, `tool_name`, `tool_description`, and `parameters`.
+
+REST servers appear in tool groups the same way as MCP protocol servers (`included_servers`, `included_tools`).
+
 ### Create a tool group
 
 Used with `sami-mcp-gateway create group -c <file>`.

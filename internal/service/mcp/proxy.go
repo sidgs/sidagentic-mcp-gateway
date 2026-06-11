@@ -120,6 +120,15 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 		return nil, fmt.Errorf("tool tenant does not match server record: %w", apierrors.ErrInvalidInput)
 	}
 
+	if server.IsRestServer() {
+		args := request.GetArguments()
+		res, err := m.callRestTool(ctx, server, toolName, args)
+		if err != nil {
+			outcome = telemetry.ToolCallOutcomeError
+		}
+		return res, err
+	}
+
 	session, err := m.getSession(ctx, server)
 	if err != nil {
 		outcome = telemetry.ToolCallOutcomeError

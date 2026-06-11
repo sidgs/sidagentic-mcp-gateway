@@ -1,6 +1,8 @@
 package model
 
 import (
+	"encoding/json"
+
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
 )
@@ -30,7 +32,36 @@ type Tool struct {
 	// These hints help LLMs understand tool behavior (e.g., read-only vs destructive).
 	Annotations datatypes.JSON `json:"annotations" gorm:"type:jsonb"`
 
+	// RestOperation stores REST operation metadata for REST adapter tools.
+	RestOperation datatypes.JSON `json:"rest_operation" gorm:"type:jsonb"`
+
 	// ServerID is the ID of the MCP server that provides this tool.
 	ServerID uint      `json:"-" gorm:"not null"`
 	Server   McpServer `json:"-" gorm:"foreignKey:ServerID;references:ID"`
+}
+
+// GetRestOperationMeta unmarshals REST operation metadata when present.
+func (t *Tool) GetRestOperationMeta() (*RestOperationMeta, error) {
+	if len(t.RestOperation) == 0 {
+		return nil, nil
+	}
+	var meta RestOperationMeta
+	if err := json.Unmarshal(t.RestOperation, &meta); err != nil {
+		return nil, err
+	}
+	return &meta, nil
+}
+
+// SetRestOperationMeta serializes REST operation metadata onto the tool row.
+func (t *Tool) SetRestOperationMeta(meta *RestOperationMeta) error {
+	if meta == nil {
+		t.RestOperation = nil
+		return nil
+	}
+	data, err := json.Marshal(meta)
+	if err != nil {
+		return err
+	}
+	t.RestOperation = datatypes.JSON(data)
+	return nil
 }

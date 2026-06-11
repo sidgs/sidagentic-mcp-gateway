@@ -288,8 +288,26 @@ func (m *MCPService) bootstrapUpstreamOAuth(ctx context.Context, input *types.Re
 		if !errors.As(err, &oauthErr) {
 			return err
 		}
+	case types.TransportRest:
+		conf, err := server.GetRestConfig()
+		if err != nil {
+			return err
+		}
+		opts := prepareRestOAuthClientOptions(server.Name, conf)
+		c, err := mcpgoclient.NewOAuthStreamableHttpClient(conf.BaseURL, prepareOAuthConfig(input, mcpgoclient.NewMemoryTokenStore()), opts...)
+		if err != nil {
+			return fmt.Errorf("failed to create OAuth HTTP client for REST server: %w", err)
+		}
+		defer c.Close()
+		_, err = initializeHTTPClient(ctx, c, conf.BaseURL, m.mcpServerInitReqTimeoutSec)
+		if err == nil {
+			return m.finalizeMcpServerRegistration(ctx, server)
+		}
+		if !errors.As(err, &oauthErr) {
+			return err
+		}
 	default:
-		return m.finalizeMcpServerRegistration(ctx, server)
+		return fmt.Errorf("unsupported transport for upstream OAuth bootstrap: %s", server.Transport)
 	}
 
 	oauthHandler := oauthErr.Handler
@@ -422,6 +440,24 @@ func (m *MCPService) buildOAuthHandlerForRegisteredClient(ctx context.Context, s
 		if !errors.As(err, &oauthErr) {
 			if err == nil {
 				return nil, fmt.Errorf("unexpectedly initialized upstream server while rebuilding OAuth handler")
+			}
+			return nil, err
+		}
+	case types.TransportRest:
+		conf, err := server.GetRestConfig()
+		if err != nil {
+			return nil, err
+		}
+		opts := prepareRestOAuthClientOptions(server.Name, conf)
+		c, err := mcpgoclient.NewOAuthStreamableHttpClient(conf.BaseURL, prepareOAuthConfig(input, mcpgoclient.NewMemoryTokenStore()), opts...)
+		if err != nil {
+			return nil, err
+		}
+		defer c.Close()
+		_, err = initializeHTTPClient(ctx, c, conf.BaseURL, m.mcpServerInitReqTimeoutSec)
+		if !errors.As(err, &oauthErr) {
+			if err == nil {
+				return nil, fmt.Errorf("unexpectedly initialized upstream REST server while rebuilding OAuth handler")
 			}
 			return nil, err
 		}

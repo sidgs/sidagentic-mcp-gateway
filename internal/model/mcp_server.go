@@ -47,6 +47,7 @@ type McpServer struct {
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_mcp_server_tenant_name"`
 
 	Name      string                   `json:"name" gorm:"uniqueIndex:ux_mcp_server_tenant_name;not null"`
+	ServerKind types.ServerKind         `json:"server_kind" gorm:"type:varchar(32);not null;default:mcp_protocol"`
 	Transport types.McpServerTransport `json:"transport" gorm:"type:varchar(30);not null"`
 	Enabled   bool                     `json:"enabled" gorm:"default:true"`
 
@@ -82,6 +83,7 @@ func NewStreamableHTTPServer(name, description, url, bearerToken string, headers
 	return &McpServer{
 		Name:        name,
 		Description: description,
+		ServerKind:  types.ServerKindMCPProtocol,
 		Transport:   types.TransportStreamableHTTP,
 		Enabled:     true,
 		Config:      configJSON,
@@ -109,6 +111,7 @@ func NewStdioServer(name, description, command string, args []string, env map[st
 	return &McpServer{
 		Name:        name,
 		Description: description,
+		ServerKind:  types.ServerKindMCPProtocol,
 		Transport:   types.TransportStdio,
 		Enabled:     true,
 		Config:      datatypes.JSON(configJSON),
@@ -135,6 +138,7 @@ func NewSSEServer(name, description, url, bearerToken string, sessionMode types.
 	return &McpServer{
 		Name:        name,
 		Description: description,
+		ServerKind:  types.ServerKindMCPProtocol,
 		Transport:   types.TransportSSE,
 		Enabled:     true,
 		Config:      configJSON,

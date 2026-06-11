@@ -24,6 +24,21 @@ func (m *MCPService) RegisterMcpServerWithOAuthSupport(
 	force bool,
 	initiatedBy string,
 ) error {
+	if s.IsRestServer() {
+		err := m.registerRestMcpServer(ctx, s, input)
+		if err == nil {
+			return nil
+		}
+		var oauthErr *UpstreamOAuthAuthorizationPendingError
+		if errors.As(err, &oauthErr) {
+			return err
+		}
+		if s.GetRestConfigAuthType() == types.RestAuthOAuth && isUnauthorizedProbeError(err) {
+			return m.bootstrapUpstreamOAuth(ctx, input, s, force, initiatedBy)
+		}
+		return err
+	}
+
 	// First attempt to register the server without involving any oauth flows.
 	// This covers all mcp servers that DO NOT specifically require oauth-based authentication.
 	err := m.registerMcpServerWithoutOAuth(ctx, s)
@@ -32,7 +47,7 @@ func (m *MCPService) RegisterMcpServerWithOAuthSupport(
 	}
 
 	// If registration failed and the error is not related to oauth, return error.
-	if s.Transport != types.TransportStreamableHTTP && s.Transport != types.TransportSSE {
+	if s.Transport != types.TransportStreamableHTTP && s.Transport != types.TransportSSE && s.Transport != types.TransportRest {
 		return err
 	}
 	if !errors.Is(err, mcpgotransport.ErrUnauthorized) {
@@ -54,6 +69,9 @@ func (m *MCPService) registerMcpServerWithoutOAuth(ctx context.Context, s *model
 // once upstream authentication has already been satisfied and any stored
 // upstream OAuth credentials should be attached to the connection attempt.
 func (m *MCPService) finalizeMcpServerRegistration(ctx context.Context, s *model.McpServer) error {
+	if s.IsRestServer() {
+		return m.registerRestMcpServer(ctx, s, nil)
+	}
 	return m.registerMcpServer(ctx, s, true)
 }
 
@@ -66,6 +84,10 @@ func (m *MCPService) finalizeMcpServerRegistration(ctx context.Context, s *model
 //
 // This method assumes that any Oauth nuance is already handled and simply uses existing auth info.
 func (m *MCPService) registerMcpServer(ctx context.Context, s *model.McpServer, useStoredUpstreamAuth bool) error {
+	if s.IsRestServer() {
+		return m.registerRestMcpServer(ctx, s, nil)
+	}
+
 	if err := validateServerName(s.Name); err != nil {
 		return err
 	}
@@ -286,11 +308,32 @@ func (m *MCPService) DashboardServerConfig(ctx context.Context, name string) (*t
 	}
 	input := &types.RegisterServerInput{
 		Name:        record.Name,
+		ServerKind:  string(record.ServerKind),
 		Transport:   string(record.Transport),
 		Description: record.Description,
 		SessionMode: string(record.SessionMode),
 	}
+	if record.ServerKind == "" {
+		input.ServerKind = string(types.ServerKindMCPProtocol)
+	}
 	switch record.Transport {
+	case types.TransportRest:
+		conf, confErr := record.GetRestConfig()
+		if confErr != nil {
+			return nil, confErr
+		}
+		input.BaseURL = conf.BaseURL
+		input.OpenAPISpecURL = conf.OpenAPISpecURL
+		input.OpenAPISpec = conf.OpenAPISpecInline
+		input.ExcludedOperations = conf.ExcludedOperations
+		input.RestAuth = restAuthToTypes(conf.Auth)
+		if conf.ManualOperation != nil {
+			input.Method = conf.ManualOperation.Method
+			input.Path = conf.ManualOperation.Path
+			input.ToolName = conf.ManualOperation.ToolName
+			input.ToolDescription = conf.ManualOperation.Description
+			input.Parameters = conf.ManualOperation.Parameters
+		}
 	case types.TransportStreamableHTTP:
 		conf, confErr := record.GetStreamableHTTPConfig()
 		if confErr != nil {
@@ -372,6 +415,19 @@ func (m *MCPService) UpdateDashboardMcpServer(ctx context.Context, name string, 
 func (m *MCPService) rebuildServerCatalogFromUpstream(ctx context.Context, existing *model.McpServer) error {
 	name := existing.Name
 	wasEnabled := existing.Enabled
+
+	if existing.IsRestServer() {
+		if err := m.rebuildRestServerCatalog(ctx, existing); err != nil {
+			return err
+		}
+		if !wasEnabled {
+			if _, _, err := m.DisableMcpServer(ctx, name); err != nil {
+				return fmt.Errorf("failed to re-apply disabled state for server %s: %w", name, err)
+			}
+		}
+		m.notifyServerCatalogReload(ctx, name)
+		return nil
+	}
 
 	if m.sessionManager != nil {
 		m.sessionManager.CloseSessionForServer(existing.TenantID, name)

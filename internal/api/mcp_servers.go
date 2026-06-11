@@ -11,6 +11,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/internal/service/mcp"
+	"sami.io/mcpgateway/internal/service/restadapter"
 	"sami.io/mcpgateway/pkg/apierrors"
 	"sami.io/mcpgateway/pkg/types"
 )
@@ -85,6 +86,7 @@ func (s *Server) registerServerHandler() gin.HandlerFunc {
 
 		c.JSON(http.StatusCreated, types.RegisterServerResult{Server: &types.McpServer{
 			Name:        server.Name,
+			ServerKind:  string(server.ServerKind),
 			Transport:   string(server.Transport),
 			Enabled:     server.Enabled,
 			Description: server.Description,
@@ -181,8 +183,13 @@ func (s *Server) listServersHandler() gin.HandlerFunc {
 		servers := make([]*types.McpServer, len(records))
 
 		for i, record := range records {
+			serverKind := string(record.ServerKind)
+			if serverKind == "" {
+				serverKind = string(types.ServerKindMCPProtocol)
+			}
 			servers[i] = &types.McpServer{
 				Name:        record.Name,
+				ServerKind:  serverKind,
 				Transport:   string(record.Transport),
 				Enabled:     record.Enabled,
 				Description: record.Description,
@@ -190,6 +197,18 @@ func (s *Server) listServersHandler() gin.HandlerFunc {
 			}
 
 			switch record.Transport {
+			case types.TransportRest:
+				conf, err := record.GetRestConfig()
+				if err != nil {
+					c.JSON(
+						http.StatusInternalServerError,
+						gin.H{
+							"error": fmt.Sprintf("Error getting REST config for server %s: %v", record.Name, err),
+						},
+					)
+					return
+				}
+				servers[i].URL = conf.BaseURL
 			case types.TransportStreamableHTTP:
 				conf, err := record.GetStreamableHTTPConfig()
 				if err != nil {
@@ -217,18 +236,19 @@ func (s *Server) listServersHandler() gin.HandlerFunc {
 				servers[i].Args = conf.Args
 				servers[i].Env = conf.Env
 			default:
-				// transport is SSE
-				conf, err := record.GetSSEConfig()
-				if err != nil {
-					c.JSON(
-						http.StatusInternalServerError,
-						gin.H{
-							"error": fmt.Sprintf("Error getting SSE config for server %s: %v", record.Name, err),
-						},
-					)
-					return
+				if record.Transport == types.TransportSSE {
+					conf, err := record.GetSSEConfig()
+					if err != nil {
+						c.JSON(
+							http.StatusInternalServerError,
+							gin.H{
+								"error": fmt.Sprintf("Error getting SSE config for server %s: %v", record.Name, err),
+							},
+						)
+						return
+					}
+					servers[i].URL = conf.URL
 				}
-				servers[i].URL = conf.URL
 			}
 		}
 
@@ -456,12 +476,21 @@ func mergeRegisterInputForUpdate(urlName string, input *types.RegisterServerInpu
 }
 
 func createServerModelFromInput(input *types.RegisterServerInput) (*model.McpServer, error) {
-	transport, err := types.ValidateTransport(input.Transport)
+	serverKind, err := types.ValidateServerKind(input.ServerKind)
 	if err != nil {
 		return nil, err
 	}
 
 	sessionMode, err := types.ValidateSessionMode(input.SessionMode)
+	if err != nil {
+		return nil, err
+	}
+
+	if types.IsRestServerKind(serverKind) {
+		return createRestServerModelFromInput(input, serverKind, sessionMode)
+	}
+
+	transport, err := types.ValidateTransport(input.Transport)
 	if err != nil {
 		return nil, err
 	}
@@ -505,5 +534,53 @@ func createServerModelFromInput(input *types.RegisterServerInput) (*model.McpSer
 			return nil, fmt.Errorf("error creating SSE server: %v", err)
 		}
 		return server, nil
+	}
+}
+
+func createRestServerModelFromInput(
+	input *types.RegisterServerInput,
+	serverKind types.ServerKind,
+	sessionMode types.SessionMode,
+) (*model.McpServer, error) {
+	if input.Transport != "" && input.Transport != string(types.TransportRest) {
+		return nil, fmt.Errorf("REST servers must use transport %q", types.TransportRest)
+	}
+
+	auth := restadapter.RestAuthFromTypes(input.RestAuth, input.BearerToken, input.Headers)
+	if !restadapter.IsValidRestAuthType(auth.Type) {
+		return nil, fmt.Errorf("unsupported rest_auth.type %q", auth.Type)
+	}
+
+	switch serverKind {
+	case types.ServerKindRestOpenAPI:
+		return model.NewRestOpenAPIServer(
+			input.Name,
+			input.Description,
+			input.BaseURL,
+			input.OpenAPISpecURL,
+			input.OpenAPISpec,
+			input.ExcludedOperations,
+			auth,
+			sessionMode,
+		)
+	case types.ServerKindRestEndpoint:
+		if input.Method == "" || input.Path == "" || input.ToolName == "" {
+			return nil, fmt.Errorf("method, path, and tool_name are required for rest_endpoint servers")
+		}
+		for _, p := range input.Parameters {
+			if err := restadapter.ValidateManualParameter(p); err != nil {
+				return nil, err
+			}
+		}
+		op := model.ManualRestOperation{
+			Method:      input.Method,
+			Path:        input.Path,
+			ToolName:    input.ToolName,
+			Description: input.ToolDescription,
+			Parameters:  input.Parameters,
+		}
+		return model.NewRestEndpointServer(input.Name, input.Description, input.BaseURL, op, auth, sessionMode)
+	default:
+		return nil, fmt.Errorf("unsupported REST server kind %q", serverKind)
 	}
 }

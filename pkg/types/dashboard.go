@@ -45,6 +45,8 @@ type DashboardOverviewResponse struct {
 
 type DashboardServerConfigSummary struct {
 	Kind             string   `json:"kind"`
+	ServerKind       string   `json:"server_kind,omitempty"`
+	Transport        string   `json:"transport,omitempty"`
 	Target           string   `json:"target,omitempty"`
 	Command          string   `json:"command,omitempty"`
 	ArgumentCount    int      `json:"argument_count,omitempty"`
@@ -57,6 +59,7 @@ type DashboardServerConfigSummary struct {
 
 type DashboardServer struct {
 	Name               string                       `json:"name"`
+	ServerKind         string                       `json:"server_kind,omitempty"`
 	Transport          string                       `json:"transport"`
 	Enabled            bool                         `json:"enabled"`
 	Status             DashboardServerStatus        `json:"status"`

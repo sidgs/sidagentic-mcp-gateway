@@ -9,7 +9,6 @@ import (
 func TestMcpServer(t *testing.T) {
 	t.Parallel()
 
-	// Test struct creation
 	server := McpServer{
 		Name:      "test-server",
 		Transport: "stdio",
@@ -55,7 +54,6 @@ func TestMcpServerJSONMarshaling(t *testing.T) {
 func TestValidateTransport(t *testing.T) {
 	t.Parallel()
 
-	// Test valid stdio transport
 	transport, err := ValidateTransport("stdio")
 	if err != nil {
 		t.Errorf("Expected no error for 'stdio', got %v", err)
@@ -64,7 +62,6 @@ func TestValidateTransport(t *testing.T) {
 		t.Errorf("Expected transport to be TransportStdio, got %s", transport)
 	}
 
-	// Test valid streamable_http transport
 	transport, err = ValidateTransport("streamable_http")
 	if err != nil {
 		t.Errorf("Expected no error for 'streamable_http', got %v", err)
@@ -81,7 +78,14 @@ func TestValidateTransport(t *testing.T) {
 		t.Errorf("Expected transport to be TransportSSE, got %s", transport)
 	}
 
-	// Test empty string
+	transport, err = ValidateTransport("rest")
+	if err != nil {
+		t.Errorf("Expected no error for 'rest', got %v", err)
+	}
+	if transport != TransportRest {
+		t.Errorf("Expected transport to be TransportRest, got %s", transport)
+	}
+
 	transport, err = ValidateTransport("")
 	if err == nil {
 		t.Error("Expected error for empty string, got nil")
@@ -90,7 +94,6 @@ func TestValidateTransport(t *testing.T) {
 		t.Errorf("Expected empty transport for invalid input, got %s", transport)
 	}
 
-	// Test invalid transport
 	transport, err = ValidateTransport("invalid_transport")
 	if err == nil {
 		t.Error("Expected error for invalid transport, got nil")
@@ -100,13 +103,41 @@ func TestValidateTransport(t *testing.T) {
 	}
 }
 
+func TestValidateServerKind(t *testing.T) {
+	t.Parallel()
+
+	kind, err := ValidateServerKind("")
+	if err != nil || kind != ServerKindMCPProtocol {
+		t.Fatalf("empty server kind: got %q err=%v", kind, err)
+	}
+
+	kind, err = ValidateServerKind("rest_openapi")
+	if err != nil || kind != ServerKindRestOpenAPI {
+		t.Fatalf("rest_openapi: got %q err=%v", kind, err)
+	}
+
+	_, err = ValidateServerKind("invalid")
+	if err == nil {
+		t.Fatal("expected error for invalid server kind")
+	}
+}
+
+func TestIsRestServerKind(t *testing.T) {
+	t.Parallel()
+
+	if !IsRestServerKind(ServerKindRestOpenAPI) {
+		t.Fatal("rest_openapi should be REST kind")
+	}
+	if IsRestServerKind(ServerKindMCPProtocol) {
+		t.Fatal("mcp_protocol should not be REST kind")
+	}
+}
+
 func TestServerMetadata(t *testing.T) {
 	t.Parallel()
 
-	// Test basic JSON marshaling/unmarshaling
 	metadata := ServerMetadata{Version: "v1.2.3"}
 
-	// Marshal to JSON
 	jsonData, err := json.Marshal(metadata)
 	if err != nil {
 		t.Fatalf("Failed to marshal: %v", err)
@@ -117,7 +148,6 @@ func TestServerMetadata(t *testing.T) {
 		t.Errorf("Expected JSON %s, got %s", expected, string(jsonData))
 	}
 
-	// Unmarshal back
 	var result ServerMetadata
 	err = json.Unmarshal(jsonData, &result)
 	if err != nil {

@@ -6,6 +6,7 @@ import (
 
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 	"gorm.io/gorm/schema"
 )
@@ -45,7 +46,20 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(&model.UpstreamOAuthToken{}); err != nil {
 		return fmt.Errorf("auto-migration failed for UpstreamOAuthToken model: %v", err)
 	}
+	if err := backfillServerKind(db); err != nil {
+		return err
+	}
 	return backfillTenantColumns(db)
+}
+
+func backfillServerKind(db *gorm.DB) error {
+	if err := db.Exec(
+		"UPDATE mcp_servers SET server_kind = ? WHERE server_kind = '' OR server_kind IS NULL",
+		string(types.ServerKindMCPProtocol),
+	).Error; err != nil {
+		return fmt.Errorf("server_kind backfill mcp_servers: %w", err)
+	}
+	return nil
 }
 
 func backfillTenantColumns(db *gorm.DB) error {

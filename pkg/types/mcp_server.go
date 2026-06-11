@@ -10,6 +10,27 @@ const (
 	TransportStdio          McpServerTransport = "stdio"
 	TransportStreamableHTTP McpServerTransport = "streamable_http"
 	TransportSSE            McpServerTransport = "sse"
+	TransportRest           McpServerTransport = "rest"
+)
+
+// ServerKind distinguishes native MCP protocol upstreams from REST-backed adapters.
+type ServerKind string
+
+const (
+	ServerKindMCPProtocol  ServerKind = "mcp_protocol"
+	ServerKindRestOpenAPI  ServerKind = "rest_openapi"
+	ServerKindRestEndpoint ServerKind = "rest_endpoint"
+)
+
+// RestAuthType identifies upstream REST authentication mode.
+type RestAuthType string
+
+const (
+	RestAuthNone   RestAuthType = "none"
+	RestAuthAPIKey RestAuthType = "api_key"
+	RestAuthBasic  RestAuthType = "basic"
+	RestAuthBearer RestAuthType = "bearer"
+	RestAuthOAuth  RestAuthType = "oauth"
 )
 
 // SessionMode represents the session management mode for an MCP server.
@@ -28,9 +49,30 @@ const (
 	SessionModeStateful SessionMode = "stateful"
 )
 
+// RestAuthConfig configures upstream authentication for REST-backed servers.
+type RestAuthConfig struct {
+	Type          RestAuthType      `json:"type,omitempty"`
+	APIKeyHeader  string            `json:"api_key_header,omitempty"`
+	APIKeyQuery   string            `json:"api_key_query,omitempty"`
+	APIKeyValue   string            `json:"api_key_value,omitempty"`
+	Username      string            `json:"username,omitempty"`
+	Password      string            `json:"password,omitempty"`
+	Headers       map[string]string `json:"headers,omitempty"`
+}
+
+// RestParameter defines a parameter for manually registered REST endpoints.
+type RestParameter struct {
+	Name        string `json:"name"`
+	In          string `json:"in"`
+	Type        string `json:"type"`
+	Required    bool   `json:"required,omitempty"`
+	Description string `json:"description,omitempty"`
+}
+
 // McpServer represents an MCP server registered in the SAMI MCP Gateway registry.
 type McpServer struct {
 	Name        string `json:"name"`
+	ServerKind  string `json:"server_kind,omitempty"`
 	Transport   string `json:"transport"`
 	Enabled     bool   `json:"enabled"`
 	Description string `json:"description"`
@@ -97,6 +139,21 @@ type RegisterServerInput struct {
 
 	// OAuthScopes is an optional list of OAuth scopes to request during authorization.
 	OAuthScopes []string `json:"oauth_scopes,omitempty"`
+
+	// ServerKind distinguishes MCP protocol upstreams from REST adapters (default: mcp_protocol).
+	ServerKind string `json:"server_kind,omitempty"`
+
+	// REST adapter fields (server_kind rest_openapi or rest_endpoint).
+	BaseURL            string            `json:"base_url,omitempty"`
+	OpenAPISpecURL     string            `json:"openapi_spec_url,omitempty"`
+	OpenAPISpec        string            `json:"openapi_spec,omitempty"`
+	ExcludedOperations []string          `json:"excluded_operations,omitempty"`
+	RestAuth           *RestAuthConfig   `json:"rest_auth,omitempty"`
+	Method             string            `json:"method,omitempty"`
+	Path               string            `json:"path,omitempty"`
+	ToolName           string            `json:"tool_name,omitempty"`
+	ToolDescription    string            `json:"tool_description,omitempty"`
+	Parameters         []RestParameter   `json:"parameters,omitempty"`
 }
 
 // ServerMetadata represents the server metadata response
@@ -118,7 +175,8 @@ type EnableDisableServerResult struct {
 // It returns an error if the input is invalid or empty.
 func ValidateTransport(input string) (McpServerTransport, error) {
 	errMsgExt := fmt.Sprintf(
-		"(acceptable values: '%s', '%s', '%s')", TransportStreamableHTTP, TransportStdio, TransportSSE,
+		"(acceptable values: '%s', '%s', '%s', '%s')",
+		TransportStreamableHTTP, TransportStdio, TransportSSE, TransportRest,
 	)
 
 	switch input {
@@ -128,11 +186,35 @@ func ValidateTransport(input string) (McpServerTransport, error) {
 		return TransportStdio, nil
 	case string(TransportSSE):
 		return TransportSSE, nil
+	case string(TransportRest):
+		return TransportRest, nil
 	case "":
 		return "", fmt.Errorf("transport is required %s", errMsgExt)
 	default:
 		return "", fmt.Errorf("unsupported transport type: %s %s", input, errMsgExt)
 	}
+}
+
+// ValidateServerKind validates server kind input. Empty input defaults to mcp_protocol.
+func ValidateServerKind(input string) (ServerKind, error) {
+	switch input {
+	case "", string(ServerKindMCPProtocol):
+		return ServerKindMCPProtocol, nil
+	case string(ServerKindRestOpenAPI):
+		return ServerKindRestOpenAPI, nil
+	case string(ServerKindRestEndpoint):
+		return ServerKindRestEndpoint, nil
+	default:
+		return "", fmt.Errorf(
+			"unsupported server kind: %s (acceptable values: '%s', '%s', '%s')",
+			input, ServerKindMCPProtocol, ServerKindRestOpenAPI, ServerKindRestEndpoint,
+		)
+	}
+}
+
+// IsRestServerKind reports whether the server kind uses REST HTTP upstreams.
+func IsRestServerKind(kind ServerKind) bool {
+	return kind == ServerKindRestOpenAPI || kind == ServerKindRestEndpoint
 }
 
 // ValidateSessionMode validates the input string and returns the corresponding SessionMode.

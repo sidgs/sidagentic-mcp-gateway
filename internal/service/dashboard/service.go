@@ -92,6 +92,7 @@ func (s *Service) Servers() (*types.DashboardServersResponse, error) {
 		summary := summarizeServerConfig(inv.McpServer)
 		resp.Servers = append(resp.Servers, types.DashboardServer{
 			Name:              inv.Name,
+			ServerKind:        string(inv.ServerKind),
 			Transport:         string(inv.Transport),
 			Enabled:           inv.Enabled,
 			Status:            deriveServerStatus(inv),
@@ -414,13 +415,27 @@ func deriveServerStatusFromCounts(transport types.McpServerTransport, toolCount,
 // server configuration. It deliberately strips or downgrades secret-bearing
 // values such as Authorization headers, bearer tokens, and query params.
 func summarizeServerConfig(server model.McpServer) types.DashboardServerConfigSummary {
+	serverKind := string(server.ServerKind)
+	if serverKind == "" {
+		serverKind = string(types.ServerKindMCPProtocol)
+	}
 	summary := types.DashboardServerConfigSummary{
-		Kind:        string(server.Transport),
+		Kind:        serverKind,
+		ServerKind:  serverKind,
+		Transport:   string(server.Transport),
 		SessionMode: string(server.SessionMode),
 		Description: server.Description,
 	}
 
 	switch server.Transport {
+	case types.TransportRest:
+		if conf, err := server.GetRestConfig(); err == nil {
+			summary.Target = sanitizeURL(conf.BaseURL)
+			summary.SanitizedSummary = summary.Target
+			if conf.Auth.Type != "" {
+				summary.SanitizedSummary = summary.Target + " (auth: " + string(conf.Auth.Type) + ")"
+			}
+		}
 	case types.TransportStreamableHTTP:
 		if conf, err := server.GetStreamableHTTPConfig(); err == nil {
 			summary.Target = sanitizeURL(conf.URL)

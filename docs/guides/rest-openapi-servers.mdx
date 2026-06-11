@@ -1,0 +1,84 @@
+---
+title: "REST and OpenAPI servers"
+description: "Expose REST APIs as MCP tools without an MCP protocol upstream."
+---
+
+Mcpgateway can register **REST APIs** and synthesize MCP tools from an OpenAPI 3 specification or a single manually defined endpoint. These servers use `server_kind` values that differ from native MCP protocol upstreams (`mcp_protocol`).
+
+## Server kinds
+
+| `server_kind` | Upstream | Use when |
+|---|---|---|
+| `mcp_protocol` | Speaks MCP (stdio, streamable HTTP, SSE) | Default for existing MCP servers |
+| `rest_openapi` | REST + OpenAPI 3 spec | Bulk-import operations as tools |
+| `rest_endpoint` | REST, one operation | Expose a single HTTP endpoint as one tool |
+
+All REST servers use `"transport": "rest"`.
+
+## OpenAPI registration
+
+Every OpenAPI operation (except entries in `excluded_operations`) becomes an MCP tool. Tool arguments are flattened primitives derived from path, query, header, and JSON body schemas.
+
+```json
+{
+  "name": "petstore",
+  "server_kind": "rest_openapi",
+  "transport": "rest",
+  "base_url": "https://petstore.example.com",
+  "openapi_spec_url": "https://petstore.example.com/openapi.json",
+  "rest_auth": { "type": "none" }
+}
+```
+
+Register with the CLI:
+
+```bash
+sami-mcp-gateway register -c petstore.json
+```
+
+## Upstream authentication
+
+Configure upstream REST credentials separately from tool group access (`security_option` on groups):
+
+| `rest_auth.type` | Behavior |
+|---|---|
+| `none` | No upstream credentials |
+| `api_key` | Sends `api_key_header` or `api_key_query` |
+| `basic` | `Authorization: Basic …` |
+| `bearer` | `Authorization: Bearer …` (or `bearer_token` field) |
+| `oauth` | Reuses upstream OAuth pending-session flow |
+
+## Tool groups
+
+REST servers participate in tool groups without changes:
+
+```json
+{
+  "name": "petstore-readonly",
+  "included_servers": ["petstore"],
+  "excluded_tools": ["petstore__delete_pet"]
+}
+```
+
+Group MCP endpoints and agent-app credentials work the same as for MCP protocol servers.
+
+## Single REST endpoint
+
+```json
+{
+  "name": "weather",
+  "server_kind": "rest_endpoint",
+  "transport": "rest",
+  "base_url": "https://api.weather.com",
+  "method": "GET",
+  "path": "/v1/current",
+  "tool_name": "get_current",
+  "tool_description": "Use when the caller needs current weather for a city",
+  "parameters": [
+    { "name": "city", "in": "query", "type": "string", "required": true, "description": "City name" }
+  ],
+  "rest_auth": { "type": "none" }
+}
+```
+
+See also [CLI configuration file](/reference/config-file) for the full JSON field reference.

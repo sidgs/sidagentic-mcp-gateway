@@ -2,12 +2,15 @@
 package mcp
 
 import (
+	"context"
 	"fmt"
 	"sync"
 
+	mcpgotransport "github.com/mark3labs/mcp-go/client/transport"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/registrysync"
+	"sami.io/mcpgateway/internal/service/restadapter"
 	"sami.io/mcpgateway/internal/telemetry"
 	"gorm.io/gorm"
 )
@@ -66,6 +69,9 @@ type MCPService struct {
 
 	// sessionManager manages persistent connections for MCP servers configured in stateful mode.
 	sessionManager *SessionManager
+
+	// restExecutor executes tool calls against REST/OpenAPI upstream servers.
+	restExecutor *restadapter.Executor
 }
 
 // NewMCPService creates a new instance of MCPService.
@@ -116,6 +122,9 @@ func NewMCPService(c *ServiceConfig) (*MCPService, error) {
 		mcpServerInitReqTimeoutSec: c.McpServerInitReqTimeout,
 
 		sessionManager: sessionManager,
+		restExecutor: restadapter.NewExecutor(c.DB, func(ctx context.Context, tenantID, serverName string) (*mcpgotransport.Token, error) {
+			return loadUpstreamOAuthTokenForREST(ctx, c.DB, tenantID, serverName)
+		}),
 	}
 	if err := s.initMCPProxyServer(); err != nil {
 		return nil, fmt.Errorf("failed to initialize MCP proxy server: %w", err)

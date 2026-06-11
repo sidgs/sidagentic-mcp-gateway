@@ -154,6 +154,19 @@ func (m *MCPService) InvokeTool(ctx context.Context, name string, args map[strin
 		)
 	}
 
+	if serverModel.IsRestServer() {
+		callToolResp, err := m.callRestTool(ctx, serverModel, toolName, args)
+		if err != nil {
+			return nil, fmt.Errorf("failed to call REST tool %s on server %s: %w", toolName, serverName, err)
+		}
+		result, err := m.convertToolCallResToAPIRes(callToolResp)
+		if err != nil {
+			return nil, fmt.Errorf("failed to convert REST response to api response: %w", err)
+		}
+		outcome = telemetry.ToolCallOutcomeSuccess
+		return result, nil
+	}
+
 	session, err := m.getSession(ctx, serverModel)
 	if err != nil {
 		return nil, err
