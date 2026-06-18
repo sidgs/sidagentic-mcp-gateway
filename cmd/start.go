@@ -31,6 +31,7 @@ import (
 	"sami.io/mcpgateway/internal/service/mcp"
 	"sami.io/mcpgateway/internal/service/promptgroup"
 	"sami.io/mcpgateway/internal/service/toolgroup"
+	"sami.io/mcpgateway/internal/service/usage"
 	"sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/tenant"
@@ -697,6 +698,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		McpProxyServer:          mcpProxyServer,
 		SseMcpProxyServer:       sseMcpProxyServer,
 		Metrics:                 mcpMetrics,
+		UsageRecorder:           usage.NewRecorder(dbConn),
 		McpServerInitReqTimeout: timeout,
 		SessionManager:          sessionManager,
 	}

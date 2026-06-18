@@ -7,7 +7,9 @@ export type AppSection =
   | "agent_apps"
   | "prompts"
   | "resources"
-  | "diagnostics";
+  | "diagnostics"
+  | "observability"
+  | "lineage";
 
 export interface DashboardEmptyState {
   title: string;
@@ -47,8 +49,32 @@ export interface DashboardAuthStatusResponse {
   sub?: string;
 }
 
+export type ServerKind = "mcp_protocol" | "rest_openapi" | "rest_endpoint";
+
+export type RestAuthType = "none" | "api_key" | "basic" | "bearer" | "oauth";
+
+export interface DashboardRestAuthConfig {
+  type?: RestAuthType;
+  api_key_header?: string;
+  api_key_query?: string;
+  api_key_value?: string;
+  username?: string;
+  password?: string;
+  headers?: Record<string, string>;
+}
+
+export interface DashboardRestParameter {
+  name: string;
+  in: string;
+  type?: string;
+  required?: boolean;
+  description?: string;
+}
+
 export interface DashboardServerConfigSummary {
   kind: string;
+  server_kind?: string;
+  transport?: string;
   target?: string;
   command?: string;
   argument_count?: number;
@@ -61,6 +87,7 @@ export interface DashboardServerConfigSummary {
 
 export interface DashboardServer {
   name: string;
+  server_kind?: string;
   transport: string;
   enabled: boolean;
   status: "connected" | "reachable" | "failed" | "unknown";
@@ -199,9 +226,98 @@ export interface DashboardDiagnosticsResponse {
   empty_state?: DashboardEmptyState;
 }
 
+export interface DashboardLineageNode {
+  id: string;
+  kind: "agent_app" | "tool_group" | "server" | "tool" | string;
+  label: string;
+  meta?: Record<string, string>;
+}
+
+export interface DashboardLineageEdge {
+  id: string;
+  source: string;
+  target: string;
+  kind: string;
+  label?: string;
+  weight?: number;
+}
+
+export interface DashboardLineageResponse {
+  usage_window?: string;
+  nodes: DashboardLineageNode[];
+  edges: DashboardLineageEdge[];
+  empty_state?: DashboardEmptyState;
+}
+
+export type ObservabilityRange = "24h" | "7d" | "30d";
+
+export interface DashboardObservabilitySummary {
+  total_calls: number;
+  success_calls: number;
+  error_calls: number;
+  success_rate: number;
+  active_agents: number;
+  active_tools: number;
+  active_tool_sets: number;
+  avg_latency_ms: number;
+}
+
+export interface DashboardAgentUsage {
+  agent_app_id?: number;
+  agent_name: string;
+  client_id?: string;
+  total_calls: number;
+  success_calls: number;
+  error_calls: number;
+  success_rate: number;
+  avg_latency_ms: number;
+}
+
+export interface DashboardToolTraffic {
+  mcp_server_name: string;
+  tool_name: string;
+  canonical_name: string;
+  total_calls: number;
+  success_calls: number;
+  error_calls: number;
+  success_rate: number;
+  avg_latency_ms: number;
+  p95_latency_ms: number;
+}
+
+export interface DashboardToolGroupTraffic {
+  tool_group_name: string;
+  total_calls: number;
+  success_calls: number;
+  error_calls: number;
+  success_rate: number;
+  avg_latency_ms: number;
+}
+
+export interface DashboardTimeBucket {
+  timestamp: string;
+  total_calls: number;
+  success_calls: number;
+  error_calls: number;
+}
+
+export interface DashboardObservabilityResponse {
+  range: string;
+  from: string;
+  to: string;
+  summary: DashboardObservabilitySummary;
+  by_agent: DashboardAgentUsage[];
+  top_tools: DashboardToolTraffic[];
+  top_tool_groups: DashboardToolGroupTraffic[];
+  tool_traffic: DashboardToolTraffic[];
+  call_volume_series: DashboardTimeBucket[];
+  empty_state?: DashboardEmptyState;
+}
+
 export interface DashboardRegisterServerInput {
   name: string;
-  transport: "stdio" | "streamable_http" | "sse";
+  server_kind?: ServerKind;
+  transport: "stdio" | "streamable_http" | "sse" | "rest";
   description?: string;
   url?: string;
   bearer_token?: string;
@@ -210,6 +326,16 @@ export interface DashboardRegisterServerInput {
   args?: string[];
   env?: Record<string, string>;
   session_mode?: "stateless" | "stateful";
+  base_url?: string;
+  openapi_spec_url?: string;
+  openapi_spec?: string;
+  excluded_operations?: string[];
+  rest_auth?: DashboardRestAuthConfig;
+  method?: string;
+  path?: string;
+  tool_name?: string;
+  tool_description?: string;
+  parameters?: DashboardRestParameter[];
   /** Present in GET /dashboard/servers/:name/config when upstream OAuth metadata exists; not sent on create. */
   oauth_redirect_uri?: string;
   oauth_client_id?: string;

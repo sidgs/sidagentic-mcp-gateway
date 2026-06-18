@@ -157,3 +157,89 @@ type DashboardDiagnosticsResponse struct {
 	ResourceCount            int                  `json:"resource_count"`
 	EmptyState               *DashboardEmptyState `json:"empty_state,omitempty"`
 }
+
+type DashboardObservabilitySummary struct {
+	TotalCalls     int64   `json:"total_calls"`
+	SuccessCalls   int64   `json:"success_calls"`
+	ErrorCalls     int64   `json:"error_calls"`
+	SuccessRate    float64 `json:"success_rate"`
+	ActiveAgents   int     `json:"active_agents"`
+	ActiveTools    int     `json:"active_tools"`
+	ActiveToolSets int     `json:"active_tool_sets"`
+	AvgLatencyMs   float64 `json:"avg_latency_ms"`
+}
+
+type DashboardAgentUsage struct {
+	AgentAppID   *uint   `json:"agent_app_id,omitempty"`
+	AgentName    string  `json:"agent_name"`
+	ClientID     string  `json:"client_id,omitempty"`
+	TotalCalls   int64   `json:"total_calls"`
+	SuccessCalls int64   `json:"success_calls"`
+	ErrorCalls   int64   `json:"error_calls"`
+	SuccessRate  float64 `json:"success_rate"`
+	AvgLatencyMs float64 `json:"avg_latency_ms"`
+}
+
+type DashboardToolTraffic struct {
+	MCPServerName string  `json:"mcp_server_name"`
+	ToolName      string  `json:"tool_name"`
+	CanonicalName string  `json:"canonical_name"`
+	TotalCalls    int64   `json:"total_calls"`
+	SuccessCalls  int64   `json:"success_calls"`
+	ErrorCalls    int64   `json:"error_calls"`
+	SuccessRate   float64 `json:"success_rate"`
+	AvgLatencyMs  float64 `json:"avg_latency_ms"`
+	P95LatencyMs  float64 `json:"p95_latency_ms"`
+}
+
+type DashboardToolGroupTraffic struct {
+	ToolGroupName string  `json:"tool_group_name"`
+	TotalCalls    int64   `json:"total_calls"`
+	SuccessCalls  int64   `json:"success_calls"`
+	ErrorCalls    int64   `json:"error_calls"`
+	SuccessRate   float64 `json:"success_rate"`
+	AvgLatencyMs  float64 `json:"avg_latency_ms"`
+}
+
+type DashboardTimeBucket struct {
+	Timestamp    string `json:"timestamp"`
+	TotalCalls   int64  `json:"total_calls"`
+	SuccessCalls int64  `json:"success_calls"`
+	ErrorCalls   int64  `json:"error_calls"`
+}
+
+type DashboardObservabilityResponse struct {
+	Range            string                      `json:"range"`
+	From             string                      `json:"from"`
+	To               string                      `json:"to"`
+	Summary          DashboardObservabilitySummary `json:"summary"`
+	ByAgent          []DashboardAgentUsage       `json:"by_agent"`
+	TopTools         []DashboardToolTraffic      `json:"top_tools"`
+	TopToolGroups    []DashboardToolGroupTraffic `json:"top_tool_groups"`
+	ToolTraffic      []DashboardToolTraffic      `json:"tool_traffic"`
+	CallVolumeSeries []DashboardTimeBucket       `json:"call_volume_series"`
+	EmptyState       *DashboardEmptyState        `json:"empty_state,omitempty"`
+}
+
+type DashboardLineageNode struct {
+	ID    string            `json:"id"`
+	Kind  string            `json:"kind"`
+	Label string            `json:"label"`
+	Meta  map[string]string `json:"meta,omitempty"`
+}
+
+type DashboardLineageEdge struct {
+	ID     string `json:"id"`
+	Source string `json:"source"`
+	Target string `json:"target"`
+	Kind   string `json:"kind"`
+	Label  string `json:"label,omitempty"`
+	Weight int64  `json:"weight,omitempty"`
+}
+
+type DashboardLineageResponse struct {
+	UsageWindow string                   `json:"usage_window,omitempty"`
+	Nodes       []DashboardLineageNode   `json:"nodes"`
+	Edges       []DashboardLineageEdge   `json:"edges"`
+	EmptyState  *DashboardEmptyState     `json:"empty_state,omitempty"`
+}

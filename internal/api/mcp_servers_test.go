@@ -315,3 +315,90 @@ func TestDeregisterServerHandler_NotFound(t *testing.T) {
 	testhelpers.AssertEqual(t, http.StatusNotFound, w.Code)
 	testhelpers.AssertStringContains(t, w.Body.String(), "not found")
 }
+
+func TestMergeRegisterInputForUpdateRestPreservesSecrets(t *testing.T) {
+	existing, err := model.NewRestOpenAPIServer(
+		"petstore",
+		"Petstore API",
+		"https://api.example.com",
+		"",
+		"openapi: 3.0.0\ninfo:\n  title: Petstore",
+		[]string{"deletePet"},
+		model.RestAuthConfig{
+			Type:        types.RestAuthAPIKey,
+			APIKeyHeader: "X-API-Key",
+			APIKeyValue:  "secret-key",
+			BearerToken:  "stored-bearer",
+		},
+		types.SessionModeStateless,
+	)
+	if err != nil {
+		t.Fatalf("NewRestOpenAPIServer: %v", err)
+	}
+
+	input := &types.RegisterServerInput{
+		Description: "Updated description",
+		BaseURL:     "https://api.example.com/v2",
+		RestAuth: &types.RestAuthConfig{
+			Type:         string(types.RestAuthAPIKey),
+			APIKeyHeader: "X-API-Key",
+			APIKeyValue:  "",
+		},
+		BearerToken: "",
+	}
+
+	if err := mergeRegisterInputForUpdate("petstore", input, existing); err != nil {
+		t.Fatalf("mergeRegisterInputForUpdate: %v", err)
+	}
+
+	testhelpers.AssertEqual(t, "petstore", input.Name)
+	testhelpers.AssertEqual(t, string(types.TransportRest), input.Transport)
+	testhelpers.AssertEqual(t, string(types.ServerKindRestOpenAPI), input.ServerKind)
+	testhelpers.AssertEqual(t, "https://api.example.com/v2", input.BaseURL)
+	testhelpers.AssertEqual(t, "openapi: 3.0.0\ninfo:\n  title: Petstore", input.OpenAPISpec)
+	testhelpers.AssertEqual(t, []string{"deletePet"}, input.ExcludedOperations)
+	testhelpers.AssertEqual(t, "secret-key", input.RestAuth.APIKeyValue)
+	testhelpers.AssertEqual(t, "stored-bearer", input.BearerToken)
+}
+
+func TestMergeRegisterInputForUpdateRestEndpointPreservesManualOperation(t *testing.T) {
+	existing, err := model.NewRestEndpointServer(
+		"weather",
+		"Weather lookup",
+		"https://weather.example.com",
+		model.ManualRestOperation{
+			Method:      "GET",
+			Path:        "/forecast",
+			ToolName:    "get_forecast",
+			Description: "Get forecast",
+			Parameters: []types.RestParameter{
+				{Name: "city", In: "query", Required: true, Type: "string"},
+			},
+		},
+		model.RestAuthConfig{Type: types.RestAuthBasic, Username: "user", Password: "pass"},
+		types.SessionModeStateless,
+	)
+	if err != nil {
+		t.Fatalf("NewRestEndpointServer: %v", err)
+	}
+
+	input := &types.RegisterServerInput{
+		Description: "Updated weather",
+		RestAuth: &types.RestAuthConfig{
+			Type:     string(types.RestAuthBasic),
+			Username: "user",
+			Password: "",
+		},
+	}
+
+	if err := mergeRegisterInputForUpdate("weather", input, existing); err != nil {
+		t.Fatalf("mergeRegisterInputForUpdate: %v", err)
+	}
+
+	testhelpers.AssertEqual(t, "GET", input.Method)
+	testhelpers.AssertEqual(t, "/forecast", input.Path)
+	testhelpers.AssertEqual(t, "get_forecast", input.ToolName)
+	testhelpers.AssertEqual(t, "Get forecast", input.ToolDescription)
+	testhelpers.AssertEqual(t, 1, len(input.Parameters))
+	testhelpers.AssertEqual(t, "pass", input.RestAuth.Password)
+}

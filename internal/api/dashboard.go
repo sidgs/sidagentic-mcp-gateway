@@ -1,6 +1,7 @@
 package api
 
 import (
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -120,6 +121,40 @@ func (s *Server) dashboardDiagnosticsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mode := c.MustGet("mode").(model.ServerMode)
 		resp, err := s.dashboardService.Diagnostics(mode, s.publicTenantMCPRoot(c))
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+func (s *Server) dashboardObservabilityHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		limit := 0
+		if raw := c.Query("limit"); raw != "" {
+			if _, err := fmt.Sscanf(raw, "%d", &limit); err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "invalid limit"})
+				return
+			}
+		}
+		resp, err := s.dashboardService.Observability(
+			c.Query("range"),
+			c.Query("from"),
+			c.Query("to"),
+			limit,
+		)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, resp)
+	}
+}
+
+func (s *Server) dashboardLineageHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		resp, err := s.dashboardService.Lineage(c.Query("range"))
 		if err != nil {
 			handleServiceError(c, err)
 			return

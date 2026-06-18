@@ -1,7 +1,51 @@
+import type { ReactNode } from "react";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import type { AppSection } from "@/lib/types";
-import { COMPONENT_NAV_SECTIONS } from "@/lib/navSections";
+import { filterNavMenu, NAV_MENU } from "@/lib/navSections";
+
+const tabDividerSx = {
+  minWidth: 8,
+  width: 8,
+  maxWidth: 8,
+  px: 0,
+  mx: 0.5,
+  opacity: 1,
+  cursor: "default",
+  pointerEvents: "none",
+  borderLeft: 1,
+  borderColor: "divider",
+  "&.Mui-disabled": {
+    opacity: 1,
+  },
+} as const;
+
+function buildNavTabs(includeHome: boolean) {
+  const menu = filterNavMenu(NAV_MENU, !includeHome);
+  const tabs: ReactNode[] = [];
+  let needsDivider = false;
+
+  for (const entry of menu) {
+    if (entry.kind === "group") {
+      if (needsDivider) {
+        tabs.push(<Tab key={`divider-${entry.id}`} disabled sx={tabDividerSx} />);
+      }
+      for (const item of entry.items) {
+        tabs.push(<Tab key={item.key} label={item.label} value={item.key} />);
+      }
+      needsDivider = true;
+      continue;
+    }
+
+    if (needsDivider) {
+      tabs.push(<Tab key={`divider-${entry.key}`} disabled sx={tabDividerSx} />);
+    }
+    tabs.push(<Tab key={entry.key} label={entry.label} value={entry.key} />);
+    needsDivider = true;
+  }
+
+  return tabs;
+}
 
 export function NavTabs({
   active,
@@ -30,9 +74,7 @@ export function NavTabs({
       value={active}
       variant="scrollable"
     >
-      {COMPONENT_NAV_SECTIONS.map((item) => (
-        <Tab key={item.key} label={item.label} value={item.key} />
-      ))}
+      {buildNavTabs(false)}
     </Tabs>
   );
 }

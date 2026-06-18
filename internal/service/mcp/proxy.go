@@ -105,7 +105,9 @@ func (m *MCPService) MCPProxyToolCallHandler(ctx context.Context, request mcp.Ca
 	}
 
 	defer func() {
-		m.metrics.RecordToolCall(ctx, serverName, toolName, outcome, time.Since(started))
+		elapsed := time.Since(started)
+		m.metrics.RecordToolCall(ctx, serverName, toolName, outcome, elapsed)
+		m.recordToolUsage(ctx, serverName, toolName, model.ToolInvocationSourceMCPProxy, outcome, elapsed)
 	}()
 
 	server, err := m.GetMcpServer(lookupCtx, serverName)

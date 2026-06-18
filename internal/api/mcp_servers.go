@@ -439,11 +439,86 @@ func mergeRegisterInputForUpdate(urlName string, input *types.RegisterServerInpu
 	}
 	input.Transport = existingTransport
 
+	if input.ServerKind == "" {
+		input.ServerKind = string(existing.ServerKind)
+	}
+	if input.ServerKind == "" {
+		input.ServerKind = string(types.ServerKindMCPProtocol)
+	}
+
 	if input.SessionMode == "" {
 		input.SessionMode = string(existing.SessionMode)
 	}
 
 	switch existing.Transport {
+	case types.TransportRest:
+		conf, err := existing.GetRestConfig()
+		if err != nil {
+			return err
+		}
+		if strings.TrimSpace(input.BaseURL) == "" {
+			input.BaseURL = conf.BaseURL
+		}
+		if strings.TrimSpace(input.OpenAPISpecURL) == "" && strings.TrimSpace(input.OpenAPISpec) == "" {
+			input.OpenAPISpecURL = conf.OpenAPISpecURL
+			input.OpenAPISpec = conf.OpenAPISpecInline
+		}
+		if input.ExcludedOperations == nil {
+			input.ExcludedOperations = conf.ExcludedOperations
+		}
+		if input.RestAuth == nil {
+			input.RestAuth = &types.RestAuthConfig{
+				Type:         conf.Auth.Type,
+				APIKeyHeader: conf.Auth.APIKeyHeader,
+				APIKeyQuery:  conf.Auth.APIKeyQuery,
+				APIKeyValue:  conf.Auth.APIKeyValue,
+				Username:     conf.Auth.Username,
+				Password:     conf.Auth.Password,
+				Headers:      conf.Auth.Headers,
+			}
+		} else {
+			if input.RestAuth.Type == "" {
+				input.RestAuth.Type = conf.Auth.Type
+			}
+			if strings.TrimSpace(input.RestAuth.APIKeyHeader) == "" {
+				input.RestAuth.APIKeyHeader = conf.Auth.APIKeyHeader
+			}
+			if strings.TrimSpace(input.RestAuth.APIKeyQuery) == "" {
+				input.RestAuth.APIKeyQuery = conf.Auth.APIKeyQuery
+			}
+			if strings.TrimSpace(input.RestAuth.APIKeyValue) == "" {
+				input.RestAuth.APIKeyValue = conf.Auth.APIKeyValue
+			}
+			if strings.TrimSpace(input.RestAuth.Username) == "" {
+				input.RestAuth.Username = conf.Auth.Username
+			}
+			if strings.TrimSpace(input.RestAuth.Password) == "" {
+				input.RestAuth.Password = conf.Auth.Password
+			}
+			if input.RestAuth.Headers == nil {
+				input.RestAuth.Headers = conf.Auth.Headers
+			}
+		}
+		if strings.TrimSpace(input.BearerToken) == "" {
+			input.BearerToken = conf.Auth.BearerToken
+		}
+		if conf.ManualOperation != nil {
+			if strings.TrimSpace(input.Method) == "" {
+				input.Method = conf.ManualOperation.Method
+			}
+			if strings.TrimSpace(input.Path) == "" {
+				input.Path = conf.ManualOperation.Path
+			}
+			if strings.TrimSpace(input.ToolName) == "" {
+				input.ToolName = conf.ManualOperation.ToolName
+			}
+			if strings.TrimSpace(input.ToolDescription) == "" {
+				input.ToolDescription = conf.ManualOperation.Description
+			}
+			if len(input.Parameters) == 0 {
+				input.Parameters = conf.ManualOperation.Parameters
+			}
+		}
 	case types.TransportStreamableHTTP:
 		conf, err := existing.GetStreamableHTTPConfig()
 		if err != nil {

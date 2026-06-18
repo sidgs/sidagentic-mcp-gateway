@@ -46,6 +46,9 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(&model.UpstreamOAuthToken{}); err != nil {
 		return fmt.Errorf("auto-migration failed for UpstreamOAuthToken model: %v", err)
 	}
+	if err := db.AutoMigrate(&model.ToolInvocationEvent{}); err != nil {
+		return fmt.Errorf("auto-migration failed for ToolInvocationEvent model: %v", err)
+	}
 	if err := backfillServerKind(db); err != nil {
 		return err
 	}

@@ -8,6 +8,9 @@ import type {
   DashboardCreatePromptGroupInput,
   DashboardCreateToolGroupInput,
   DashboardDiagnosticsResponse,
+  DashboardLineageResponse,
+  DashboardObservabilityResponse,
+  ObservabilityRange,
   DashboardToolGroup,
   DashboardPromptGroup,
   DashboardUpdateToolGroupInput,
@@ -117,6 +120,29 @@ export const api = {
   prompts: () => requestJSON<DashboardPromptsResponse>("/dashboard/prompts"),
   resources: () => requestJSON<DashboardResourcesResponse>("/dashboard/resources"),
   diagnostics: () => requestJSON<DashboardDiagnosticsResponse>("/dashboard/diagnostics"),
+  observability: (params?: { range?: ObservabilityRange; limit?: number }) => {
+    const search = new URLSearchParams();
+    if (params?.range) {
+      search.set("range", params.range);
+    }
+    if (params?.limit != null) {
+      search.set("limit", String(params.limit));
+    }
+    const query = search.toString();
+    return requestJSON<DashboardObservabilityResponse>(
+      query ? `/dashboard/observability?${query}` : "/dashboard/observability",
+    );
+  },
+  lineage: (params?: { range?: ObservabilityRange }) => {
+    const search = new URLSearchParams();
+    if (params?.range) {
+      search.set("range", params.range);
+    }
+    const query = search.toString();
+    return requestJSON<DashboardLineageResponse>(
+      query ? `/dashboard/lineage?${query}` : "/dashboard/lineage",
+    );
+  },
   registerServer: (body: DashboardRegisterServerInput) =>
     requestJSON<DashboardRegisterServerResponse>("/dashboard/servers", {
       method: "POST",

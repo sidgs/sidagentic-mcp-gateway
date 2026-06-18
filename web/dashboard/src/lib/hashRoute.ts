@@ -11,6 +11,8 @@ const SECTIONS = new Set<string>([
   "prompts",
   "resources",
   "diagnostics",
+  "observability",
+  "lineage",
 ]);
 
 /** Canonical hash for a dashboard section (`#/home`). */

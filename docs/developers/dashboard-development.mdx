@@ -310,6 +310,8 @@ Handlers live in:
 - `GET /api/dashboard/prompts`
 - `GET /api/dashboard/resources`
 - `GET /api/dashboard/diagnostics`
+- `GET /api/dashboard/observability?range=24h|7d|30d&limit=10` — aggregated tool invocation metrics (by agent, top tools, tool groups, traffic)
+- `GET /api/dashboard/lineage?range=7d` — graph nodes/edges linking agent apps, tool groups, servers, and tools
 
 #### Mutation endpoints
 

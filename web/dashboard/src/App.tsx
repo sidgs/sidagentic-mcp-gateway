@@ -67,6 +67,9 @@ import type {
   DashboardUpdatePromptGroupInput,
   DashboardUpdateToolGroupInput,
   DashboardDiagnosticsResponse,
+  DashboardLineageResponse,
+  DashboardObservabilityResponse,
+  ObservabilityRange,
   GroupSecurityOption,
   DashboardOAuthAuthorizationRequired,
   DashboardOverviewResponse,
@@ -77,6 +80,9 @@ import type {
   DashboardRegisterServerInput,
   DashboardRegisterServerResponse,
   DashboardResource,
+  DashboardRestParameter,
+  RestAuthType,
+  ServerKind,
   DashboardResourcesResponse,
   DashboardServer,
   DashboardServersResponse,
@@ -90,6 +96,8 @@ import { EmptyStateCard } from "@/components/EmptyStateCard";
 import { HomePage } from "@/components/HomePage";
 import { NavSidebar } from "@/components/NavSidebar";
 import { NavTabs } from "@/components/NavTabs";
+import { LineagePage } from "@/components/LineagePage";
+import { ObservabilityPage } from "@/components/ObservabilityPage";
 import { SectionCard } from "@/components/SectionCard";
 import { StatusBadge } from "@/components/StatusBadge";
 import { monospaceFontFamily } from "@/theme";
@@ -176,10 +184,21 @@ interface KeyValueRow {
   value: string;
 }
 
+interface RestParameterRow {
+  name: string;
+  in: "path" | "query" | "header";
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+type UpstreamType = ServerKind;
+
 interface RegisterServerFormState {
   name: string;
   description: string;
-  transport: "stdio" | "streamable_http" | "sse";
+  upstream_type: UpstreamType;
+  transport: "stdio" | "streamable_http" | "sse" | "rest";
   session_mode: "stateless" | "stateful";
   command: string;
   args_text: string;
@@ -187,6 +206,26 @@ interface RegisterServerFormState {
   url: string;
   bearer_token: string;
   header_rows: KeyValueRow[];
+  base_url: string;
+  spec_source: "url" | "inline";
+  openapi_spec_url: string;
+  openapi_spec_inline: string;
+  excluded_operations_text: string;
+  method: string;
+  path: string;
+  tool_name: string;
+  tool_description: string;
+  parameter_rows: RestParameterRow[];
+  rest_auth_type: RestAuthType;
+  api_key_header: string;
+  api_key_query: string;
+  api_key_value: string;
+  basic_username: string;
+  basic_password: string;
+  oauth_redirect_uri: string;
+  oauth_client_id: string;
+  oauth_client_secret: string;
+  oauth_scopes_text: string;
 }
 
 interface RegisterOAuthState {
@@ -337,6 +376,14 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
     title: "System Info",
     subtitle: "",
   },
+  observability: {
+    title: "Observability",
+    subtitle: "Agent-to-tool traceability, popular tools, and traffic metrics.",
+  },
+  lineage: {
+    title: "Lineage",
+    subtitle: "Discover how agent apps, tool groups, servers, and tools connect.",
+  },
 };
 
 function shortVersion(version?: string) {
@@ -356,6 +403,49 @@ function mergeSortedUniqueNames(available: string[], selected: string[]): string
 
 function transportLabel(value?: string) {
   return value ? value.split("_").join(" ") : "unknown";
+}
+
+function serverKindLabel(kind?: string) {
+  switch (kind) {
+    case "rest_openapi":
+      return "REST (OpenAPI)";
+    case "rest_endpoint":
+      return "REST (endpoint)";
+    case "mcp_protocol":
+      return "MCP protocol";
+    default:
+      return kind ? kind.split("_").join(" ") : "Unknown";
+  }
+}
+
+function resolveServerKind(server: DashboardServer): string {
+  return server.server_kind || server.config_summary.server_kind || server.config_summary.kind || "mcp_protocol";
+}
+
+function isRestUpstream(form: RegisterServerFormState) {
+  return form.upstream_type === "rest_openapi" || form.upstream_type === "rest_endpoint";
+}
+
+function parseExcludedOperations(text: string): string[] {
+  return text
+    .split(/[\n,]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
+}
+
+function excludedOperationsToText(values?: string[]) {
+  return (values ?? []).join("\n");
+}
+
+function createEmptyRestParameterRow(): RestParameterRow {
+  return { name: "", in: "query", type: "string", required: false, description: "" };
+}
+
+function splitOAuthScopes(text: string) {
+  return text
+    .split(/[\n,]+/)
+    .map((value) => value.trim())
+    .filter(Boolean);
 }
 
 function serverConnectionTone(status: DashboardServer["status"]): "good" | "warn" | "bad" | "muted" {
@@ -584,6 +674,7 @@ function createInitialRegisterForm(): RegisterServerFormState {
   return {
     name: "",
     description: "",
+    upstream_type: "mcp_protocol",
     transport: "streamable_http",
     session_mode: "stateless",
     command: "",
@@ -592,10 +683,43 @@ function createInitialRegisterForm(): RegisterServerFormState {
     url: "",
     bearer_token: "",
     header_rows: [createEmptyPair()],
+    base_url: "",
+    spec_source: "url",
+    openapi_spec_url: "",
+    openapi_spec_inline: "",
+    excluded_operations_text: "",
+    method: "GET",
+    path: "",
+    tool_name: "",
+    tool_description: "",
+    parameter_rows: [createEmptyRestParameterRow()],
+    rest_auth_type: "none",
+    api_key_header: "",
+    api_key_query: "",
+    api_key_value: "",
+    basic_username: "",
+    basic_password: "",
+    oauth_redirect_uri: "",
+    oauth_client_id: "",
+    oauth_client_secret: "",
+    oauth_scopes_text: "",
   };
 }
 
-function registerFormFromConfig(input: DashboardRegisterServerInput): RegisterServerFormState {
+function upstreamTypeFromConfig(input: DashboardRegisterServerInput): UpstreamType {
+  if (input.server_kind === "rest_openapi" || input.server_kind === "rest_endpoint") {
+    return input.server_kind;
+  }
+  if (input.transport === "rest") {
+    return "rest_openapi";
+  }
+  return "mcp_protocol";
+}
+
+function registerFormFromConfig(
+  input: DashboardRegisterServerInput,
+  editing: boolean,
+): RegisterServerFormState {
   const envEntries = input.env ? Object.entries(input.env) : [];
   const env_rows =
     envEntries.length > 0
@@ -606,10 +730,31 @@ function registerFormFromConfig(input: DashboardRegisterServerInput): RegisterSe
     headerEntries.length > 0
       ? headerEntries.map(([key, value]) => ({ key, value: String(value) }))
       : [createEmptyPair()];
+  const upstream_type = upstreamTypeFromConfig(input);
+  const parameter_rows =
+    input.parameters && input.parameters.length > 0
+      ? input.parameters.map((param) => ({
+          name: param.name,
+          in: (param.in === "path" || param.in === "header" ? param.in : "query") as RestParameterRow["in"],
+          type: param.type || "string",
+          required: Boolean(param.required),
+          description: param.description ?? "",
+        }))
+      : [createEmptyRestParameterRow()];
+
+  const restAuth = input.rest_auth;
+  const restAuthType = restAuth?.type ?? "none";
+
   return {
     name: input.name,
     description: input.description ?? "",
-    transport: input.transport,
+    upstream_type,
+    transport:
+      upstream_type === "mcp_protocol"
+        ? (input.transport === "stdio" || input.transport === "sse"
+            ? input.transport
+            : "streamable_http")
+        : "rest",
     session_mode: input.session_mode ?? "stateless",
     command: input.command ?? "",
     args_text: (input.args ?? []).join("\n"),
@@ -617,6 +762,26 @@ function registerFormFromConfig(input: DashboardRegisterServerInput): RegisterSe
     url: input.url ?? "",
     bearer_token: input.bearer_token ?? "",
     header_rows,
+    base_url: input.base_url ?? input.url ?? "",
+    spec_source: input.openapi_spec ? "inline" : "url",
+    openapi_spec_url: input.openapi_spec_url ?? "",
+    openapi_spec_inline: input.openapi_spec ?? "",
+    excluded_operations_text: excludedOperationsToText(input.excluded_operations),
+    method: input.method ?? "GET",
+    path: input.path ?? "",
+    tool_name: input.tool_name ?? "",
+    tool_description: input.tool_description ?? "",
+    parameter_rows,
+    rest_auth_type: restAuthType,
+    api_key_header: restAuth?.api_key_header ?? "",
+    api_key_query: restAuth?.api_key_query ?? "",
+    api_key_value: editing ? "" : restAuth?.api_key_value ?? "",
+    basic_username: restAuth?.username ?? "",
+    basic_password: editing ? "" : restAuth?.password ?? "",
+    oauth_redirect_uri: input.oauth_redirect_uri ?? "",
+    oauth_client_id: input.oauth_client_id ?? "",
+    oauth_client_secret: editing ? "" : input.oauth_client_secret ?? "",
+    oauth_scopes_text: (input.oauth_scopes ?? []).join("\n"),
   };
 }
 
@@ -639,10 +804,65 @@ function splitArgs(input: string) {
     .filter(Boolean);
 }
 
-function getRegisterValidationError(form: RegisterServerFormState) {
+function getRegisterValidationError(form: RegisterServerFormState, editing: boolean) {
   if (!form.name.trim()) {
     return "Server name is required.";
   }
+
+  if (isRestUpstream(form)) {
+    if (!form.base_url.trim()) {
+      return "Base URL is required for REST servers.";
+    }
+    if (form.upstream_type === "rest_openapi") {
+      if (form.spec_source === "url" && !form.openapi_spec_url.trim()) {
+        return "OpenAPI spec URL is required when using URL spec source.";
+      }
+      if (form.spec_source === "inline" && !form.openapi_spec_inline.trim()) {
+        return "Inline OpenAPI spec is required when using inline spec source.";
+      }
+    }
+    if (form.upstream_type === "rest_endpoint") {
+      if (!form.method.trim()) {
+        return "HTTP method is required for REST endpoint servers.";
+      }
+      if (!form.path.trim()) {
+        return "Path is required for REST endpoint servers.";
+      }
+      if (!form.tool_name.trim()) {
+        return "Tool name is required for REST endpoint servers.";
+      }
+    }
+    switch (form.rest_auth_type) {
+      case "api_key":
+        if (!form.api_key_header.trim() && !form.api_key_query.trim()) {
+          return "API key header or query parameter name is required for API key auth.";
+        }
+        if (!form.api_key_value.trim() && !editing) {
+          return "API key value is required for API key auth.";
+        }
+        break;
+      case "basic":
+        if (!form.basic_username.trim()) {
+          return "Username is required for basic auth.";
+        }
+        if (!form.basic_password.trim() && !editing) {
+          return "Password is required for basic auth.";
+        }
+        break;
+      case "bearer":
+        if (!form.bearer_token.trim() && !editing) {
+          return "Bearer token is required for bearer auth.";
+        }
+        break;
+      case "oauth":
+        if (!form.oauth_redirect_uri.trim()) {
+          return "OAuth redirect URI is required for OAuth auth.";
+        }
+        break;
+    }
+    return "";
+  }
+
   if (form.transport === "stdio" && !form.command.trim()) {
     return "Command is required for stdio servers.";
   }
@@ -652,10 +872,92 @@ function getRegisterValidationError(form: RegisterServerFormState) {
   return "";
 }
 
+function buildRestAuthPayload(form: RegisterServerFormState): DashboardRegisterServerInput["rest_auth"] {
+  const auth: NonNullable<DashboardRegisterServerInput["rest_auth"]> = {
+    type: form.rest_auth_type,
+  };
+  if (form.rest_auth_type === "api_key") {
+    auth.api_key_header = form.api_key_header.trim();
+    auth.api_key_query = form.api_key_query.trim();
+    if (form.api_key_value.trim()) {
+      auth.api_key_value = form.api_key_value.trim();
+    }
+  }
+  if (form.rest_auth_type === "basic") {
+    auth.username = form.basic_username.trim();
+    if (form.basic_password.trim()) {
+      auth.password = form.basic_password.trim();
+    }
+  }
+  return auth;
+}
+
 function buildRegisterPayload(form: RegisterServerFormState): DashboardRegisterServerInput {
+  if (isRestUpstream(form)) {
+    const payload: DashboardRegisterServerInput = {
+      name: form.name.trim(),
+      description: form.description.trim(),
+      server_kind: form.upstream_type,
+      transport: "rest",
+      base_url: form.base_url.trim(),
+      rest_auth: buildRestAuthPayload(form),
+    };
+
+    if (form.upstream_type === "rest_openapi") {
+      if (form.spec_source === "url") {
+        payload.openapi_spec_url = form.openapi_spec_url.trim();
+      } else if (form.openapi_spec_inline.trim()) {
+        payload.openapi_spec = form.openapi_spec_inline.trim();
+      }
+      const excluded = parseExcludedOperations(form.excluded_operations_text);
+      if (excluded.length > 0) {
+        payload.excluded_operations = excluded;
+      }
+    }
+
+    if (form.upstream_type === "rest_endpoint") {
+      payload.method = form.method.trim().toUpperCase();
+      payload.path = form.path.trim();
+      payload.tool_name = form.tool_name.trim();
+      payload.tool_description = form.tool_description.trim();
+      const parameters: DashboardRestParameter[] = form.parameter_rows
+        .filter((row) => row.name.trim())
+        .map((row) => ({
+          name: row.name.trim(),
+          in: row.in,
+          type: row.type.trim() || "string",
+          required: row.required,
+          description: row.description.trim() || undefined,
+        }));
+      if (parameters.length > 0) {
+        payload.parameters = parameters;
+      }
+    }
+
+    if (form.rest_auth_type === "bearer" && form.bearer_token.trim()) {
+      payload.bearer_token = form.bearer_token.trim();
+    }
+    if (form.rest_auth_type === "oauth") {
+      payload.oauth_redirect_uri = form.oauth_redirect_uri.trim();
+      if (form.oauth_client_id.trim()) {
+        payload.oauth_client_id = form.oauth_client_id.trim();
+      }
+      if (form.oauth_client_secret.trim()) {
+        payload.oauth_client_secret = form.oauth_client_secret.trim();
+      }
+      const scopes = splitOAuthScopes(form.oauth_scopes_text);
+      if (scopes.length > 0) {
+        payload.oauth_scopes = scopes;
+      }
+    }
+
+    return payload;
+  }
+
   const payload: DashboardRegisterServerInput = {
     name: form.name.trim(),
     description: form.description.trim(),
+    server_kind: "mcp_protocol",
     transport: form.transport,
     session_mode: form.session_mode,
   };
@@ -741,6 +1043,13 @@ export default function App() {
   const [errorMessage, setErrorMessage] = useState("");
   const [feedback, setFeedback] = useState<FeedbackMessage | null>(null);
   const [data, setData] = useState<DashboardData>({});
+  const [observabilityRange, setObservabilityRange] = useState<ObservabilityRange>("24h");
+  const [observabilityData, setObservabilityData] = useState<DashboardObservabilityResponse | null>(null);
+  const [observabilityLoading, setObservabilityLoading] = useState(false);
+  const [observabilityError, setObservabilityError] = useState<string | null>(null);
+  const [lineageData, setLineageData] = useState<DashboardLineageResponse | null>(null);
+  const [lineageLoading, setLineageLoading] = useState(false);
+  const [lineageError, setLineageError] = useState<string | null>(null);
   const [serverFilter, setServerFilter] = useState("");
   const [toolFilter, setToolFilter] = useState("");
   const [toolServerFilter, setToolServerFilter] = useState("all");
@@ -1083,9 +1392,57 @@ export default function App() {
     }
   }
 
+  async function loadObservability(range: ObservabilityRange = observabilityRange) {
+    setObservabilityLoading(true);
+    setObservabilityError(null);
+    try {
+      const payload = await api.observability({ range, limit: 10 });
+      setObservabilityData(payload);
+    } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to load observability metrics";
+      setObservabilityError(message);
+    } finally {
+      setObservabilityLoading(false);
+    }
+  }
+
   useEffect(() => {
     void bootstrapDashboard();
   }, []);
+
+  useEffect(() => {
+    if (section !== "observability" || loadState !== "ready") {
+      return;
+    }
+    void loadObservability(observabilityRange);
+  }, [section, observabilityRange, loadState]);
+
+  async function loadLineage() {
+    setLineageLoading(true);
+    setLineageError(null);
+    try {
+      const payload = await api.lineage({ range: "7d" });
+      setLineageData(payload);
+    } catch (error) {
+      if (maybeRedirectDashboardAuth(error)) {
+        return;
+      }
+      const message = error instanceof Error ? error.message : "Failed to load lineage graph";
+      setLineageError(message);
+    } finally {
+      setLineageLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (section !== "lineage" || loadState !== "ready") {
+      return;
+    }
+    void loadLineage();
+  }, [section, loadState]);
 
   const filteredServers = useMemo(() => {
     const servers = data.servers?.servers ?? [];
@@ -1097,6 +1454,8 @@ export default function App() {
       (server) =>
         server.name.toLowerCase().includes(term) ||
         server.transport.toLowerCase().includes(term) ||
+        resolveServerKind(server).toLowerCase().includes(term) ||
+        serverKindLabel(resolveServerKind(server)).toLowerCase().includes(term) ||
         server.connection_summary.toLowerCase().includes(term),
     );
   }, [data.servers?.servers, serverFilter]);
@@ -1458,6 +1817,177 @@ export default function App() {
     });
   }
 
+  function updateRestParameterRow(
+    index: number,
+    key: keyof RestParameterRow,
+    value: RestParameterRow[keyof RestParameterRow],
+  ) {
+    setRegisterForm((current) => {
+      const rows = current.parameter_rows.map((row, rowIndex) =>
+        rowIndex === index ? { ...row, [key]: value } : row,
+      );
+      return { ...current, parameter_rows: rows };
+    });
+  }
+
+  function addRestParameterRow() {
+    setRegisterForm((current) => ({
+      ...current,
+      parameter_rows: [...current.parameter_rows, createEmptyRestParameterRow()],
+    }));
+  }
+
+  function removeRestParameterRow(index: number) {
+    setRegisterForm((current) => {
+      const rows = current.parameter_rows.filter((_, rowIndex) => rowIndex !== index);
+      return {
+        ...current,
+        parameter_rows: rows.length > 0 ? rows : [createEmptyRestParameterRow()],
+      };
+    });
+  }
+
+  function updateUpstreamType(value: UpstreamType) {
+    setRegisterForm((current) => ({
+      ...current,
+      upstream_type: value,
+      transport: value === "mcp_protocol" ? "streamable_http" : "rest",
+    }));
+  }
+
+  const registerEditing = registerServerEditingName !== null;
+  const registerSecretHelper = registerEditing ? "Leave blank to keep the current value." : undefined;
+
+  function renderRestAuthFields() {
+    return (
+      <Box>
+        <Typography variant="subtitle2" gutterBottom>
+          Upstream authentication
+        </Typography>
+        <Stack spacing={2}>
+          <FormControl fullWidth size="small">
+            <InputLabel id="reg-rest-auth">Auth type</InputLabel>
+            <Select
+              labelId="reg-rest-auth"
+              label="Auth type"
+              value={registerForm.rest_auth_type}
+              onChange={(event) =>
+                updateRegisterField("rest_auth_type", event.target.value as RestAuthType)
+              }
+            >
+              <MenuItem value="none">none</MenuItem>
+              <MenuItem value="api_key">api_key</MenuItem>
+              <MenuItem value="basic">basic</MenuItem>
+              <MenuItem value="bearer">bearer</MenuItem>
+              <MenuItem value="oauth">oauth</MenuItem>
+            </Select>
+          </FormControl>
+
+          {registerForm.rest_auth_type === "api_key" ? (
+            <>
+              <TextField
+                label="API key header"
+                fullWidth
+                size="small"
+                placeholder="X-API-Key"
+                value={registerForm.api_key_header}
+                onChange={(event) => updateRegisterField("api_key_header", event.target.value)}
+              />
+              <TextField
+                label="API key query param"
+                fullWidth
+                size="small"
+                placeholder="api_key"
+                value={registerForm.api_key_query}
+                onChange={(event) => updateRegisterField("api_key_query", event.target.value)}
+              />
+              <TextField
+                label="API key value"
+                fullWidth
+                size="small"
+                type="password"
+                value={registerForm.api_key_value}
+                onChange={(event) => updateRegisterField("api_key_value", event.target.value)}
+                helperText={registerSecretHelper}
+              />
+            </>
+          ) : null}
+
+          {registerForm.rest_auth_type === "basic" ? (
+            <>
+              <TextField
+                label="Username"
+                fullWidth
+                size="small"
+                value={registerForm.basic_username}
+                onChange={(event) => updateRegisterField("basic_username", event.target.value)}
+              />
+              <TextField
+                label="Password"
+                fullWidth
+                size="small"
+                type="password"
+                value={registerForm.basic_password}
+                onChange={(event) => updateRegisterField("basic_password", event.target.value)}
+                helperText={registerSecretHelper}
+              />
+            </>
+          ) : null}
+
+          {registerForm.rest_auth_type === "bearer" ? (
+            <TextField
+              label="Bearer token"
+              fullWidth
+              size="small"
+              type="password"
+              value={registerForm.bearer_token}
+              onChange={(event) => updateRegisterField("bearer_token", event.target.value)}
+              helperText={registerSecretHelper}
+            />
+          ) : null}
+
+          {registerForm.rest_auth_type === "oauth" ? (
+            <>
+              <TextField
+                label="OAuth redirect URI"
+                fullWidth
+                size="small"
+                value={registerForm.oauth_redirect_uri}
+                onChange={(event) => updateRegisterField("oauth_redirect_uri", event.target.value)}
+              />
+              <TextField
+                label="OAuth client ID"
+                fullWidth
+                size="small"
+                value={registerForm.oauth_client_id}
+                onChange={(event) => updateRegisterField("oauth_client_id", event.target.value)}
+              />
+              <TextField
+                label="OAuth client secret"
+                fullWidth
+                size="small"
+                type="password"
+                value={registerForm.oauth_client_secret}
+                onChange={(event) => updateRegisterField("oauth_client_secret", event.target.value)}
+                helperText={registerSecretHelper}
+              />
+              <TextField
+                label="OAuth scopes"
+                fullWidth
+                size="small"
+                multiline
+                minRows={2}
+                placeholder="scope.one&#10;scope.two"
+                value={registerForm.oauth_scopes_text}
+                onChange={(event) => updateRegisterField("oauth_scopes_text", event.target.value)}
+              />
+            </>
+          ) : null}
+        </Stack>
+      </Box>
+    );
+  }
+
   function openRegisterModal() {
     setRegisterForm(createInitialRegisterForm());
     setRegisterServerEditingName(null);
@@ -1485,7 +2015,7 @@ export default function App() {
     setRegisterForm(createInitialRegisterForm());
     try {
       const config = await api.getServerConfig(serverName);
-      setRegisterForm(registerFormFromConfig(config));
+      setRegisterForm(registerFormFromConfig(config, true));
     } catch (error) {
       if (maybeRedirectDashboardAuth(error)) {
         return;
@@ -1648,7 +2178,7 @@ export default function App() {
   }
 
   async function submitRegisterServer() {
-    const validationError = getRegisterValidationError(registerForm);
+    const validationError = getRegisterValidationError(registerForm, registerServerEditingName !== null);
     if (validationError) {
       setRegisterError(validationError);
       return;
@@ -2953,6 +3483,8 @@ export default function App() {
   }
 
   function renderServerDetailPanel(server: DashboardServer) {
+    const serverKind = resolveServerKind(server);
+    const isRestServer = server.transport === "rest" || serverKind.startsWith("rest");
     return (
       <>
         <Stack direction="row" spacing={1} useFlexGap sx={{ flexWrap: "wrap", justifyContent: "flex-end", mb: 2 }}>
@@ -3001,6 +3533,12 @@ export default function App() {
             </Typography>
           ) : null}
           <dl className="tool-detail-meta">
+            <div className="tool-detail-description">
+              <dt>Server kind</dt>
+              <dd>
+                <StatusBadge text={serverKindLabel(serverKind)} tone="muted" />
+              </dd>
+            </div>
             <div className="tool-detail-description">
               <dt>Transport</dt>
               <dd>
@@ -3054,7 +3592,7 @@ export default function App() {
           <div className="server-detail" style={{ marginTop: "1rem" }}>
             <dl>
               <div>
-                <dt>Target</dt>
+                <dt>{isRestServer ? "Base URL" : "Target"}</dt>
                 <dd>
                   <div className="detail-copy-row">
                     <code className="detail-target-code">
@@ -3062,32 +3600,38 @@ export default function App() {
                     </code>
                     {server.config_summary.target || server.config_summary.command ? (
                       <CopyButton
-                        ariaLabel="Copy target"
-                        title="Copy target"
+                        ariaLabel={isRestServer ? "Copy base URL" : "Copy target"}
+                        title={isRestServer ? "Copy base URL" : "Copy target"}
                         value={server.config_summary.target ?? server.config_summary.command ?? ""}
                       />
                     ) : null}
                   </div>
                 </dd>
               </div>
-              <div>
-                <dt>Session mode</dt>
-                <dd>
-                  <code>{server.config_summary.session_mode ?? "Unknown"}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>Header keys</dt>
-                <dd>
-                  <code>{server.config_summary.header_keys?.join(", ") || "None"}</code>
-                </dd>
-              </div>
-              <div>
-                <dt>Env keys</dt>
-                <dd>
-                  <code>{server.config_summary.env_keys?.join(", ") || "None"}</code>
-                </dd>
-              </div>
+              {!isRestServer ? (
+                <div>
+                  <dt>Session mode</dt>
+                  <dd>
+                    <code>{server.config_summary.session_mode ?? "Unknown"}</code>
+                  </dd>
+                </div>
+              ) : null}
+              {!isRestServer ? (
+                <div>
+                  <dt>Header keys</dt>
+                  <dd>
+                    <code>{server.config_summary.header_keys?.join(", ") || "None"}</code>
+                  </dd>
+                </div>
+              ) : null}
+              {!isRestServer ? (
+                <div>
+                  <dt>Env keys</dt>
+                  <dd>
+                    <code>{server.config_summary.env_keys?.join(", ") || "None"}</code>
+                  </dd>
+                </div>
+              ) : null}
             </dl>
           </div>
         </div>
@@ -3878,6 +4422,10 @@ export default function App() {
                                 <code>{transportLabel(server.transport)}</code>
                               </Typography>
                               <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap", gap: 0.5, mb: 1 }}>
+                                <StatusBadge
+                                  text={serverKindLabel(resolveServerKind(server))}
+                                  tone="muted"
+                                />
                                 <StatusBadge
                                   text={server.enabled ? "Enabled" : "Disabled"}
                                   tone={server.enabled ? "good" : "muted"}
@@ -4724,6 +5272,22 @@ export default function App() {
                 </SectionCard>
               </>
             ) : null}
+
+            {section === "observability" ? (
+              <ObservabilityPage
+                data={observabilityData}
+                loading={observabilityLoading}
+                error={observabilityError}
+                range={observabilityRange}
+                onRangeChange={setObservabilityRange}
+                onRefresh={() => void loadObservability(observabilityRange)}
+                metricsEndpoint={diagnostics?.metrics_endpoint}
+              />
+            ) : null}
+
+            {section === "lineage" ? (
+              <LineagePage data={lineageData} loading={lineageLoading} error={lineageError} />
+            ) : null}
               </>
             )}
           </div>
@@ -4919,8 +5483,10 @@ export default function App() {
                   {registerOAuth
                     ? "Complete OAuth authorization"
                     : registerServerEditingName
-                      ? "Edit MCP server"
-                      : "Register an MCP server"}
+                      ? "Edit server"
+                      : isRestUpstream(registerForm)
+                        ? "Register a REST server"
+                        : "Register an MCP server"}
                 </Typography>
               </Box>
               <Button variant="outlined" size="small" onClick={closeRegisterModal}>
@@ -4937,7 +5503,7 @@ export default function App() {
             ) : registerOAuth ? (
               <Stack spacing={2} className="oauth-step">
                 <Typography>
-                  This MCP server requires OAuth authorization. Continue in your browser to complete registration.
+                  This server requires OAuth authorization. Continue in your browser to complete registration.
                 </Typography>
                 <Paper variant="outlined" sx={{ p: 2, borderRadius: 2 }}>
                   <Stack spacing={0.5}>
@@ -4966,7 +5532,13 @@ export default function App() {
               <Stack spacing={2}>
                 <TextField
                   label="Server name"
-                  placeholder={registerForm.transport === "streamable_http" ? "context7" : "filesystem"}
+                  placeholder={
+                    isRestUpstream(registerForm)
+                      ? "petstore"
+                      : registerForm.transport === "streamable_http"
+                        ? "context7"
+                        : "filesystem"
+                  }
                   fullWidth
                   size="small"
                   value={registerForm.name}
@@ -4976,9 +5548,11 @@ export default function App() {
                 <TextField
                   label="Description"
                   placeholder={
-                    registerForm.transport === "streamable_http"
-                      ? "context7 mcp server"
-                      : "Local filesystem access"
+                    isRestUpstream(registerForm)
+                      ? "Petstore REST API exposed as MCP tools"
+                      : registerForm.transport === "streamable_http"
+                        ? "context7 mcp server"
+                        : "Local filesystem access"
                   }
                   fullWidth
                   size="small"
@@ -4986,46 +5560,65 @@ export default function App() {
                   onChange={(event) => updateRegisterField("description", event.target.value)}
                 />
 
-                <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="reg-transport">Transport</InputLabel>
-                    <Select
-                      labelId="reg-transport"
-                      label="Transport"
-                      value={registerForm.transport}
-                      disabled={registerServerEditingName !== null}
-                      onChange={(event) =>
-                        updateRegisterField(
-                          "transport",
-                          event.target.value as RegisterServerFormState["transport"],
-                        )
-                      }
-                    >
-                      <MenuItem value="stdio">stdio</MenuItem>
-                      <MenuItem value="streamable_http">streamable_http</MenuItem>
-                      <MenuItem value="sse">sse</MenuItem>
-                    </Select>
-                  </FormControl>
-                  <FormControl fullWidth size="small">
-                    <InputLabel id="reg-session">Session mode</InputLabel>
-                    <Select
-                      labelId="reg-session"
-                      label="Session mode"
-                      value={registerForm.session_mode}
-                      onChange={(event) =>
-                        updateRegisterField(
-                          "session_mode",
-                          event.target.value as RegisterServerFormState["session_mode"],
-                        )
-                      }
-                    >
-                      <MenuItem value="stateless">stateless</MenuItem>
-                      <MenuItem value="stateful">stateful</MenuItem>
-                    </Select>
-                  </FormControl>
-                </Stack>
+                <FormControl fullWidth size="small">
+                  <InputLabel id="reg-upstream-type">Upstream type</InputLabel>
+                  <Select
+                    labelId="reg-upstream-type"
+                    label="Upstream type"
+                    value={registerForm.upstream_type}
+                    disabled={registerServerEditingName !== null}
+                    onChange={(event) => updateUpstreamType(event.target.value as UpstreamType)}
+                  >
+                    <MenuItem value="mcp_protocol">MCP protocol server</MenuItem>
+                    <MenuItem value="rest_openapi">REST API (OpenAPI)</MenuItem>
+                    <MenuItem value="rest_endpoint">REST API (single endpoint)</MenuItem>
+                  </Select>
+                </FormControl>
 
-                {registerForm.transport === "stdio" ? (
+                {!isRestUpstream(registerForm) ? (
+                  <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="reg-transport">Transport</InputLabel>
+                      <Select
+                        labelId="reg-transport"
+                        label="Transport"
+                        value={registerForm.transport}
+                        disabled={registerServerEditingName !== null}
+                        onChange={(event) =>
+                          updateRegisterField(
+                            "transport",
+                            event.target.value as RegisterServerFormState["transport"],
+                          )
+                        }
+                      >
+                        <MenuItem value="stdio">stdio</MenuItem>
+                        <MenuItem value="streamable_http">streamable_http</MenuItem>
+                        <MenuItem value="sse">sse</MenuItem>
+                      </Select>
+                    </FormControl>
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="reg-session">Session mode</InputLabel>
+                      <Select
+                        labelId="reg-session"
+                        label="Session mode"
+                        value={registerForm.session_mode}
+                        onChange={(event) =>
+                          updateRegisterField(
+                            "session_mode",
+                            event.target.value as RegisterServerFormState["session_mode"],
+                          )
+                        }
+                      >
+                        <MenuItem value="stateless">stateless</MenuItem>
+                        <MenuItem value="stateful">stateful</MenuItem>
+                      </Select>
+                    </FormControl>
+                  </Stack>
+                ) : (
+                  <FormHelperText>Session mode is not applicable for REST adapters.</FormHelperText>
+                )}
+
+                {registerForm.upstream_type === "mcp_protocol" && registerForm.transport === "stdio" ? (
                   <Stack spacing={2}>
                     <TextField
                       label="Command"
@@ -5092,7 +5685,7 @@ export default function App() {
                       </Button>
                     </Box>
                   </Stack>
-                ) : (
+                ) : registerForm.upstream_type === "mcp_protocol" ? (
                   <Stack spacing={2}>
                     <TextField
                       label="Target URL"
@@ -5168,6 +5761,206 @@ export default function App() {
                         </Button>
                       </Box>
                     ) : null}
+                  </Stack>
+                ) : registerForm.upstream_type === "rest_openapi" ? (
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Base URL"
+                      fullWidth
+                      size="small"
+                      placeholder="https://api.example.com"
+                      value={registerForm.base_url}
+                      onChange={(event) => updateRegisterField("base_url", event.target.value)}
+                    />
+                    <FormControl fullWidth size="small">
+                      <InputLabel id="reg-spec-source">OpenAPI spec source</InputLabel>
+                      <Select
+                        labelId="reg-spec-source"
+                        label="OpenAPI spec source"
+                        value={registerForm.spec_source}
+                        onChange={(event) =>
+                          updateRegisterField(
+                            "spec_source",
+                            event.target.value as RegisterServerFormState["spec_source"],
+                          )
+                        }
+                      >
+                        <MenuItem value="url">URL</MenuItem>
+                        <MenuItem value="inline">Inline YAML/JSON</MenuItem>
+                      </Select>
+                    </FormControl>
+                    {registerForm.spec_source === "url" ? (
+                      <TextField
+                        label="OpenAPI spec URL"
+                        fullWidth
+                        size="small"
+                        placeholder="https://api.example.com/openapi.json"
+                        value={registerForm.openapi_spec_url}
+                        onChange={(event) => updateRegisterField("openapi_spec_url", event.target.value)}
+                      />
+                    ) : (
+                      <TextField
+                        label="Inline OpenAPI spec"
+                        fullWidth
+                        size="small"
+                        multiline
+                        minRows={6}
+                        placeholder="openapi: 3.0.3..."
+                        value={registerForm.openapi_spec_inline}
+                        onChange={(event) => updateRegisterField("openapi_spec_inline", event.target.value)}
+                        helperText={
+                          registerEditing && registerForm.spec_source === "inline"
+                            ? "Leave blank to keep the current inline spec."
+                            : undefined
+                        }
+                      />
+                    )}
+                    <TextField
+                      label="Excluded operations"
+                      fullWidth
+                      size="small"
+                      multiline
+                      minRows={3}
+                      placeholder="deletePet&#10;updateUser"
+                      value={registerForm.excluded_operations_text}
+                      onChange={(event) =>
+                        updateRegisterField("excluded_operations_text", event.target.value)
+                      }
+                      helperText="One OpenAPI operationId per line (optional)."
+                    />
+                    {renderRestAuthFields()}
+                  </Stack>
+                ) : (
+                  <Stack spacing={2}>
+                    <TextField
+                      label="Base URL"
+                      fullWidth
+                      size="small"
+                      placeholder="https://api.example.com"
+                      value={registerForm.base_url}
+                      onChange={(event) => updateRegisterField("base_url", event.target.value)}
+                    />
+                    <Stack direction={{ xs: "column", md: "row" }} spacing={2}>
+                      <FormControl fullWidth size="small">
+                        <InputLabel id="reg-rest-method">HTTP method</InputLabel>
+                        <Select
+                          labelId="reg-rest-method"
+                          label="HTTP method"
+                          value={registerForm.method}
+                          onChange={(event) => updateRegisterField("method", event.target.value)}
+                        >
+                          <MenuItem value="GET">GET</MenuItem>
+                          <MenuItem value="POST">POST</MenuItem>
+                          <MenuItem value="PUT">PUT</MenuItem>
+                          <MenuItem value="PATCH">PATCH</MenuItem>
+                          <MenuItem value="DELETE">DELETE</MenuItem>
+                        </Select>
+                      </FormControl>
+                      <TextField
+                        label="Path"
+                        fullWidth
+                        size="small"
+                        placeholder="/v1/current"
+                        value={registerForm.path}
+                        onChange={(event) => updateRegisterField("path", event.target.value)}
+                      />
+                    </Stack>
+                    <TextField
+                      label="Tool name"
+                      fullWidth
+                      size="small"
+                      placeholder="get_current"
+                      value={registerForm.tool_name}
+                      onChange={(event) => updateRegisterField("tool_name", event.target.value)}
+                    />
+                    <TextField
+                      label="Tool description"
+                      fullWidth
+                      size="small"
+                      multiline
+                      minRows={2}
+                      placeholder="Use when the caller needs current weather for a city"
+                      value={registerForm.tool_description}
+                      onChange={(event) => updateRegisterField("tool_description", event.target.value)}
+                    />
+                    <Box>
+                      <Typography variant="subtitle2" gutterBottom>
+                        Parameters
+                      </Typography>
+                      <Stack spacing={1}>
+                        {registerForm.parameter_rows.map((row, index) => (
+                          <Paper key={`param-${index}`} variant="outlined" sx={{ p: 1.5, borderRadius: 2 }}>
+                            <Stack spacing={1}>
+                              <Stack direction={{ xs: "column", sm: "row" }} spacing={1}>
+                                <TextField
+                                  size="small"
+                                  label="Name"
+                                  value={row.name}
+                                  onChange={(event) =>
+                                    updateRestParameterRow(index, "name", event.target.value)
+                                  }
+                                  sx={{ flex: 1 }}
+                                />
+                                <FormControl size="small" sx={{ minWidth: 120 }}>
+                                  <InputLabel id={`param-in-${index}`}>In</InputLabel>
+                                  <Select
+                                    labelId={`param-in-${index}`}
+                                    label="In"
+                                    value={row.in}
+                                    onChange={(event) =>
+                                      updateRestParameterRow(
+                                        index,
+                                        "in",
+                                        event.target.value as RestParameterRow["in"],
+                                      )
+                                    }
+                                  >
+                                    <MenuItem value="path">path</MenuItem>
+                                    <MenuItem value="query">query</MenuItem>
+                                    <MenuItem value="header">header</MenuItem>
+                                  </Select>
+                                </FormControl>
+                                <TextField
+                                  size="small"
+                                  label="Type"
+                                  value={row.type}
+                                  onChange={(event) =>
+                                    updateRestParameterRow(index, "type", event.target.value)
+                                  }
+                                  sx={{ width: 120 }}
+                                />
+                              </Stack>
+                              <TextField
+                                size="small"
+                                label="Description"
+                                value={row.description}
+                                onChange={(event) =>
+                                  updateRestParameterRow(index, "description", event.target.value)
+                                }
+                                fullWidth
+                              />
+                              <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
+                                <Checkbox
+                                  checked={row.required}
+                                  onChange={(event) =>
+                                    updateRestParameterRow(index, "required", event.target.checked)
+                                  }
+                                />
+                                <Typography variant="body2">Required</Typography>
+                                <Box sx={{ flex: 1 }} />
+                                <Button variant="outlined" onClick={() => removeRestParameterRow(index)}>
+                                  Remove
+                                </Button>
+                              </Stack>
+                            </Stack>
+                          </Paper>
+                        ))}
+                      </Stack>
+                      <Button variant="outlined" size="small" sx={{ mt: 1 }} onClick={addRestParameterRow}>
+                        Add parameter
+                      </Button>
+                    </Box>
+                    {renderRestAuthFields()}
                   </Stack>
                 )}
 

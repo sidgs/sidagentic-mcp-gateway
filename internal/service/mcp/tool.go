@@ -142,7 +142,9 @@ func (m *MCPService) InvokeTool(ctx context.Context, name string, args map[strin
 
 	// record the tool call metrics when the function returns
 	defer func() {
-		m.metrics.RecordToolCall(ctx, serverName, toolName, outcome, time.Since(started))
+		elapsed := time.Since(started)
+		m.metrics.RecordToolCall(ctx, serverName, toolName, outcome, elapsed)
+		m.recordToolUsage(ctx, serverName, toolName, model.ToolInvocationSourceRESTInvoke, outcome, elapsed)
 	}()
 
 	serverModel, err := m.GetMcpServer(ctx, serverName)

@@ -11,6 +11,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/registrysync"
 	"sami.io/mcpgateway/internal/service/restadapter"
+	"sami.io/mcpgateway/internal/service/usage"
 	"sami.io/mcpgateway/internal/telemetry"
 	"gorm.io/gorm"
 )
@@ -23,6 +24,8 @@ type ServiceConfig struct {
 	SseMcpProxyServer *server.MCPServer
 
 	Metrics telemetry.CustomMetrics
+
+	UsageRecorder usage.Recorder
 
 	McpServerInitReqTimeout int
 
@@ -64,6 +67,8 @@ type MCPService struct {
 	promptAdditionCallback PromptAdditionCallback
 
 	metrics telemetry.CustomMetrics
+
+	usageRecorder usage.Recorder
 
 	mcpServerInitReqTimeoutSec int
 
@@ -118,6 +123,13 @@ func NewMCPService(c *ServiceConfig) (*MCPService, error) {
 		promptAdditionCallback: func(qualifiedPromptName string) error { return nil },
 
 		metrics: c.Metrics,
+
+		usageRecorder: func() usage.Recorder {
+			if c.UsageRecorder != nil {
+				return c.UsageRecorder
+			}
+			return usage.NewNoopRecorder()
+		}(),
 
 		mcpServerInitReqTimeoutSec: c.McpServerInitReqTimeout,
 
