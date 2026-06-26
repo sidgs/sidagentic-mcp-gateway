@@ -1,24 +1,9 @@
-# SAMI MCP Gateway API image: HTTP path prefix + dashboard built under the same base path.
+# SAMI MCP Gateway API image (API-only; dashboard UI is not built in this image).
 # Runtime includes uv/uvx (Astral base) and Node/npx (NodeSource) for stdio MCP commands.
 #
 # Build: docker build -f Dockerfile.api -t sami-mcpgateway-api .
 #
-# Dashboard: VITE_DASHBOARD_BASE=/ai/v1/sami-mcp-gateway
-# Server:     HTTP_PATH_PREFIX=/ai/v1/sami-mcp-gateway
-
-FROM node:20-bookworm-slim AS dashboard-builder
-
-WORKDIR /src/web/dashboard
-COPY web/dashboard/package.json web/dashboard/package-lock.json ./
-RUN npm ci
-COPY web/dashboard/ ./
-# Vite resolves @repo-assets to /src/assets (repo-root ../../assets). The dir may be empty if no bundled images.
-RUN mkdir -p /src/assets
-
-ARG VITE_DASHBOARD_BASE=/
-ENV VITE_DASHBOARD_BASE=$VITE_DASHBOARD_BASE
-
-RUN npm run build
+# Server: HTTP_PATH_PREFIX=/ai/v1/sami-mcp-gateway
 
 FROM golang:1.24.3-bookworm AS builder
 
@@ -31,8 +16,9 @@ RUN go mod download
 
 COPY . .
 
-RUN rm -rf internal/dashboardui/dist
-COPY --from=dashboard-builder /src/web/dashboard/dist ./internal/dashboardui/dist
+# go:embed requires dist/ at compile time; this image does not bundle the dashboard UI.
+RUN mkdir -p internal/dashboardui/dist \
+	&& printf '%s\n' '<!DOCTYPE html><html><body></body></html>' > internal/dashboardui/dist/index.html
 
 RUN CGO_ENABLED=0 go build -trimpath \
 	-ldflags="-s -w -X sami.io/mcpgateway/pkg/version.Version=${VERSION}" \

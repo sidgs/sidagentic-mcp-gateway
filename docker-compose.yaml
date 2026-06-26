@@ -35,8 +35,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-      args:
-        - VITE_DASHBOARD_BASE=${VITE_DASHBOARD_BASE:-/}
     environment:
       DATABASE_URL: postgres://sami:sami@${POSTGRES_HOST:-postgres-dev-sl.sidglobal.cloud}:${POSTGRES_PORT:-5432}/sami-mcp-gateway-enterprise
       SERVER_MODE: ${SERVER_MODE:-enterprise}

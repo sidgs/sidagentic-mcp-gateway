@@ -54,7 +54,6 @@ func (s *Service) CreateSkillSet(ctx context.Context, req *types.CreateSkillSetR
 		return nil, err
 	}
 
-	var created model.SkillSet
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
 		set := model.SkillSet{
 			TenantID:       tenant.MustFromContext(ctx),
@@ -71,7 +70,6 @@ func (s *Service) CreateSkillSet(ctx context.Context, req *types.CreateSkillSetR
 				return err
 			}
 		}
-		created = set
 		return nil
 	})
 	if err != nil {
