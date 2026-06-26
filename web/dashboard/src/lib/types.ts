@@ -437,6 +437,8 @@ export interface DashboardSkillVersionDetail extends DashboardSkillVersionSummar
   body_content: string;
   scripts: string[];
   references: string[];
+  script_files?: { filename: string; code_content: string }[];
+  reference_files?: { filename: string; markdown_content: string }[];
 }
 
 export interface DashboardSkillsResponse {

@@ -361,6 +361,27 @@ func ToDetail(sv *model.SkillVersion, skillName string) (*types.SkillVersionDeta
 	}, nil
 }
 
+// ToEditableDetail converts a loaded version to an admin edit shape with resource content.
+func ToEditableDetail(sv *model.SkillVersion, skillName string) (*types.SkillVersionEditableDetail, error) {
+	base, err := ToDetail(sv, skillName)
+	if err != nil {
+		return nil, err
+	}
+	scriptFiles := make([]types.SkillScriptInput, len(sv.Scripts))
+	for i, sc := range sv.Scripts {
+		scriptFiles[i] = types.SkillScriptInput{Filename: sc.Filename, CodeContent: sc.CodeContent}
+	}
+	refFiles := make([]types.SkillReferenceInput, len(sv.References))
+	for i, r := range sv.References {
+		refFiles[i] = types.SkillReferenceInput{Filename: r.Filename, MarkdownContent: r.MarkdownContent}
+	}
+	return &types.SkillVersionEditableDetail{
+		SkillVersionDetail: *base,
+		ScriptFiles:        scriptFiles,
+		ReferenceFiles:     refFiles,
+	}, nil
+}
+
 func (s *Service) getVersionRecord(ctx context.Context, name, version string) (*model.SkillVersion, *model.Skill, error) {
 	name = strings.TrimSpace(name)
 	version = strings.TrimSpace(version)

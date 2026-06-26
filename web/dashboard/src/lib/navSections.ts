@@ -24,6 +24,7 @@ export const NAV_MENU: NavMenuEntry[] = [
       { key: "tools", label: "Tools" },
       { key: "prompts", label: "Prompts" },
       { key: "resources", label: "Resources" },
+      { key: "skills", label: "Skills" },
     ],
   },
   {
@@ -33,7 +34,6 @@ export const NAV_MENU: NavMenuEntry[] = [
     items: [
       { key: "tool_groups", label: "Tool Groups" },
       { key: "prompt_groups", label: "Prompt Groups" },
-      { key: "skills", label: "Skills" },
       { key: "skill_sets", label: "Skill Sets" },
     ],
   },

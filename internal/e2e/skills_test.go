@@ -93,6 +93,22 @@ func TestE2E_DevMode_Skill_LifecycleAndSkillSet(t *testing.T) {
 	require.Len(t, members, 1)
 }
 
+func TestE2E_DevMode_Skill_Update(t *testing.T) {
+	env := setupE2EServer(t, model.ModeDev)
+	createTestSkill(t, env, "editable-skill", "1.0.0")
+
+	resp := env.do(t, http.MethodPut, "/api/v0/skills/editable-skill/versions/1.0.0", map[string]any{
+		"description":  "Updated description",
+		"body_content": "# Updated\nNew instructions.",
+	}, env.globalMCPAPIKey)
+	defer drain(resp)
+	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var detail map[string]any
+	decodeJSON(t, resp, &detail)
+	assert.Equal(t, "Updated description", detail["description"])
+	assert.Equal(t, "# Updated\nNew instructions.", detail["body_content"])
+}
+
 func TestE2E_DevMode_Skill_LockedBlocksUpdate(t *testing.T) {
 	env := setupE2EServer(t, model.ModeDev)
 	createTestSkill(t, env, "locked-skill", "1.0.0")

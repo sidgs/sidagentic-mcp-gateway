@@ -99,7 +99,7 @@ import { NavTabs } from "@/components/NavTabs";
 import { LineagePage } from "@/components/LineagePage";
 import { ObservabilityPage } from "@/components/ObservabilityPage";
 import { SectionCard } from "@/components/SectionCard";
-import { SkillsCatalogPanel } from "@/components/SkillsCatalogPanel";
+import { SkillsSection } from "@/components/SkillsSection";
 import { SkillSetsCatalogPanel } from "@/components/SkillSetsCatalogPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import { monospaceFontFamily } from "@/theme";
@@ -4805,11 +4805,7 @@ export default function App() {
               )
             ) : null}
 
-            {section === "skills" ? (
-              <SectionCard title={currentSectionMeta.title} subtitle={currentSectionMeta.subtitle}>
-                <SkillsCatalogPanel />
-              </SectionCard>
-            ) : null}
+            {section === "skills" ? <SkillsSection /> : null}
 
             {section === "skill_sets" ? (
               <SectionCard title={currentSectionMeta.title} subtitle={currentSectionMeta.subtitle}>

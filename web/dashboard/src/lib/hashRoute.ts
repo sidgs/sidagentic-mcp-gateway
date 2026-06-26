@@ -24,6 +24,8 @@ export function appSectionToHash(section: AppSection): string {
 
 export type ToolGroupFormMode = "create" | "edit" | null;
 
+export type SkillFormMode = "create" | "add-version" | "edit" | "import";
+
 export type HashRoute = {
   section: AppSection | null;
   agentAppId: number | null;
@@ -34,6 +36,9 @@ export type HashRoute = {
   promptGroupName: string | null;
   toolCanonicalName: string | null;
   promptCanonicalName: string | null;
+  skillFormMode: SkillFormMode | null;
+  skillName: string | null;
+  skillVersion: string | null;
 };
 
 function decodeRouteSegment(parts: string[], fromIndex: number): string | null {
@@ -77,6 +82,34 @@ function parseToolGroupSubroute(parts: string[]): Pick<
   };
 }
 
+function parseSkillSubroute(parts: string[]): Pick<HashRoute, "skillFormMode" | "skillName" | "skillVersion"> {
+  if (parts.length < 2) {
+    return { skillFormMode: null, skillName: null, skillVersion: null };
+  }
+  if (parts[1] === "new" && parts.length === 2) {
+    return { skillFormMode: "create", skillName: null, skillVersion: null };
+  }
+  if (parts[1] === "import" && parts.length === 2) {
+    return { skillFormMode: "import", skillName: null, skillVersion: null };
+  }
+  const versionsIndex = parts.indexOf("versions", 1);
+  if (versionsIndex === -1 || versionsIndex === 1) {
+    return { skillFormMode: null, skillName: null, skillVersion: null };
+  }
+  const skillName = decodeRouteSegmentRange(parts, 1, versionsIndex);
+  if (versionsIndex + 1 >= parts.length) {
+    return { skillFormMode: null, skillName: null, skillVersion: null };
+  }
+  if (parts[versionsIndex + 1] === "new" && parts.length === versionsIndex + 2) {
+    return { skillFormMode: "add-version", skillName, skillVersion: null };
+  }
+  const skillVersion = decodeRouteSegmentRange(parts, versionsIndex + 1, versionsIndex + 2);
+  if (parts.length === versionsIndex + 3 && parts[parts.length - 1] === "edit") {
+    return { skillFormMode: "edit", skillName, skillVersion };
+  }
+  return { skillFormMode: null, skillName: null, skillVersion: null };
+}
+
 /**
  * Parse hash into dashboard section and optional detail segments.
  * Examples: `#/agent_apps/42`, `#/servers/my-server`, `#/tools/canonical.name`, `#/prompts/my.prompt`,
@@ -99,6 +132,9 @@ export function parseHashRoute(): HashRoute {
       promptGroupName: null,
       toolCanonicalName: null,
       promptCanonicalName: null,
+      skillFormMode: null,
+      skillName: null,
+      skillVersion: null,
     };
   }
   const section = parts[0] as AppSection;
@@ -119,6 +155,10 @@ export function parseHashRoute(): HashRoute {
   const promptGroupName = section === "prompt_groups" ? decodeRouteSegment(parts, 1) : null;
   const toolCanonicalName = section === "tools" ? decodeRouteSegment(parts, 1) : null;
   const promptCanonicalName = section === "prompts" ? decodeRouteSegment(parts, 1) : null;
+  const skillRoute =
+    section === "skills"
+      ? parseSkillSubroute(parts)
+      : { skillFormMode: null, skillName: null, skillVersion: null };
 
   return {
     section,
@@ -130,6 +170,9 @@ export function parseHashRoute(): HashRoute {
     promptGroupName: section === "prompt_groups" ? promptGroupName : null,
     toolCanonicalName: section === "tools" ? toolCanonicalName : null,
     promptCanonicalName: section === "prompts" ? promptCanonicalName : null,
+    skillFormMode: section === "skills" ? skillRoute.skillFormMode : null,
+    skillName: section === "skills" ? skillRoute.skillName : null,
+    skillVersion: section === "skills" ? skillRoute.skillVersion : null,
   };
 }
 
@@ -171,6 +214,31 @@ export function promptGroupDetailHash(name: string): string {
 /** Bookmarkable hash for a single tool detail view (canonical name is URL-encoded). */
 export function toolDetailHash(canonicalName: string): string {
   return `#/tools/${encodeURIComponent(canonicalName)}`;
+}
+
+/** Bookmarkable hash for the skills list. */
+export function skillsListHash(): string {
+  return "#/skills";
+}
+
+/** Bookmarkable hash for importing a skill from JSON or YAML. */
+export function skillImportHash(): string {
+  return "#/skills/import";
+}
+
+/** Bookmarkable hash for registering a new skill. */
+export function skillCreateHash(): string {
+  return "#/skills/new";
+}
+
+/** Bookmarkable hash for adding a version to an existing skill. */
+export function skillAddVersionHash(name: string): string {
+  return `#/skills/${encodeURIComponent(name)}/versions/new`;
+}
+
+/** Bookmarkable hash for editing a skill version. */
+export function skillEditHash(name: string, version: string): string {
+  return `#/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/edit`;
 }
 
 /** Bookmarkable hash for a single prompt detail view (canonical name is URL-encoded). */

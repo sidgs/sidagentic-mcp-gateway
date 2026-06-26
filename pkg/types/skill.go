@@ -35,6 +35,13 @@ type SkillVersionDetail struct {
 	References    []string          `json:"references"`
 }
 
+// SkillVersionEditableDetail adds bundled resource content for admin edit forms.
+type SkillVersionEditableDetail struct {
+	SkillVersionDetail
+	ScriptFiles    []SkillScriptInput    `json:"script_files"`
+	ReferenceFiles []SkillReferenceInput `json:"reference_files"`
+}
+
 // CreateSkillVersionRequest registers a new skill version.
 type CreateSkillVersionRequest struct {
 	Name          string                `json:"name"`

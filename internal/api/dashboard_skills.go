@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	skillsvc "sami.io/mcpgateway/internal/service/skill"
 	"sami.io/mcpgateway/pkg/types"
 )
 
@@ -26,7 +27,19 @@ func (s *Server) dashboardSkillsHandler() gin.HandlerFunc {
 }
 
 func (s *Server) dashboardGetSkillVersionHandler() gin.HandlerFunc {
-	return s.getSkillVersionHandler()
+	return func(c *gin.Context) {
+		sv, sk, err := s.skillService.GetSkillVersion(c.Request.Context(), c.Param("name"), c.Param("version"))
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		detail, err := skillsvc.ToEditableDetail(sv, sk.Name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, detail)
+	}
 }
 
 func (s *Server) dashboardCreateSkillVersionHandler() gin.HandlerFunc {
