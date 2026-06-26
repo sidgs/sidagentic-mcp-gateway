@@ -6,9 +6,9 @@ export type SkillImportFormat = "json" | "yaml" | "auto";
 const SKILL_NAME_RE = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const SKILL_VERSION_RE = /^[0-9]+(\.[0-9]+)*(-[a-z0-9]+)?$/;
 
-function asRecord(value: unknown): Record<string, unknown> {
+function asRecord(value: unknown, label: string): Record<string, unknown> {
   if (value === null || typeof value !== "object" || Array.isArray(value)) {
-    throw new Error("Import document must be a JSON or YAML object at the top level.");
+    throw new Error(`${label} must be an object.`);
   }
   return value as Record<string, unknown>;
 }
@@ -35,12 +35,14 @@ function readStringArray(obj: Record<string, unknown>, key: string): string[] {
   if (!Array.isArray(raw)) {
     throw new Error(`Field "${key}" must be an array of strings.`);
   }
-  return raw.map((item, index) => {
-    if (typeof item !== "string") {
-      throw new Error(`Field "${key}[${index}]" must be a string.`);
-    }
-    return item.trim();
-  }).filter(Boolean);
+  return raw
+    .map((item, index) => {
+      if (typeof item !== "string") {
+        throw new Error(`Field "${key}[${index}]" must be a string.`);
+      }
+      return item.trim();
+    })
+    .filter(Boolean);
 }
 
 function readScriptFiles(raw: unknown): DashboardCreateSkillInput["scripts"] {
@@ -51,7 +53,7 @@ function readScriptFiles(raw: unknown): DashboardCreateSkillInput["scripts"] {
     throw new Error('Field "scripts" must be an array of { filename, code_content } objects.');
   }
   return raw.map((item, index) => {
-    const obj = asRecord(item);
+    const obj = asRecord(item, `scripts[${index}]`);
     const filename = readString(obj, "filename", true);
     const code_content = readString(obj, "code_content", true);
     if (filename.includes("/") || filename.includes("\\")) {
@@ -69,7 +71,7 @@ function readReferenceFiles(raw: unknown): DashboardCreateSkillInput["references
     throw new Error('Field "references" must be an array of { filename, markdown_content } objects.');
   }
   return raw.map((item, index) => {
-    const obj = asRecord(item);
+    const obj = asRecord(item, `references[${index}]`);
     const filename = readString(obj, "filename", true);
     const markdown_content = readString(obj, "markdown_content", true);
     if (filename.includes("/") || filename.includes("\\")) {
@@ -109,6 +111,17 @@ function validateImportPayload(payload: DashboardCreateSkillInput): DashboardCre
   return payload;
 }
 
+function validateBatchUnique(skills: DashboardCreateSkillInput[]): void {
+  const seen = new Set<string>();
+  for (const skill of skills) {
+    const key = `${skill.name}@${skill.version}`;
+    if (seen.has(key)) {
+      throw new Error(`Duplicate skill in import document: ${skill.name} @ ${skill.version}`);
+    }
+    seen.add(key);
+  }
+}
+
 export function detectSkillImportFormat(text: string): Exclude<SkillImportFormat, "auto"> {
   const trimmed = text.trim();
   if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
@@ -128,8 +141,34 @@ export function formatFromFilename(filename: string): SkillImportFormat {
   return "auto";
 }
 
+function isSkillObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    return false;
+  }
+  const obj = value as Record<string, unknown>;
+  return typeof obj.name === "string" && typeof obj.version === "string";
+}
+
+function normalizeImportItems(parsed: unknown): unknown[] {
+  if (Array.isArray(parsed)) {
+    return parsed;
+  }
+  if (parsed !== null && typeof parsed === "object") {
+    const obj = parsed as Record<string, unknown>;
+    if (Array.isArray(obj.skills)) {
+      return obj.skills;
+    }
+    if (isSkillObject(parsed)) {
+      return [parsed];
+    }
+  }
+  throw new Error(
+    "Import document must be a skill object, an array of skills, or an object with a top-level skills array.",
+  );
+}
+
 function parseStructuredImport(raw: unknown): DashboardCreateSkillInput {
-  const obj = asRecord(raw);
+  const obj = asRecord(raw, "Skill entry");
   const payload: DashboardCreateSkillInput = {
     name: readString(obj, "name", true),
     version: readString(obj, "version", true),
@@ -164,7 +203,7 @@ function parseStructuredImport(raw: unknown): DashboardCreateSkillInput {
   return validateImportPayload(payload);
 }
 
-export function parseSkillImportText(text: string, format: SkillImportFormat = "auto"): DashboardCreateSkillInput {
+export function parseSkillImportText(text: string, format: SkillImportFormat = "auto"): DashboardCreateSkillInput[] {
   const trimmed = text.trim();
   if (!trimmed) {
     throw new Error("Paste JSON or YAML, or choose a file to import.");
@@ -183,7 +222,26 @@ export function parseSkillImportText(text: string, format: SkillImportFormat = "
     throw new Error(`Failed to parse ${resolvedFormat.toUpperCase()}: ${message}`);
   }
 
-  return parseStructuredImport(parsed);
+  const items = normalizeImportItems(parsed);
+  if (items.length === 0) {
+    throw new Error("Import document contains no skills.");
+  }
+
+  const skills = items.map((item, index) => {
+    try {
+      return parseStructuredImport(item);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Invalid skill entry";
+      const label =
+        item !== null && typeof item === "object" && !Array.isArray(item)
+          ? `${String((item as Record<string, unknown>).name ?? "unknown")} @ ${String((item as Record<string, unknown>).version ?? "?")}`
+          : `entry ${index + 1}`;
+      throw new Error(`Skill ${index + 1} (${label}): ${message}`);
+    }
+  });
+
+  validateBatchUnique(skills);
+  return skills;
 }
 
 export async function readSkillImportFile(file: File): Promise<{ text: string; format: SkillImportFormat }> {
