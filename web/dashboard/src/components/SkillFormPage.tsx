@@ -9,7 +9,14 @@ import {
   skillDetailToForm,
   type SkillCreateForm,
 } from "../lib/skillForm";
+import {
+  emptySkillLifecycle,
+  skillDetailToLifecycle,
+  validateSkillLifecycle,
+  type SkillLifecycleForm,
+} from "../lib/skillLifecycle";
 import { SkillContentFields, SkillIdentityFields } from "./SkillContentFields";
+import { SkillLifecycleFields } from "./SkillLifecycleFields";
 
 export interface SkillFormPageProps {
   mode: SkillFormMode;
@@ -41,6 +48,8 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
     return emptySkillCreateForm();
   });
   const [editForm, setEditForm] = useState(emptySkillContent());
+  const [lifecycleForm, setLifecycleForm] = useState<SkillLifecycleForm>(emptySkillLifecycle);
+  const [originalLifecycle, setOriginalLifecycle] = useState<SkillLifecycleForm>(emptySkillLifecycle);
   const [locked, setLocked] = useState(false);
   const [loading, setLoading] = useState(isEdit);
   const [saving, setSaving] = useState(false);
@@ -60,6 +69,9 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
           return;
         }
         setEditForm(skillDetailToForm(detail));
+        const lifecycle = skillDetailToLifecycle(detail);
+        setLifecycleForm(lifecycle);
+        setOriginalLifecycle(lifecycle);
         setLocked(detail.locked);
       })
       .catch((e) => {
@@ -83,10 +95,34 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
     setError(null);
     try {
       if (isEdit) {
-        if (!skillName || !skillVersion || locked) {
+        if (!skillName || !skillVersion) {
           return;
         }
-        await api.updateSkill(skillName, skillVersion, formToUpdatePayload(editForm));
+
+        const lifecycleChanged =
+          lifecycleForm.status !== originalLifecycle.status ||
+          lifecycleForm.dlc_status !== originalLifecycle.dlc_status;
+
+        if (lifecycleChanged) {
+          const lifecycleError = validateSkillLifecycle(lifecycleForm);
+          if (lifecycleError) {
+            setError(lifecycleError);
+            return;
+          }
+        }
+
+        if (!locked) {
+          await api.updateSkill(skillName, skillVersion, formToUpdatePayload(editForm));
+        } else if (!lifecycleChanged) {
+          return;
+        }
+
+        if (lifecycleForm.dlc_status !== originalLifecycle.dlc_status) {
+          await api.setSkillDLCStatus(skillName, skillVersion, lifecycleForm.dlc_status);
+        }
+        if (lifecycleForm.status !== originalLifecycle.status) {
+          await api.transitionSkillStatus(skillName, skillVersion, lifecycleForm.status);
+        }
       } else {
         await api.createSkill({
           name: createForm.name.trim(),
@@ -103,6 +139,10 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
   }
 
   const readOnly = isEdit && locked;
+  const lifecycleChanged =
+    lifecycleForm.status !== originalLifecycle.status ||
+    lifecycleForm.dlc_status !== originalLifecycle.dlc_status;
+  const canSave = !isEdit || !locked || lifecycleChanged;
 
   return (
     <Stack spacing={3}>
@@ -113,7 +153,10 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
       {loading ? <Typography>Loading skill…</Typography> : null}
 
       {!loading && isEdit && locked ? (
-        <Alert severity="info">This version is locked. Unlock it from the skills list before editing content.</Alert>
+        <Alert severity="info">
+          This version is locked. Unlock it from the skills list before editing content or DLC status. Lifecycle
+          status can still be updated here.
+        </Alert>
       ) : null}
 
       {!loading && !isEdit ? (
@@ -138,6 +181,12 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
               <strong>Version:</strong> {skillVersion}
             </Typography>
           </Stack>
+          <SkillLifecycleFields
+            form={lifecycleForm}
+            setForm={setLifecycleForm}
+            statusDisabled={saving}
+            dlcDisabled={readOnly || saving}
+          />
           <SkillContentFields form={editForm} setForm={setEditForm} disabled={readOnly || saving} />
         </>
       ) : null}
@@ -150,7 +199,7 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
         </Button>
         <Button
           variant="contained"
-          disabled={loading || saving || readOnly}
+          disabled={loading || saving || !canSave}
           onClick={() => void submit()}
         >
           {isEdit ? "Save changes" : "Create skill"}
