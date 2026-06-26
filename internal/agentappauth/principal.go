@@ -15,7 +15,8 @@ type Principal struct {
 	AgentAppID uint
 	// ToolGroups and PromptGroups are the current attachment sets from the database.
 	ToolGroups    []string
-	PromptGroups []string
+	PromptGroups  []string
+	SkillSets     []string
 }
 
 // WithPrincipal attaches an agent-app principal to ctx for MCP proxy handlers.
@@ -46,4 +47,9 @@ func (p *Principal) AllowsToolGroup(name string) bool {
 // AllowsPromptGroup reports whether the principal may access the named prompt group route.
 func (p *Principal) AllowsPromptGroup(name string) bool {
 	return containsString(p.PromptGroups, name)
+}
+
+// AllowsSkillSet reports whether the principal may access the named skill set route.
+func (p *Principal) AllowsSkillSet(name string) bool {
+	return containsString(p.SkillSets, name)
 }

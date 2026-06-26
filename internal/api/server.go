@@ -20,6 +20,8 @@ import (
 	"sami.io/mcpgateway/internal/service/dashboard"
 	"sami.io/mcpgateway/internal/service/mcp"
 	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/skill"
+	"sami.io/mcpgateway/internal/service/skillset"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/internal/telemetry"
@@ -55,6 +57,8 @@ type ServerOptions struct {
 	UserService      *user.UserService
 	ToolGroupService  *toolgroup.ToolGroupService
 	PromptGroupService *promptgroup.PromptGroupService
+	SkillService       *skill.Service
+	SkillSetService    *skillset.Service
 	DashboardService   *dashboard.Service
 	AgentAppService    *agentapp.Service
 
@@ -111,6 +115,8 @@ type Server struct {
 	userService      *user.UserService
 	toolGroupService  *toolgroup.ToolGroupService
 	promptGroupService *promptgroup.PromptGroupService
+	skillService       *skill.Service
+	skillSetService    *skillset.Service
 	dashboardService   *dashboard.Service
 	agentAppService    *agentapp.Service
 
@@ -240,6 +246,8 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		userService:           opts.UserService,
 		toolGroupService:      opts.ToolGroupService,
 		promptGroupService:    opts.PromptGroupService,
+		skillService:          opts.SkillService,
+		skillSetService:       opts.SkillSetService,
 		dashboardService:      opts.DashboardService,
 		agentAppService:       opts.AgentAppService,
 		otelProviders:         opts.OtelProviders,
@@ -607,6 +615,24 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		s.checkAuthForGroupMcpProxyAccess(false),
 		s.promptGroupSseMessageHandler(),
 	)
+	tenantMCP.GET(
+		V0PathPrefix+"/skillsets/:name/skills",
+		s.requireInitialized(),
+		s.checkAuthForSkillSetAccess(),
+		s.tenantSkillSetListHandler(),
+	)
+	tenantMCP.GET(
+		V0PathPrefix+"/skillsets/:name/skills/:skillname/versions/:version",
+		s.requireInitialized(),
+		s.checkAuthForSkillSetAccess(),
+		s.tenantSkillSetSkillHandler(),
+	)
+	tenantMCP.GET(
+		V0PathPrefix+"/skillsets/:name/skills/:skillname/versions/:version/references/:filename",
+		s.requireInitialized(),
+		s.checkAuthForSkillSetAccess(),
+		s.tenantSkillSetReferenceHandler(),
+	)
 
 	g.POST(
 		"/agent-apps/oauth/token",
@@ -647,6 +673,12 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		userAPI.PATCH("/agent-apps/:id", s.patchAgentAppHandler())
 		userAPI.DELETE("/agent-apps/:id", s.deleteAgentAppHandler())
 		userAPI.POST("/agent-apps/:id/rotate-secret", s.rotateAgentAppSecretHandler())
+
+		userAPI.GET("/skills", s.listSkillsHandler())
+		userAPI.GET("/skills/:name/versions/:version", s.getSkillVersionHandler())
+		userAPI.GET("/skills/:name/versions/:version/references/:filename", s.getSkillReferenceHandler())
+		userAPI.GET("/skillsets", s.listSkillSetsHandler())
+		userAPI.GET("/skillsets/:name", s.getSkillSetHandler())
 	}
 
 	// endpoints only accessible by an admin user in enterprise mode or anyone in development mode
@@ -705,6 +737,14 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		adminAPI.GET("/prompt-groups", s.listPromptGroupsHandler())
 		adminAPI.DELETE("/prompt-groups/:name", s.deletePromptGroupHandler())
 		adminAPI.PUT("/prompt-groups/:name", s.updatePromptGroupHandler())
+
+		adminAPI.POST("/skills", s.createSkillVersionHandler())
+		adminAPI.PUT("/skills/:name/versions/:version", s.updateSkillVersionHandler())
+		adminAPI.PATCH("/skills/:name/versions/:version/status", s.transitionSkillStatusHandler())
+		adminAPI.PATCH("/skills/:name/versions/:version/dlc-status", s.setSkillDLCStatusHandler())
+		adminAPI.PATCH("/skills/:name/versions/:version/lock", s.setSkillLockHandler())
+		adminAPI.POST("/skillsets", s.createSkillSetHandler())
+		adminAPI.PUT("/skillsets/:name", s.updateSkillSetHandler())
 	}
 
 	if s.dashboardService != nil {
@@ -748,6 +788,21 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.GET("/prompt-groups/:name", s.dashboardGetPromptGroupHandler())
 			dashboardAPI.PUT("/prompt-groups/:name", s.dashboardUpdatePromptGroupHandler())
 			dashboardAPI.DELETE("/prompt-groups/:name", s.dashboardDeletePromptGroupHandler())
+
+			dashboardAPI.GET("/skills", s.dashboardSkillsHandler())
+			dashboardAPI.GET("/skills/:name/versions/:version", s.dashboardGetSkillVersionHandler())
+			dashboardAPI.POST("/skills", s.dashboardCreateSkillVersionHandler())
+			dashboardAPI.PUT("/skills/:name/versions/:version", s.dashboardUpdateSkillVersionHandler())
+			dashboardAPI.PATCH("/skills/:name/versions/:version/status", s.dashboardTransitionSkillStatusHandler())
+			dashboardAPI.PATCH("/skills/:name/versions/:version/dlc-status", s.dashboardSetSkillDLCStatusHandler())
+			dashboardAPI.PATCH("/skills/:name/versions/:version/lock", s.dashboardSetSkillLockHandler())
+			dashboardAPI.DELETE("/skills/:name/versions/:version", s.dashboardDeleteSkillVersionHandler())
+
+			dashboardAPI.GET("/skillsets", s.dashboardSkillSetsHandler())
+			dashboardAPI.GET("/skillsets/:name", s.dashboardGetSkillSetHandler())
+			dashboardAPI.POST("/skillsets", s.dashboardCreateSkillSetHandler())
+			dashboardAPI.PUT("/skillsets/:name", s.dashboardUpdateSkillSetHandler())
+			dashboardAPI.DELETE("/skillsets/:name", s.dashboardDeleteSkillSetHandler())
 
 			dashboardAPI.GET("/agent-apps", s.dashboardAgentAppsHandler())
 			dashboardAPI.POST("/agent-apps", s.dashboardCreateAgentAppHandler())

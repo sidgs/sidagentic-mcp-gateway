@@ -25,9 +25,11 @@ type dashboardAgentApp struct {
 	Status               string                            `json:"status"`
 	ToolGroupNames       []string                          `json:"tool_group_names"`
 	PromptGroupNames     []string                          `json:"prompt_group_names"`
+	SkillSetNames        []string                          `json:"skill_set_names"`
 	OAuthTokenURL        string                            `json:"oauth_token_url"`
 	ToolGroupEndpoints   []dashboardAgentAppGroupEndpoints `json:"tool_group_endpoints"`
 	PromptGroupEndpoints []dashboardAgentAppGroupEndpoints `json:"prompt_group_endpoints"`
+	SkillSetEndpoints    []dashboardAgentAppGroupEndpoints `json:"skill_set_endpoints"`
 }
 
 type dashboardAgentAppsResponse struct {
@@ -39,6 +41,7 @@ type dashboardAgentAppCreateRequest struct {
 	Description        string   `json:"description,omitempty"`
 	ToolGroupNames     []string `json:"tool_group_names,omitempty"`
 	PromptGroupNames   []string `json:"prompt_group_names,omitempty"`
+	SkillSetNames      []string `json:"skill_set_names,omitempty"`
 }
 
 type dashboardAgentAppPatchRequest struct {
@@ -47,6 +50,7 @@ type dashboardAgentAppPatchRequest struct {
 	Status             *string   `json:"status,omitempty"`
 	ToolGroupNames     *[]string `json:"tool_group_names,omitempty"`
 	PromptGroupNames   *[]string `json:"prompt_group_names,omitempty"`
+	SkillSetNames      *[]string `json:"skill_set_names,omitempty"`
 }
 
 func (s *Server) buildDashboardAgentApp(c *gin.Context, app *model.AgentApp) (dashboardAgentApp, error) {
@@ -58,6 +62,10 @@ func (s *Server) buildDashboardAgentApp(c *gin.Context, app *model.AgentApp) (da
 	if err != nil {
 		return dashboardAgentApp{}, err
 	}
+	ss, err := app.GetSkillSets()
+	if err != nil {
+		return dashboardAgentApp{}, err
+	}
 	out := dashboardAgentApp{
 		ID:               app.ID,
 		Name:             app.Name,
@@ -66,6 +74,7 @@ func (s *Server) buildDashboardAgentApp(c *gin.Context, app *model.AgentApp) (da
 		Status:           string(app.Status),
 		ToolGroupNames:   tg,
 		PromptGroupNames: pg,
+		SkillSetNames:    ss,
 		OAuthTokenURL:    s.agentAppOAuthTokenURL(c),
 	}
 	for _, n := range tg {
@@ -85,6 +94,10 @@ func (s *Server) buildDashboardAgentApp(c *gin.Context, app *model.AgentApp) (da
 			SSEEndpoint:            ep.SSEEndpoint,
 			SSEMessageEndpoint:     ep.SSEMessageEndpoint,
 		})
+	}
+	for _, n := range ss {
+		ep := s.getSkillSetCatalogEndpoints(c, n)
+		out.SkillSetEndpoints = append(out.SkillSetEndpoints, ep)
 	}
 	return out, nil
 }
@@ -134,7 +147,7 @@ func (s *Server) dashboardCreateAgentAppHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		app, secret, err := s.agentAppService.Create(c.Request.Context(), scope, req.Name, req.Description, req.ToolGroupNames, req.PromptGroupNames)
+		app, secret, err := s.agentAppService.Create(c.Request.Context(), scope, req.Name, req.Description, req.ToolGroupNames, req.PromptGroupNames, req.SkillSetNames)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -153,6 +166,7 @@ func (s *Server) dashboardCreateAgentAppHandler() gin.HandlerFunc {
 				Status:           item.Status,
 				ToolGroupNames:   item.ToolGroupNames,
 				PromptGroupNames: item.PromptGroupNames,
+				SkillSetNames:    item.SkillSetNames,
 			},
 			ClientSecret:  secret,
 			OAuthTokenURL: item.OAuthTokenURL,
@@ -190,7 +204,7 @@ func (s *Server) dashboardPatchAgentAppHandler() gin.HandlerFunc {
 			}
 			st = &v
 		}
-		app, err := s.agentAppService.UpdatePatch(c.Request.Context(), uint(id64), scope, req.Name, req.Description, st, req.ToolGroupNames, req.PromptGroupNames)
+		app, err := s.agentAppService.UpdatePatch(c.Request.Context(), uint(id64), scope, req.Name, req.Description, st, req.ToolGroupNames, req.PromptGroupNames, req.SkillSetNames)
 		if err != nil {
 			handleServiceError(c, err)
 			return

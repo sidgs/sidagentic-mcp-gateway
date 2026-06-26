@@ -29,6 +29,7 @@ type AgentApp struct {
 	Status             AgentAppStatus `json:"status" gorm:"size:32;not null;default:enabled"`
 	ToolGroupNames     datatypes.JSON `json:"tool_group_names" gorm:"type:jsonb"`
 	PromptGroupNames   datatypes.JSON `json:"prompt_group_names" gorm:"type:jsonb"`
+	SkillSetNames      datatypes.JSON `json:"skill_set_names" gorm:"type:jsonb"`
 }
 
 // GetToolGroups unmarshals tool group names attached to this app.
@@ -51,6 +52,18 @@ func (a *AgentApp) GetPromptGroups() ([]string, error) {
 	var names []string
 	if err := json.Unmarshal(a.PromptGroupNames, &names); err != nil {
 		return nil, fmt.Errorf("prompt_group_names: %w", err)
+	}
+	return names, nil
+}
+
+// GetSkillSets unmarshals skill set names attached to this app.
+func (a *AgentApp) GetSkillSets() ([]string, error) {
+	if a.SkillSetNames == nil {
+		return []string{}, nil
+	}
+	var names []string
+	if err := json.Unmarshal(a.SkillSetNames, &names); err != nil {
+		return nil, fmt.Errorf("skill_set_names: %w", err)
 	}
 	return names, nil
 }

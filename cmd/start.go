@@ -30,6 +30,8 @@ import (
 	"sami.io/mcpgateway/internal/service/dashboard"
 	"sami.io/mcpgateway/internal/service/mcp"
 	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/skill"
+	"sami.io/mcpgateway/internal/service/skillset"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/service/usage"
 	"sami.io/mcpgateway/internal/service/user"
@@ -727,6 +729,9 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf("failed to create Prompt Group service: %v", err)
 	}
 
+	skillService := skill.New(dbConn)
+	skillSetService := skillset.New(dbConn, skillService)
+
 	defaultTenantID, err := getDefaultTenantID()
 	if err != nil {
 		return err
@@ -775,6 +780,8 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		UserService:          userService,
 		ToolGroupService:      toolGroupService,
 		PromptGroupService: promptGroupService,
+		SkillService:       skillService,
+		SkillSetService:    skillSetService,
 		DashboardService:     dashboardService,
 		AgentAppService:      agentAppService,
 		OtelProviders:        otelProviders,

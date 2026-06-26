@@ -7,6 +7,8 @@ const SECTIONS = new Set<string>([
   "tools",
   "tool_groups",
   "prompt_groups",
+  "skills",
+  "skill_sets",
   "agent_apps",
   "prompts",
   "resources",

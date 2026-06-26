@@ -119,9 +119,10 @@ func normalizeGroupNames(names []string) []string {
 	return out
 }
 
-func validateAgentAppGroupAttachment(toolGroups, promptGroups []string) error {
+func validateAgentAppGroupAttachment(toolGroups, promptGroups, skillSets []string) error {
 	nt := normalizeGroupNames(toolGroups)
 	np := normalizeGroupNames(promptGroups)
+	_ = normalizeGroupNames(skillSets) // skill sets: zero or many; duplicates removed
 	if len(nt) > 1 {
 		return fmt.Errorf("agent app may reference at most one tool group: %w", apierrors.ErrInvalidInput)
 	}
@@ -141,7 +142,7 @@ func validateAgentAppGroupAttachment(toolGroups, promptGroups []string) error {
 	}
 }
 
-func (s *Service) validateAttachedGroups(ctx context.Context, toolGroups, promptGroups []string) error {
+func (s *Service) validateAttachedGroups(ctx context.Context, toolGroups, promptGroups, skillSets []string) error {
 	tid := tenant.MustFromContext(ctx)
 	for _, n := range toolGroups {
 		n = strings.TrimSpace(n)
@@ -169,11 +170,24 @@ func (s *Service) validateAttachedGroups(ctx context.Context, toolGroups, prompt
 			return fmt.Errorf("prompt group %q does not exist: %w", n, apierrors.ErrInvalidInput)
 		}
 	}
+	for _, n := range skillSets {
+		n = strings.TrimSpace(n)
+		if n == "" {
+			return fmt.Errorf("empty skill set name: %w", apierrors.ErrInvalidInput)
+		}
+		var count int64
+		if err := s.db.WithContext(ctx).Model(&model.SkillSet{}).Where("tenant_id = ? AND name = ?", tid, n).Count(&count).Error; err != nil {
+			return err
+		}
+		if count == 0 {
+			return fmt.Errorf("skill set %q does not exist: %w", n, apierrors.ErrInvalidInput)
+		}
+	}
 	return nil
 }
 
 // Create persists a new agent-app and returns the plaintext secret once.
-func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description string, toolGroups, promptGroups []string) (*model.AgentApp, string, error) {
+func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description string, toolGroups, promptGroups, skillSets []string) (*model.AgentApp, string, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, "", fmt.Errorf("name is required: %w", apierrors.ErrInvalidInput)
@@ -184,10 +198,11 @@ func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description s
 	}
 	toolGroups = normalizeGroupNames(toolGroups)
 	promptGroups = normalizeGroupNames(promptGroups)
-	if err := validateAgentAppGroupAttachment(toolGroups, promptGroups); err != nil {
+	skillSets = normalizeGroupNames(skillSets)
+	if err := validateAgentAppGroupAttachment(toolGroups, promptGroups, skillSets); err != nil {
 		return nil, "", err
 	}
-	if err := s.validateAttachedGroups(ctx, toolGroups, promptGroups); err != nil {
+	if err := s.validateAttachedGroups(ctx, toolGroups, promptGroups, skillSets); err != nil {
 		return nil, "", err
 	}
 	clientID, secretPlain, err := GenerateCredentials()
@@ -206,6 +221,10 @@ func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description s
 	if err != nil {
 		return nil, "", err
 	}
+	ssJSON, err := marshalNames(skillSets)
+	if err != nil {
+		return nil, "", err
+	}
 	app := &model.AgentApp{
 		TenantID:         tenant.MustFromContext(ctx),
 		OwnerScopeKey:    ownerScopeKey,
@@ -216,6 +235,7 @@ func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description s
 		Status:           model.AgentAppStatusEnabled,
 		ToolGroupNames:   tgJSON,
 		PromptGroupNames: pgJSON,
+		SkillSetNames:    ssJSON,
 	}
 	if err := s.dbTenant(ctx).Create(app).Error; err != nil {
 		return nil, "", err
@@ -246,7 +266,7 @@ func (s *Service) GetOwned(ctx context.Context, id uint, ownerScopeKey string) (
 }
 
 // UpdatePatch updates name, description, status, and/or attachments when non-nil.
-func (s *Service) UpdatePatch(ctx context.Context, id uint, ownerScopeKey string, name, description *string, status *model.AgentAppStatus, toolGroups, promptGroups *[]string) (*model.AgentApp, error) {
+func (s *Service) UpdatePatch(ctx context.Context, id uint, ownerScopeKey string, name, description *string, status *model.AgentAppStatus, toolGroups, promptGroups, skillSets *[]string) (*model.AgentApp, error) {
 	app, err := s.GetOwned(ctx, id, ownerScopeKey)
 	if err != nil {
 		return nil, err
@@ -278,8 +298,13 @@ func (s *Service) UpdatePatch(ctx context.Context, id uint, ownerScopeKey string
 	if err != nil {
 		return nil, err
 	}
+	curSS, err := app.GetSkillSets()
+	if err != nil {
+		return nil, err
+	}
 	tg := normalizeGroupNames(curTG)
 	pg := normalizeGroupNames(curPG)
+	ss := normalizeGroupNames(curSS)
 	if toolGroups != nil {
 		tg = normalizeGroupNames(*toolGroups)
 		if len(tg) > 0 {
@@ -292,10 +317,13 @@ func (s *Service) UpdatePatch(ctx context.Context, id uint, ownerScopeKey string
 			tg = []string{}
 		}
 	}
-	if err := validateAgentAppGroupAttachment(tg, pg); err != nil {
+	if skillSets != nil {
+		ss = normalizeGroupNames(*skillSets)
+	}
+	if err := validateAgentAppGroupAttachment(tg, pg, ss); err != nil {
 		return nil, err
 	}
-	if err := s.validateAttachedGroups(ctx, tg, pg); err != nil {
+	if err := s.validateAttachedGroups(ctx, tg, pg, ss); err != nil {
 		return nil, err
 	}
 	tgj, err := marshalNames(tg)
@@ -306,8 +334,13 @@ func (s *Service) UpdatePatch(ctx context.Context, id uint, ownerScopeKey string
 	if err != nil {
 		return nil, err
 	}
+	ssj, err := marshalNames(ss)
+	if err != nil {
+		return nil, err
+	}
 	app.ToolGroupNames = tgj
 	app.PromptGroupNames = pgj
+	app.SkillSetNames = ssj
 
 	if err := s.dbTenant(ctx).Save(app).Error; err != nil {
 		return nil, err
@@ -437,10 +470,15 @@ func PrincipalForApp(app *model.AgentApp) (*agentappauth.Principal, error) {
 	if err != nil {
 		return nil, err
 	}
+	ss, err := app.GetSkillSets()
+	if err != nil {
+		return nil, err
+	}
 	return &agentappauth.Principal{
 		AgentAppID:   app.ID,
 		ToolGroups:   tg,
 		PromptGroups: pg,
+		SkillSets:    ss,
 	}, nil
 }
 

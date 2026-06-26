@@ -49,6 +49,24 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(&model.ToolInvocationEvent{}); err != nil {
 		return fmt.Errorf("auto-migration failed for ToolInvocationEvent model: %v", err)
 	}
+	if err := db.AutoMigrate(&model.Skill{}); err != nil {
+		return fmt.Errorf("auto-migration failed for Skill model: %v", err)
+	}
+	if err := db.AutoMigrate(&model.SkillVersion{}); err != nil {
+		return fmt.Errorf("auto-migration failed for SkillVersion model: %v", err)
+	}
+	if err := db.AutoMigrate(&model.SkillSet{}); err != nil {
+		return fmt.Errorf("auto-migration failed for SkillSet model: %v", err)
+	}
+	if err := db.AutoMigrate(&model.SkillSetMember{}); err != nil {
+		return fmt.Errorf("auto-migration failed for SkillSetMember model: %v", err)
+	}
+	if err := db.AutoMigrate(&model.SkillScript{}); err != nil {
+		return fmt.Errorf("auto-migration failed for SkillScript model: %v", err)
+	}
+	if err := db.AutoMigrate(&model.SkillReference{}); err != nil {
+		return fmt.Errorf("auto-migration failed for SkillReference model: %v", err)
+	}
 	if err := backfillServerKind(db); err != nil {
 		return err
 	}
@@ -87,6 +105,8 @@ func backfillTenantColumns(db *gorm.DB) error {
 		ns.TableName("ToolGroup"),
 		ns.TableName("PromptGroup"),
 		ns.TableName("AgentApp"),
+		ns.TableName("Skill"),
+		ns.TableName("SkillSet"),
 		ns.TableName("UpstreamOAuthPendingSession"),
 		ns.TableName("UpstreamOAuthToken"),
 	} {

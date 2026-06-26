@@ -244,4 +244,63 @@ export const api = {
     requestJSON<{ client_secret: string }>(`/dashboard/agent-apps/${id}/rotate-secret`, {
       method: "POST",
     }),
+
+  skills: () => requestJSON<{ skills: import("./types").DashboardSkillVersionSummary[] }>("/dashboard/skills"),
+  getSkillVersion: (name: string, version: string) =>
+    requestJSON<import("./types").DashboardSkillVersionDetail>(
+      `/dashboard/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}`,
+    ),
+  createSkill: (body: import("./types").DashboardCreateSkillInput) =>
+    requestJSON("/dashboard/skills", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  updateSkill: (name: string, version: string, body: import("./types").DashboardUpdateSkillInput) =>
+    requestJSON(`/dashboard/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  transitionSkillStatus: (name: string, version: string, status: string) =>
+    requestJSON(`/dashboard/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status }),
+    }),
+  setSkillDLCStatus: (name: string, version: string, dlc_status: string) =>
+    requestJSON(`/dashboard/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/dlc-status`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ dlc_status }),
+    }),
+  setSkillLock: (name: string, version: string, locked: boolean) =>
+    requestJSON(`/dashboard/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/lock`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ locked }),
+    }),
+  deleteSkillVersion: (name: string, version: string) =>
+    requestJSON(`/dashboard/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}`, {
+      method: "DELETE",
+    }),
+  skillSets: () => requestJSON<{ skill_sets: import("./types").DashboardSkillSetSummary[] }>("/dashboard/skillsets"),
+  getSkillSet: (name: string) =>
+    requestJSON<import("./types").DashboardSkillSet>(`/dashboard/skillsets/${encodeURIComponent(name)}`),
+  createSkillSet: (body: import("./types").DashboardCreateSkillSetInput) =>
+    requestJSON("/dashboard/skillsets", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  updateSkillSet: (name: string, body: import("./types").DashboardUpdateSkillSetInput) =>
+    requestJSON(`/dashboard/skillsets/${encodeURIComponent(name)}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  deleteSkillSet: (name: string) =>
+    requestJSON(`/dashboard/skillsets/${encodeURIComponent(name)}`, {
+      method: "DELETE",
+    }),
 };

@@ -99,6 +99,8 @@ import { NavTabs } from "@/components/NavTabs";
 import { LineagePage } from "@/components/LineagePage";
 import { ObservabilityPage } from "@/components/ObservabilityPage";
 import { SectionCard } from "@/components/SectionCard";
+import { SkillsCatalogPanel } from "@/components/SkillsCatalogPanel";
+import { SkillSetsCatalogPanel } from "@/components/SkillSetsCatalogPanel";
 import { StatusBadge } from "@/components/StatusBadge";
 import { monospaceFontFamily } from "@/theme";
 
@@ -172,6 +174,7 @@ interface DashboardData {
   resources?: DashboardResourcesResponse;
   diagnostics?: DashboardDiagnosticsResponse;
   agentApps?: DashboardAgentAppsResponse;
+  skillSets?: { skill_sets: { name: string; description: string; member_count: number }[] };
 }
 
 interface FeedbackMessage {
@@ -360,6 +363,14 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
     title: "Prompt Groups",
     subtitle: "Expose a curated subset of prompts at dedicated MCP URLs.",
   },
+  skills: {
+    title: "Skills",
+    subtitle: "Versioned Agent Skills catalog with lifecycle and DLC status.",
+  },
+  skill_sets: {
+    title: "Skill Sets",
+    subtitle: "Group pinned active skill versions for tenant catalog access.",
+  },
   prompts: {
     title: "Prompts",
     subtitle: "Prompt templates currently exposed through MCP Gateway.",
@@ -370,7 +381,7 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
   },
   agent_apps: {
     title: "Agent Apps",
-    subtitle: "OAuth clients scoped to attached tool and prompt groups.",
+    subtitle: "OAuth clients scoped to attached tool, prompt, or skill set groups.",
   },
   diagnostics: {
     title: "System Info",
@@ -1116,6 +1127,7 @@ export default function App() {
   const [agentAppDescription, setAgentAppDescription] = useState("");
   const [agentAppToolGroup, setAgentAppToolGroup] = useState("");
   const [agentAppPromptGroup, setAgentAppPromptGroup] = useState("");
+  const [agentAppSkillSets, setAgentAppSkillSets] = useState<string[]>([]);
   const [agentAppLegacyConfigInvalid, setAgentAppLegacyConfigInvalid] = useState(false);
   const [agentAppCreateError, setAgentAppCreateError] = useState("");
   const [agentAppSecretReveal, setAgentAppSecretReveal] = useState<{ title: string; secret: string } | null>(
@@ -1197,7 +1209,7 @@ export default function App() {
   }, [authSession]);
 
   async function fetchDashboardPanelsAfterOverview(overview: DashboardOverviewResponse) {
-    const [servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps] =
+    const [servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets] =
       await Promise.all([
       api.servers(),
       api.tools(),
@@ -1207,12 +1219,13 @@ export default function App() {
       api.resources(),
       api.diagnostics(),
       api.agentApps(),
+      api.skillSets(),
     ]);
-    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps };
+    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets };
   }
 
   async function fetchFullDashboard() {
-    const [overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps] =
+    const [overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets] =
       await Promise.all([
       api.overview(),
       api.servers(),
@@ -1223,12 +1236,13 @@ export default function App() {
       api.resources(),
       api.diagnostics(),
       api.agentApps(),
+      api.skillSets(),
     ]);
-    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps };
+    return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets };
   }
 
   function applyDashboardPayload(payload: Required<DashboardData>) {
-    const { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps } =
+    const { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets } =
       payload;
     setData({
       overview,
@@ -1240,6 +1254,7 @@ export default function App() {
       resources,
       diagnostics,
       agentApps,
+      skillSets,
     });
     setExpandedServer((current) => {
       if (current === null) {
@@ -1625,6 +1640,19 @@ export default function App() {
   const agentAppPromptGroupMenuNames = useMemo(
     () => mergeSortedUniqueNames(agentAppPromptGroupSelectOptions, agentAppPromptGroup ? [agentAppPromptGroup] : []),
     [agentAppPromptGroupSelectOptions, agentAppPromptGroup],
+  );
+
+  const agentAppSkillSetSelectOptions = useMemo(
+    () =>
+      [...(data.skillSets?.skill_sets ?? [])]
+        .map((g) => g.name)
+        .sort((a, b) => a.localeCompare(b)),
+    [data.skillSets?.skill_sets],
+  );
+
+  const agentAppSkillSetMenuNames = useMemo(
+    () => mergeSortedUniqueNames(agentAppSkillSetSelectOptions, agentAppSkillSets),
+    [agentAppSkillSetSelectOptions, agentAppSkillSets],
   );
 
   const selectedAgentApp = useMemo(() => {
@@ -2536,6 +2564,7 @@ export default function App() {
     setAgentAppDescription("");
     setAgentAppToolGroup("");
     setAgentAppPromptGroup("");
+    setAgentAppSkillSets([]);
     setAgentAppLegacyConfigInvalid(false);
     setAgentAppCreateError("");
     setAgentAppDialogOpen(true);
@@ -2548,19 +2577,21 @@ export default function App() {
     setAgentAppCreateError("");
     const tg = app.tool_group_names ?? [];
     const pg = app.prompt_group_names ?? [];
+    const ss = app.skill_set_names ?? [];
     const bad =
-      (tg.length === 0 && pg.length === 0) ||
+      (tg.length !== 1 && pg.length !== 1) ||
       tg.length > 1 ||
-      pg.length > 1 ||
-      (tg.length > 0 && pg.length > 0);
+      pg.length > 1;
     if (bad) {
       setAgentAppToolGroup("");
       setAgentAppPromptGroup("");
+      setAgentAppSkillSets([]);
       setAgentAppLegacyConfigInvalid(true);
     } else {
       setAgentAppLegacyConfigInvalid(false);
       setAgentAppToolGroup(tg[0] ?? "");
       setAgentAppPromptGroup(pg[0] ?? "");
+      setAgentAppSkillSets(ss);
     }
     setAgentAppDialogOpen(true);
   }
@@ -2573,6 +2604,7 @@ export default function App() {
     setAgentAppDescription("");
     setAgentAppToolGroup("");
     setAgentAppPromptGroup("");
+    setAgentAppSkillSets([]);
     setAgentAppLegacyConfigInvalid(false);
   }
 
@@ -2584,11 +2616,10 @@ export default function App() {
     }
     const toolGroupNames = agentAppToolGroup.trim() ? [agentAppToolGroup.trim()] : [];
     const promptGroupNames = agentAppPromptGroup.trim() ? [agentAppPromptGroup.trim()] : [];
-    const xorOk =
-      (toolGroupNames.length === 1 && promptGroupNames.length === 0) ||
-      (toolGroupNames.length === 0 && promptGroupNames.length === 1);
-    if (!xorOk) {
-      setAgentAppCreateError("Select exactly one tool group or exactly one prompt group.");
+    const skillSetNames = agentAppSkillSets.map((n) => n.trim()).filter(Boolean);
+    const mcpAttached = toolGroupNames.length + promptGroupNames.length;
+    if (mcpAttached !== 1) {
+      setAgentAppCreateError("Select exactly one tool group or one prompt group.");
       return;
     }
     setAgentAppCreateError("");
@@ -2603,6 +2634,7 @@ export default function App() {
           description: agentAppDescription.trim(),
           tool_group_names: toolGroupNames,
           prompt_group_names: promptGroupNames,
+          skill_set_names: skillSetNames,
         };
         await api.patchAgentApp(editingId, patch);
         closeAgentAppModal();
@@ -2615,6 +2647,7 @@ export default function App() {
         description: agentAppDescription.trim() || undefined,
         tool_group_names: toolGroupNames,
         prompt_group_names: promptGroupNames,
+        skill_set_names: skillSetNames,
       };
       const res = await api.createAgentApp(payload);
       setAgentAppSecretReveal({
@@ -4012,6 +4045,18 @@ export default function App() {
               ? `${app.prompt_group_names[0]} (prompt)`
               : "— (invalid or unset — edit to fix)"}
         </Typography>
+        <Typography variant="caption" color="text.secondary" component="div" sx={{ mt: 0.5 }}>
+          Skill sets:{" "}
+          {app.skill_set_names?.length ? (
+            <Stack direction="row" spacing={0.5} component="span" sx={{ display: "inline-flex", flexWrap: "wrap", gap: 0.5, verticalAlign: "middle" }}>
+              {app.skill_set_names.map((name) => (
+                <Chip key={name} label={name} size="small" variant="outlined" />
+              ))}
+            </Stack>
+          ) : (
+            "—"
+          )}
+        </Typography>
 
         <Box sx={{ mt: 2, pt: 2, borderTop: 1, borderColor: "divider" }}>
           <Typography variant="subtitle2" sx={{ mb: 1 }}>
@@ -4074,6 +4119,7 @@ export default function App() {
 
         {renderAgentAppGroupEndpoints("Tool group MCP URLs", app.tool_group_endpoints)}
         {renderAgentAppGroupEndpoints("Prompt group MCP URLs", app.prompt_group_endpoints)}
+        {renderAgentAppGroupEndpoints("Skill set catalog URLs", app.skill_set_endpoints)}
       </>
     );
   }
@@ -4757,6 +4803,18 @@ export default function App() {
                   )}
                 </SectionCard>
               )
+            ) : null}
+
+            {section === "skills" ? (
+              <SectionCard title={currentSectionMeta.title} subtitle={currentSectionMeta.subtitle}>
+                <SkillsCatalogPanel />
+              </SectionCard>
+            ) : null}
+
+            {section === "skill_sets" ? (
+              <SectionCard title={currentSectionMeta.title} subtitle={currentSectionMeta.subtitle}>
+                <SkillSetsCatalogPanel />
+              </SectionCard>
             ) : null}
 
             {section === "prompt_groups" && data.promptGroups ? (
@@ -6108,6 +6166,45 @@ export default function App() {
                   {agentAppPromptGroupSelectOptions.length === 0
                     ? "No prompt groups yet. Create one in the Prompt groups section."
                     : "Choosing a prompt group clears the tool group."}
+                </FormHelperText>
+              </FormControl>
+              <FormControl
+                fullWidth
+                size="small"
+                disabled={
+                  agentAppSkillSetSelectOptions.length === 0 && agentAppSkillSets.length === 0
+                }
+              >
+                <InputLabel id="agent-app-skill-sets-label">Skill sets</InputLabel>
+                <Select
+                  labelId="agent-app-skill-sets-label"
+                  id="agent-app-skill-sets"
+                  multiple
+                  value={agentAppSkillSets}
+                  label="Skill sets"
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setAgentAppSkillSets(typeof v === "string" ? v.split(",") : v);
+                  }}
+                  renderValue={(selected) => (
+                    <Box sx={{ display: "flex", flexWrap: "wrap", gap: 0.5 }}>
+                      {selected.map((name) => (
+                        <Chip key={name} label={name} size="small" />
+                      ))}
+                    </Box>
+                  )}
+                  MenuProps={{ slotProps: { paper: { sx: { maxHeight: 360 } } } }}
+                >
+                  {agentAppSkillSetMenuNames.map((name) => (
+                    <MenuItem key={name} value={name}>
+                      {name}
+                    </MenuItem>
+                  ))}
+                </Select>
+                <FormHelperText>
+                  {agentAppSkillSetSelectOptions.length === 0
+                    ? "No skill sets yet. Create one in the Skill Sets section."
+                    : "Optional. Attach zero or more skill sets in addition to the tool or prompt group."}
                 </FormHelperText>
               </FormControl>
               {agentAppCreateError ? (

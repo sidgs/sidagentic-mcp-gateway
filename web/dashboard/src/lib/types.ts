@@ -4,6 +4,8 @@ export type AppSection =
   | "tools"
   | "tool_groups"
   | "prompt_groups"
+  | "skills"
+  | "skill_sets"
   | "agent_apps"
   | "prompts"
   | "resources"
@@ -410,9 +412,103 @@ export interface DashboardAgentApp {
   status: string;
   tool_group_names: string[];
   prompt_group_names: string[];
+  skill_set_names: string[];
   oauth_token_url: string;
   tool_group_endpoints: DashboardAgentAppGroupEndpoints[];
   prompt_group_endpoints: DashboardAgentAppGroupEndpoints[];
+  skill_set_endpoints: DashboardAgentAppGroupEndpoints[];
+}
+
+export interface DashboardSkillVersionSummary {
+  id: string;
+  name: string;
+  version: string;
+  description: string;
+  status: string;
+  dlc_status: string;
+  locked: boolean;
+}
+
+export interface DashboardSkillVersionDetail extends DashboardSkillVersionSummary {
+  license?: string;
+  compatibility?: string;
+  metadata?: Record<string, string>;
+  allowed_tools?: string[];
+  body_content: string;
+  scripts: string[];
+  references: string[];
+}
+
+export interface DashboardSkillsResponse {
+  skills: DashboardSkillVersionSummary[];
+}
+
+export interface DashboardSkillSetMember {
+  skill_version_id: string;
+  name: string;
+  version: string;
+  description: string;
+  status: string;
+}
+
+export interface DashboardSkillSet {
+  name: string;
+  description: string;
+  security_option: string;
+  members: DashboardSkillSetMember[];
+  member_count: number;
+  catalog_endpoint: string;
+}
+
+export interface DashboardSkillSetSummary {
+  name: string;
+  description: string;
+  member_count: number;
+}
+
+export interface DashboardSkillSetsResponse {
+  skill_sets: DashboardSkillSetSummary[];
+}
+
+export interface DashboardCreateSkillInput {
+  name: string;
+  version: string;
+  description: string;
+  license?: string;
+  compatibility?: string;
+  body_content: string;
+  allowed_tools?: string[];
+  scripts?: { filename: string; code_content: string }[];
+  references?: { filename: string; markdown_content: string }[];
+}
+
+export interface DashboardUpdateSkillInput {
+  description: string;
+  license?: string;
+  compatibility?: string;
+  body_content: string;
+  allowed_tools?: string[];
+  scripts?: { filename: string; code_content: string }[];
+  references?: { filename: string; markdown_content: string }[];
+}
+
+export interface DashboardSkillSetMemberInput {
+  skill_version_id?: string;
+  skill_name?: string;
+  version?: string;
+}
+
+export interface DashboardCreateSkillSetInput {
+  name: string;
+  description: string;
+  security_option?: string;
+  members: DashboardSkillSetMemberInput[];
+}
+
+export interface DashboardUpdateSkillSetInput {
+  description?: string;
+  security_option?: string;
+  members?: DashboardSkillSetMemberInput[];
 }
 
 export interface DashboardAgentAppsResponse {
@@ -422,9 +518,10 @@ export interface DashboardAgentAppsResponse {
 export interface DashboardCreateAgentAppInput {
   name: string;
   description?: string;
-  /** Exactly one of tool_group_names or prompt_group_names must contain a single group name. */
+  /** Exactly one of tool_group_names or prompt_group_names must contain a single name; skill_set_names may list zero or more. */
   tool_group_names?: string[];
   prompt_group_names?: string[];
+  skill_set_names?: string[];
 }
 
 /** Body for PATCH /dashboard/agent-apps/:id (all fields optional). */
@@ -432,9 +529,10 @@ export interface DashboardPatchAgentAppInput {
   name?: string;
   description?: string;
   status?: string;
-  /** Exact XOR single-group rule; see CreateAgentAppInput. */
+  /** Exactly one tool or prompt group; optional skill sets. See CreateAgentAppInput. */
   tool_group_names?: string[];
   prompt_group_names?: string[];
+  skill_set_names?: string[];
 }
 
 export interface DashboardCreateAgentAppResponse {
@@ -446,6 +544,7 @@ export interface DashboardCreateAgentAppResponse {
     status: string;
     tool_group_names: string[];
     prompt_group_names: string[];
+    skill_set_names: string[];
   };
   client_secret: string;
   oauth_token_url?: string;

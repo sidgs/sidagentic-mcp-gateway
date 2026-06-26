@@ -15,6 +15,7 @@ import (
 	"sami.io/mcpgateway/internal/mcpgatewayctx"
 	"sami.io/mcpgateway/internal/service/agentapp"
 	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/skillset"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/types"
@@ -334,6 +335,102 @@ func (s *Server) checkAuthForGroupMcpProxyAccess(toolGroup bool) gin.HandlerFunc
 			continueWithPrincipal(principal)
 
 		default: // basic (default)
+			authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+			user, pass, ok := parseMCPBasicAuth(authHeader)
+			if !ok {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing basic authentication"})
+				return
+			}
+			principal, err := s.agentAppService.ResolvePrincipalFromBasic(c.Request.Context(), user, pass)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid authorization"})
+				return
+			}
+			continueWithPrincipal(principal)
+		}
+	}
+}
+
+// checkAuthForSkillSetAccess enforces each skill set's security_option on tenant catalog routes.
+func (s *Server) checkAuthForSkillSetAccess() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		name := c.Param("name")
+		if name == "" {
+			c.AbortWithStatusJSON(http.StatusBadRequest, gin.H{"error": "skill set name is required"})
+			return
+		}
+		set, err := s.skillSetService.GetSkillSet(c.Request.Context(), name)
+		if err != nil {
+			if errors.Is(err, skillset.ErrSkillSetNotFound) {
+				c.AbortWithStatusJSON(http.StatusNotFound, gin.H{"error": fmt.Sprintf("skill set not found: %s", name)})
+				return
+			}
+			c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+		securityOption := types.NormalizeGroupSecurityOption(set.SecurityOption)
+		ctx := c.Request.Context()
+		if securityOption == types.GroupSecurityOpen {
+			c.Request = c.Request.WithContext(ctx)
+			c.Next()
+			return
+		}
+		if s.agentAppService == nil {
+			c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "agent-app service is not configured"})
+			return
+		}
+		allowSet := func(principal *agentappauth.Principal) bool {
+			if !principal.AllowsSkillSet(name) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "not authorized for this skill set"})
+				return false
+			}
+			return true
+		}
+		continueWithPrincipal := func(principal *agentappauth.Principal) {
+			if !allowSet(principal) {
+				return
+			}
+			nextCtx := agentappauth.WithPrincipal(ctx, principal)
+			c.Request = c.Request.WithContext(nextCtx)
+			c.Next()
+		}
+		switch securityOption {
+		case types.GroupSecurityAPIKey:
+			key := strings.TrimSpace(c.GetHeader("X-API-Key"))
+			if key == "" {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing x-api-key"})
+				return
+			}
+			app, err := s.agentAppService.GetByClientID(c.Request.Context(), key)
+			if err != nil || !app.IsEnabled() {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid x-api-key"})
+				return
+			}
+			principal, err := agentapp.PrincipalForApp(app)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+				return
+			}
+			continueWithPrincipal(principal)
+		case types.GroupSecurityBearer:
+			authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+			const bearerPrefix = "Bearer "
+			if len(authHeader) <= len(bearerPrefix) || !strings.EqualFold(authHeader[:len(bearerPrefix)], bearerPrefix) {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "missing bearer token"})
+				return
+			}
+			if !s.agentAppService.JWTConfigured() {
+				c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "agent-app JWT is not configured"})
+				return
+			}
+			token := strings.TrimSpace(authHeader[len(bearerPrefix):])
+			principal, err := s.agentAppService.ResolvePrincipalFromBearerJWT(c.Request.Context(), token)
+			if err != nil {
+				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": "invalid bearer token"})
+				return
+			}
+			continueWithPrincipal(principal)
+		default:
 			authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
 			user, pass, ok := parseMCPBasicAuth(authHeader)
 			if !ok {

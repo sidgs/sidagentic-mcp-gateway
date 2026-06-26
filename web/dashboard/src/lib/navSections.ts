@@ -33,6 +33,8 @@ export const NAV_MENU: NavMenuEntry[] = [
     items: [
       { key: "tool_groups", label: "Tool Groups" },
       { key: "prompt_groups", label: "Prompt Groups" },
+      { key: "skills", label: "Skills" },
+      { key: "skill_sets", label: "Skill Sets" },
     ],
   },
   { kind: "item", key: "agent_apps", label: "Agent Apps" },

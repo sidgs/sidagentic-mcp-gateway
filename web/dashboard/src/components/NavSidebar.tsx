@@ -17,7 +17,9 @@ import ChevronLeftIcon from "@mui/icons-material/ChevronLeft";
 import ChevronRightIcon from "@mui/icons-material/ChevronRight";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
+import AutoStoriesOutlinedIcon from "@mui/icons-material/AutoStoriesOutlined";
 import AssignmentOutlinedIcon from "@mui/icons-material/AssignmentOutlined";
+import LibraryBooksOutlinedIcon from "@mui/icons-material/LibraryBooksOutlined";
 import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import TextSnippetOutlinedIcon from "@mui/icons-material/TextSnippetOutlined";
 import DnsOutlinedIcon from "@mui/icons-material/DnsOutlined";
@@ -62,6 +64,10 @@ function SectionIcon({ section, ...props }: { section: AppSection } & SvgIconPro
       return <LayersOutlinedIcon {...props} />;
     case "prompt_groups":
       return <TextSnippetOutlinedIcon {...props} />;
+    case "skills":
+      return <AutoStoriesOutlinedIcon {...props} />;
+    case "skill_sets":
+      return <LibraryBooksOutlinedIcon {...props} />;
     case "agent_apps":
       return <AppsOutlinedIcon {...props} />;
     case "prompts":

@@ -30,6 +30,10 @@ func agentAppModelToPublic(a *model.AgentApp) (types.AgentAppPublic, error) {
 	if err != nil {
 		return types.AgentAppPublic{}, err
 	}
+	ss, err := a.GetSkillSets()
+	if err != nil {
+		return types.AgentAppPublic{}, err
+	}
 	return types.AgentAppPublic{
 		ID:               a.ID,
 		Name:             a.Name,
@@ -38,6 +42,7 @@ func agentAppModelToPublic(a *model.AgentApp) (types.AgentAppPublic, error) {
 		Status:           string(a.Status),
 		ToolGroupNames:   tg,
 		PromptGroupNames: pg,
+		SkillSetNames:    ss,
 	}, nil
 }
 
@@ -115,7 +120,7 @@ func (s *Server) createAgentAppHandler() gin.HandlerFunc {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 			return
 		}
-		app, secret, err := s.agentAppService.Create(c.Request.Context(), ownerScope, req.Name, req.Description, req.ToolGroupNames, req.PromptGroupNames)
+		app, secret, err := s.agentAppService.Create(c.Request.Context(), ownerScope, req.Name, req.Description, req.ToolGroupNames, req.PromptGroupNames, req.SkillSetNames)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -223,7 +228,7 @@ func (s *Server) patchAgentAppHandler() gin.HandlerFunc {
 			}
 			st = &v
 		}
-		app, err := s.agentAppService.UpdatePatch(c.Request.Context(), uint(id), ownerScope, req.Name, req.Description, st, req.ToolGroupNames, req.PromptGroupNames)
+		app, err := s.agentAppService.UpdatePatch(c.Request.Context(), uint(id), ownerScope, req.Name, req.Description, st, req.ToolGroupNames, req.PromptGroupNames, req.SkillSetNames)
 		if err != nil {
 			handleServiceError(c, err)
 			return
