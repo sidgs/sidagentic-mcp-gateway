@@ -2,12 +2,11 @@ package model
 
 import (
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 // Resource represents a resource provided by an MCP server.
 type Resource struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;index"`
 

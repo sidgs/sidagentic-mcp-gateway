@@ -6,7 +6,6 @@ import (
 
 	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 type StreamableHTTPConfig struct {
@@ -42,7 +41,7 @@ type SSEConfig struct {
 
 // McpServer represents a MCP server registered in sami-mcp-gateway
 type McpServer struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_mcp_server_tenant_name"`
 

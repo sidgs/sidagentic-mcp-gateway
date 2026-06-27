@@ -2,7 +2,8 @@ import type { ReactNode } from "react";
 import Tab from "@mui/material/Tab";
 import Tabs from "@mui/material/Tabs";
 import type { AppSection } from "@/lib/types";
-import { filterNavMenu, NAV_MENU } from "@/lib/navSections";
+import { filterNavMenu, filterNavMenuByRole, NAV_MENU } from "@/lib/navSections";
+import { normalizeRole, type UserRole } from "@/lib/rbac";
 
 const tabDividerSx = {
   minWidth: 8,
@@ -20,8 +21,8 @@ const tabDividerSx = {
   },
 } as const;
 
-function buildNavTabs(includeHome: boolean) {
-  const menu = filterNavMenu(NAV_MENU, !includeHome);
+function buildNavTabs(includeHome: boolean, role?: UserRole, platformAdmin?: boolean) {
+  const menu = filterNavMenuByRole(filterNavMenu(NAV_MENU, !includeHome), role, platformAdmin);
   const tabs: ReactNode[] = [];
   let needsDivider = false;
 
@@ -50,9 +51,13 @@ function buildNavTabs(includeHome: boolean) {
 export function NavTabs({
   active,
   onSelect,
+  role,
+  platformAdmin,
 }: {
   active: AppSection;
   onSelect: (section: AppSection) => void;
+  role?: UserRole;
+  platformAdmin?: boolean;
 }) {
   return (
     <Tabs
@@ -74,7 +79,7 @@ export function NavTabs({
       value={active}
       variant="scrollable"
     >
-      {buildNavTabs(false)}
+      {buildNavTabs(false, normalizeRole(role), platformAdmin)}
     </Tabs>
   );
 }

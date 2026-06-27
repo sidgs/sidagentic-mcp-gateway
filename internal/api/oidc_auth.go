@@ -136,6 +136,19 @@ func (s *Server) effectivePostLoginRedirect() string {
 	return dest
 }
 
+// postLoginRedirectAfterAuth sends new sessions to the tenant picker when multi-tenant login is enabled.
+func (s *Server) postLoginRedirectAfterAuth() string {
+	dest := s.effectivePostLoginRedirect()
+	if s.tenantRegistry != nil && s.postLoginRedirectURL == "" {
+		base := strings.TrimSuffix(dest, "/")
+		if base == "" {
+			base = "/"
+		}
+		return base + "/#/select-tenant"
+	}
+	return dest
+}
+
 func (s *Server) oidcLazyProvider(ctx context.Context) (*oidc.Provider, error) {
 	s.oidcProviderMu.Lock()
 	defer s.oidcProviderMu.Unlock()
@@ -332,7 +345,7 @@ func (s *Server) cognitoOAuthCallbackHandler() gin.HandlerFunc {
 			SameSite: http.SameSiteLaxMode,
 		})
 
-		c.Redirect(http.StatusFound, s.effectivePostLoginRedirect())
+		c.Redirect(http.StatusFound, s.postLoginRedirectAfterAuth())
 	}
 }
 

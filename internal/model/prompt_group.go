@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 // PromptResolver defines the interface needed to resolve prompts by server.
@@ -17,7 +16,7 @@ type PromptResolver interface {
 
 // PromptGroup represents a subset of MCP prompts exposed on a dedicated proxy endpoint.
 type PromptGroup struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_promptgroup_tenant_name"`
 

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 // ToolResolver defines the interface needed to resolve tools by server.
@@ -18,7 +17,7 @@ type ToolResolver interface {
 // ToolGroup represents a group of tools.
 // It is useful when the user wants to expose only a subset of all tools to MCP clients.
 type ToolGroup struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_toolgroup_tenant_name"`
 

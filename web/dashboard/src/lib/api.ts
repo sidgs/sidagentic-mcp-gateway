@@ -29,6 +29,7 @@ import type {
 import { DashboardAuthRequiredError } from "./auth";
 import { getExternalAuthHeaders } from "./embedAuth";
 import { isExternalAuthMode, resolveHttpPathPrefix } from "./runtimeConfig";
+import { getTenantAuthHeaders } from "./tenantSession";
 
 function normalizeHttpPathPrefix(prefix: string): string {
   const trimmed = prefix.trim();
@@ -66,11 +67,13 @@ function dashboardFetchURL(absPathUnderGatewayMount: string): string {
 
 async function requestJSON<T>(path: string, init?: RequestInit): Promise<T> {
   const embedHeaders = isExternalAuthMode() ? getExternalAuthHeaders() : {};
+  const tenantHeaders = isExternalAuthMode() ? {} : getTenantAuthHeaders();
   const response = await fetch(dashboardFetchURL(path), {
     ...init,
     headers: {
       Accept: "application/json",
       ...embedHeaders,
+      ...tenantHeaders,
       ...(init?.headers ?? {}),
     },
   });
@@ -327,5 +330,49 @@ export const api = {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ role }),
+    }),
+  listTenants: () => requestJSON<import("./types").ListAccessibleTenantsResponse>("/dashboard/auth/tenants"),
+  selectTenant: (tenantId: string) =>
+    requestJSON<import("./types").SelectTenantResponse>("/dashboard/auth/select-tenant", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ tenant_id: tenantId }),
+    }),
+  platformTenants: () => requestJSON<import("./types").TenantPublic[]>("/dashboard/platform/tenants"),
+  createPlatformTenant: (body: { tenant_id: string; name: string; owner_email: string }) =>
+    requestJSON<import("./types").TenantPublic>("/dashboard/platform/tenants", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  suspendPlatformTenant: (id: string) =>
+    requestJSON(`/dashboard/platform/tenants/${encodeURIComponent(id)}/suspend`, { method: "POST" }),
+  removePlatformTenant: (id: string) =>
+    requestJSON(`/dashboard/platform/tenants/${encodeURIComponent(id)}/remove`, { method: "POST" }),
+  setPlatformTenantMode: (id: string, mode: "normal" | "read_only") =>
+    requestJSON(`/dashboard/platform/tenants/${encodeURIComponent(id)}/mode`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ mode }),
+    }),
+  platformTenantMembers: (tenantId: string) =>
+    requestJSON<import("./types").TenantMembershipPublic[]>(
+      `/dashboard/platform/tenants/${encodeURIComponent(tenantId)}/members`,
+    ),
+  addPlatformTenantMember: (tenantId: string, body: { email: string; role: string }) =>
+    requestJSON(`/dashboard/platform/tenants/${encodeURIComponent(tenantId)}/members`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  patchPlatformTenantMember: (tenantId: string, membershipId: number, body: { role: string }) =>
+    requestJSON(`/dashboard/platform/tenants/${encodeURIComponent(tenantId)}/members/${membershipId}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  deletePlatformTenantMember: (tenantId: string, membershipId: number) =>
+    requestJSON(`/dashboard/platform/tenants/${encodeURIComponent(tenantId)}/members/${membershipId}`, {
+      method: "DELETE",
     }),
 };

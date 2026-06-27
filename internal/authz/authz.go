@@ -20,6 +20,7 @@ type Principal struct {
 	Email           string
 	Sub             string
 	Role            types.UserRole
+	IsPlatformAdmin bool
 	OwnerScopeKey   string
 	TeamMemberships []TeamMembership
 }
@@ -72,6 +73,10 @@ func (p *Principal) CanManageMembersOfTeam(teamID uint) bool {
 		}
 	}
 	return false
+}
+
+func (p *Principal) CanAccessTenantAdmin() bool {
+	return p != nil && p.IsPlatformAdmin
 }
 
 func (p *Principal) CanAccessSystemSection() bool {

@@ -33,6 +33,7 @@ import (
 	"sami.io/mcpgateway/internal/service/skill"
 	"sami.io/mcpgateway/internal/service/skillset"
 	"sami.io/mcpgateway/internal/service/team"
+	"sami.io/mcpgateway/internal/service/tenantregistry"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/service/usage"
 	"sami.io/mcpgateway/internal/service/user"
@@ -92,6 +93,9 @@ const (
 
 	// DashboardEmbedAllowedOriginsEnvVar is a comma-separated list of browser origins allowed to call /dashboard/* cross-origin (embed mode).
 	DashboardEmbedAllowedOriginsEnvVar = "DASHBOARD_EMBED_ALLOWED_ORIGINS"
+
+	// PlatformAdminListEnvVar is a comma-separated list of emails granted global platform administrator access.
+	PlatformAdminListEnvVar = "PLATFORM_ADMIN_LIST"
 
 	// JWTSecretEnvVar is the HS256 key for platform-issued UI JWTs on /dashboard/* routes.
 	JWTSecretEnvVar = "JWT_SECRET"
@@ -710,6 +714,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 	configService := config.NewServerConfigService(dbConn)
 	userService := user.NewUserService(dbConn)
 	teamService := team.NewService(dbConn)
+	tenantRegistry := tenantregistry.NewService(dbConn)
 	dashboardService := dashboard.NewService(dbConn, otelProviders.IsEnabled())
 
 	toolGroupService, err := toolgroup.NewToolGroupService(dbConn, mcpService)
@@ -772,6 +777,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		ConfigService:        configService,
 		UserService:          userService,
 		TeamService:          teamService,
+		TenantRegistry:       tenantRegistry,
 		ToolGroupService:      toolGroupService,
 		PromptGroupService: promptGroupService,
 		SkillService:       skillService,

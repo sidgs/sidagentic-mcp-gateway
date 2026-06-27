@@ -1,8 +1,6 @@
 package model
 
 import (
-	"time"
-
 	"github.com/google/uuid"
 	"gorm.io/datatypes"
 	"gorm.io/gorm"
@@ -10,11 +8,10 @@ import (
 
 // Skill is the logical identity for a named skill within a tenant.
 type Skill struct {
-	ID        uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
-	TenantID  string    `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_skill_tenant_name"`
-	Name      string    `json:"name" gorm:"size:64;not null;uniqueIndex:ux_skill_tenant_name"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID       uuid.UUID `json:"id" gorm:"type:uuid;primaryKey;default:gen_random_uuid()"`
+	TenantID string    `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_skill_tenant_name"`
+	Name     string    `json:"name" gorm:"size:64;not null;uniqueIndex:ux_skill_tenant_name"`
+	AuditFields
 
 	Versions []SkillVersion `json:"-" gorm:"foreignKey:SkillID;constraint:OnDelete:CASCADE"`
 }
@@ -42,8 +39,7 @@ type SkillVersion struct {
 	Status        string         `json:"status" gorm:"size:16;not null;default:preview"`
 	DLCStatus     string         `json:"dlc_status" gorm:"size:16;not null;default:development;column:dlc_status"`
 	Locked        bool           `json:"locked" gorm:"not null;default:false"`
-	CreatedAt     time.Time      `json:"created_at"`
-	UpdatedAt     time.Time      `json:"updated_at"`
+	AuditFields
 
 	Skill      Skill            `json:"-" gorm:"foreignKey:SkillID;constraint:OnDelete:CASCADE"`
 	Scripts    []SkillScript    `json:"-" gorm:"foreignKey:SkillVersionID;constraint:OnDelete:CASCADE"`
@@ -66,8 +62,7 @@ type SkillSet struct {
 	Name           string    `json:"name" gorm:"size:64;not null;uniqueIndex:ux_skillset_tenant_name"`
 	Description    string    `json:"description" gorm:"size:1024;not null"`
 	SecurityOption string    `json:"security_option" gorm:"size:32;not null;default:basic"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	AuditFields
 
 	Members []SkillSetMember `json:"-" gorm:"foreignKey:SkillSetID;constraint:OnDelete:CASCADE"`
 }
@@ -96,8 +91,7 @@ type SkillScript struct {
 	SkillVersionID uuid.UUID `json:"skill_version_id" gorm:"type:uuid;not null;uniqueIndex:ux_skill_script_filename"`
 	Filename       string    `json:"filename" gorm:"size:255;not null;uniqueIndex:ux_skill_script_filename"`
 	CodeContent    string    `json:"code_content" gorm:"type:text;not null"`
-	CreatedAt      time.Time `json:"created_at"`
-	UpdatedAt      time.Time `json:"updated_at"`
+	AuditFields
 }
 
 func (SkillScript) TableName() string { return "skill_scripts" }
@@ -115,8 +109,7 @@ type SkillReference struct {
 	SkillVersionID   uuid.UUID `json:"skill_version_id" gorm:"type:uuid;not null;uniqueIndex:ux_skill_reference_filename"`
 	Filename         string    `json:"filename" gorm:"size:255;not null;uniqueIndex:ux_skill_reference_filename"`
 	MarkdownContent  string    `json:"markdown_content" gorm:"type:text;not null"`
-	CreatedAt        time.Time `json:"created_at"`
-	UpdatedAt        time.Time `json:"updated_at"`
+	AuditFields
 }
 
 func (SkillReference) TableName() string { return "skill_references" }

@@ -61,11 +61,11 @@ func ResourceTypeAllowedForTeamType(teamType TeamType, resourceType TeamResource
 }
 
 type TeamPublic struct {
-	ID              uint   `json:"id"`
-	TenantID        string `json:"tenant_id"`
-	Name            string `json:"name"`
-	Type            string `json:"type"`
-	CreatedByUserID uint   `json:"created_by_user_id"`
+	ID        uint   `json:"id"`
+	TenantID  string `json:"tenant_id"`
+	Name      string `json:"name"`
+	Type      string `json:"type"`
+	CreatedBy string `json:"created_by"`
 }
 
 type TeamMemberPublic struct {

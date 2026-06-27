@@ -4,12 +4,11 @@ import (
 	"encoding/json"
 
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 // Tool represents a tool provided by an MCP server.
 type Tool struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;index"`
 

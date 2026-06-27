@@ -9,6 +9,8 @@ import (
 	"sami.io/mcpgateway/internal/authz"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/auditctx"
+	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/types"
 )
 
@@ -45,9 +47,13 @@ func (s *Server) buildDashboardPrincipal(c *gin.Context) (*authz.Principal, erro
 	sess, ok := s.validDashboardUserFromRequest(c)
 	sub := ""
 	email := ""
+	sessionRole := types.UserRole("")
+	platformAdmin := false
 	if ok {
 		sub = sess.Sub
 		email = sess.Email
+		sessionRole = types.NormalizeUserRole(types.UserRole(sess.Role))
+		platformAdmin = sess.PlatformAdmin || isPlatformAdminEmail(email)
 	} else if mode, exists := c.Get("mode"); exists {
 		if m, ok := mode.(model.ServerMode); ok && m == model.ModeDev {
 			sub = "dev:dashboard"
@@ -62,6 +68,7 @@ func (s *Server) buildDashboardPrincipal(c *gin.Context) (*authz.Principal, erro
 		sub,
 		email,
 		s.isBootstrapAdmin(sub, email),
+		sessionRole,
 	)
 	if err != nil {
 		return nil, err
@@ -75,14 +82,20 @@ func (s *Server) buildDashboardPrincipal(c *gin.Context) (*authz.Principal, erro
 			return nil, err
 		}
 	}
+	role := user.EffectiveRole()
+	if sessionRole != "" && sessionRole != types.UserRoleUser {
+		role = sessionRole
+	}
 	principal := &authz.Principal{
-		UserID:        user.ID,
+		UserID:          user.ID,
 		Username:      user.Username,
 		Email:         user.Email,
 		Sub:           sub,
-		Role:          user.EffectiveRole(),
+		Role:          role,
+		IsPlatformAdmin: platformAdmin,
 		OwnerScopeKey: ownerScope,
 	}
+	c.Request = c.Request.WithContext(auditctx.WithActor(c.Request.Context(), actorFromSession(sub, email, user.ID)))
 	if s.teamService != nil {
 		memberships, err := s.teamService.ListMembershipsForUser(c.Request.Context(), user.ID)
 		if err != nil {
@@ -148,11 +161,11 @@ func (s *Server) requireAdministrator() gin.HandlerFunc {
 func (s *Server) dashboardMeHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := mustDashboardPrincipal(c)
-		c.JSON(http.StatusOK, s.principalToMeResponse(p))
+		c.JSON(http.StatusOK, s.principalToMeResponse(c, p))
 	}
 }
 
-func (s *Server) principalToMeResponse(p *authz.Principal) types.DashboardMeResponse {
+func (s *Server) principalToMeResponse(c *gin.Context, p *authz.Principal) types.DashboardMeResponse {
 	teams := make([]types.DashboardTeamMembership, 0, len(p.TeamMemberships))
 	for _, m := range p.TeamMemberships {
 		teams = append(teams, types.DashboardTeamMembership{
@@ -167,6 +180,8 @@ func (s *Server) principalToMeResponse(p *authz.Principal) types.DashboardMeResp
 		Email:         p.Email,
 		Sub:           p.Sub,
 		Role:          string(p.EffectiveRole()),
+		TenantID:      tenant.MustFromContext(c.Request.Context()),
+		PlatformAdmin: p.IsPlatformAdmin,
 		UserID:        p.UserID,
 		Teams:         teams,
 	}

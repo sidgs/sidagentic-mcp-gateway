@@ -17,10 +17,12 @@ func (s *Server) enrichAuthStatus(c *gin.Context, resp types.DashboardAuthStatus
 	if err != nil || principal == nil {
 		return resp
 	}
-	me := s.principalToMeResponse(principal)
+	me := s.principalToMeResponse(c, principal)
 	resp.Role = me.Role
+	resp.TenantID = me.TenantID
 	resp.UserID = me.UserID
 	resp.Teams = me.Teams
+	resp.PlatformAdmin = me.PlatformAdmin
 	return resp
 }
 

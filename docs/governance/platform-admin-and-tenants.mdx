@@ -1,0 +1,72 @@
+---
+title: Platform administrators and tenants
+description: Multi-tenant login, tenant registry lifecycle, and platform administrator configuration.
+---
+
+# Platform administrators and tenants
+
+The gateway supports **multi-tenant dashboard login**: users authenticate once, pick a tenant, and receive a **tenant-scoped JWT** used with `Authorization: Bearer` and `X-Tenant-ID` on all `/dashboard/*` API calls.
+
+## Roles
+
+| Role | Source | Scope |
+|------|--------|-------|
+| **Platform administrator** | `PLATFORM_ADMIN_LIST` (comma-separated emails) | Global; not stored in the database |
+| **Tenant administrator** | `tenant_memberships.role = administrator` | Per tenant |
+| **Tenant member roles** | `tenant_memberships.role` | `administrator`, `provider`, `user`, or `auditor` per tenant |
+
+Platform administrators:
+
+- See **Tenant Admin** in the System navigation.
+- Can list all non-removed tenants in the tenant picker.
+- May enter suspended, retired (including after retire date), and read-only tenants for maintenance.
+
+## Environment variables
+
+| Variable | Purpose |
+|----------|---------|
+| `PLATFORM_ADMIN_LIST` | Comma-separated platform administrator emails (case-insensitive). |
+| `JWT_SECRET` | HS256 signing key for tenant-scoped dashboard JWTs minted by `POST /dashboard/auth/select-tenant`. **Required** for multi-tenant OIDC login in production. |
+| `PLATFORM_JWT_AUD` | Expected `aud` claim on platform/tenant JWTs (default: `sami-cms`). |
+| `DEFAULT_TENANT_ID` | Fallback tenant when `X-Tenant-ID` is omitted (legacy single-tenant behavior). |
+| `POST_LOGIN_REDIRECT_URL` | Optional override for post-OIDC redirect. When unset and tenant registry is enabled, users land on `/#/select-tenant`. |
+
+## Login flow
+
+1. Browser completes OIDC at `/login` → `/auth/callback`.
+2. Dashboard calls `GET /dashboard/auth/tenants` with the identity cookie.
+3. User selects a tenant (auto-selected when exactly one accessible tenant exists).
+4. Dashboard calls `POST /dashboard/auth/select-tenant` → stores JWT + tenant id in session storage.
+5. All dashboard API calls include `Authorization: Bearer <jwt>` and `X-Tenant-ID`.
+
+Use **Switch tenant** in the sidebar to clear the tenant JWT and return to the picker.
+
+## Tenant lifecycle
+
+| Status / mode | Normal user login | Platform admin login | Tenant mutations | Platform admin mutations |
+|---------------|-------------------|----------------------|------------------|--------------------------|
+| active / normal | yes | yes | yes | yes |
+| read_only | yes | yes | no | yes |
+| suspended | no | yes | n/a | yes |
+| retired (before date) | yes | yes | yes | yes |
+| retired (after date) | no | yes | n/a | yes |
+| removed | no | no | no | no |
+
+Removing a tenant is a **soft remove** (`status=removed`): access is blocked but data is retained.
+
+## Platform admin API
+
+Routes under `/dashboard/platform/*` require a platform administrator identity:
+
+- `GET/POST /dashboard/platform/tenants` — list / create tenants
+- `PATCH /dashboard/platform/tenants/:id` — update name, status, mode, retire date
+- Lifecycle: `POST .../suspend`, `POST .../retire`, `POST .../remove`, `PATCH .../mode`
+- Members: `GET/POST .../members`, `PATCH/DELETE .../members/:membershipId`
+
+Creating a tenant bootstraps an owner membership, `server_configs`, and registry metadata with audit fields.
+
+## Audit metadata
+
+All persisted models record `created_by`, `created_on`, `updated_by`, and `updated_on`. Tenant Admin responses include audit columns for tenants and memberships.
+
+Historical rows backfilled during migration use `created_by=system` and `updated_by=system`.

@@ -46,6 +46,7 @@ export const NAV_MENU: NavMenuEntry[] = [
     label: "System",
     items: [
       { key: "users", label: "Users" },
+      { key: "tenant_admin", label: "Tenant Admin" },
       { key: "observability", label: "Observability" },
       { key: "lineage", label: "Lineage" },
       { key: "diagnostics", label: "System Info" },
@@ -122,17 +123,17 @@ export function filterNavMenu(menu: NavMenuEntry[], excludeHome: boolean): NavMe
   return menu.filter((entry) => entry.kind !== "item" || entry.key !== "home");
 }
 
-export function filterNavMenuByRole(menu: NavMenuEntry[], role?: UserRole): NavMenuEntry[] {
+export function filterNavMenuByRole(menu: NavMenuEntry[], role?: UserRole, platformAdmin?: boolean): NavMenuEntry[] {
   const effectiveRole = normalizeRole(role);
   const filtered: NavMenuEntry[] = [];
   for (const entry of menu) {
     if (entry.kind === "item") {
-      if (canSeeNavSection(entry.key, effectiveRole)) {
+      if (canSeeNavSection(entry.key, effectiveRole, platformAdmin)) {
         filtered.push(entry);
       }
       continue;
     }
-    const items = entry.items.filter((item) => canSeeNavSection(item.key, effectiveRole));
+    const items = entry.items.filter((item) => canSeeNavSection(item.key, effectiveRole, platformAdmin));
     if (items.length > 0) {
       filtered.push({ ...entry, items });
     }

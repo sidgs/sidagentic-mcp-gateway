@@ -64,6 +64,10 @@ Agent apps are **not** assigned to user teams.
 
 Auditors receive **403** on all mutating dashboard routes.
 
+## Multi-tenant login and platform administrators
+
+When OIDC multi-tenant login is enabled, tenant-scoped roles come from **`tenant_memberships`** after tenant selection. Global **platform administrators** (`PLATFORM_ADMIN_LIST`) manage the tenant registry via the Tenant Admin screen. See [Platform administrators and tenants](/docs/governance/platform-admin-and-tenants) for the full flow, lifecycle rules, and environment variables.
+
 ## Runtime MCP access
 
 Agent runtime access (MCP proxy, group routes) continues to use **agent app credentials** and group `security_option` settings. Human RBAC applies to the **dashboard** and `/dashboard/*` JSON APIs.

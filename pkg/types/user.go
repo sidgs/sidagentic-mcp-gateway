@@ -101,6 +101,8 @@ type DashboardMeResponse struct {
 	Email         string                    `json:"email,omitempty"`
 	Sub           string                    `json:"sub,omitempty"`
 	Role          string                    `json:"role"`
+	TenantID      string                    `json:"tenant_id"`
+	PlatformAdmin bool                      `json:"platform_admin"`
 	UserID        uint                      `json:"user_id"`
 	Teams         []DashboardTeamMembership `json:"teams"`
 }

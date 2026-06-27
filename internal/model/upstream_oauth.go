@@ -5,13 +5,12 @@ import (
 
 	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 // UpstreamOAuthPendingSession stores an in-progress OAuth authorization flow for
 // an upstream MCP server registration.
 type UpstreamOAuthPendingSession struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_oauth_pending_session"`
 
@@ -41,7 +40,7 @@ type UpstreamOAuthPendingSession struct {
 // UpstreamOAuthToken stores gateway-scoped OAuth credentials for a registered
 // upstream MCP server.
 type UpstreamOAuthToken struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_oauth_token_server"`
 

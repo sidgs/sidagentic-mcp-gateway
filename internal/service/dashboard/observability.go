@@ -150,7 +150,7 @@ func (s *Service) loadObservabilitySummary(from, to time.Time) (types.DashboardO
 			model.ToolInvocationOutcomeError,
 			"__",
 		).
-		Where("created_at >= ? AND created_at < ?", from, to).
+		Where("created_on >= ? AND created_on < ?", from, to).
 		Scan(&row).Error
 	if err != nil {
 		return types.DashboardObservabilitySummary{}, err
@@ -193,7 +193,7 @@ func (s *Service) loadObservabilityByAgent(from, to time.Time, limit int) ([]typ
 			model.ToolInvocationOutcomeError,
 		).
 		Joins("LEFT JOIN agent_apps AS a ON a.id = e.agent_app_id").
-		Where("e.created_at >= ? AND e.created_at < ?", from, to).
+		Where("e.created_on >= ? AND e.created_on < ?", from, to).
 		Group("e.agent_app_id, a.name, a.client_id").
 		Order("total_calls DESC").
 		Limit(limit).
@@ -240,7 +240,7 @@ func (s *Service) loadObservabilityToolTraffic(from, to time.Time, limit int) ([
 			model.ToolInvocationOutcomeSuccess,
 			model.ToolInvocationOutcomeError,
 		).
-		Where("created_at >= ? AND created_at < ?", from, to).
+		Where("created_on >= ? AND created_on < ?", from, to).
 		Group("mcp_server_name, tool_name").
 		Order("total_calls DESC").
 		Limit(limit).
@@ -273,7 +273,7 @@ func (s *Service) loadObservabilityToolTraffic(from, to time.Time, limit int) ([
 func (s *Service) loadToolP95Latency(from, to time.Time, serverName, toolName string) (float64, error) {
 	var latencies []int64
 	err := s.db.Model(&model.ToolInvocationEvent{}).
-		Where("created_at >= ? AND created_at < ? AND mcp_server_name = ? AND tool_name = ?", from, to, serverName, toolName).
+		Where("created_on >= ? AND created_on < ? AND mcp_server_name = ? AND tool_name = ?", from, to, serverName, toolName).
 		Order("latency_ms ASC").
 		Pluck("latency_ms", &latencies).Error
 	if err != nil {
@@ -312,7 +312,7 @@ func (s *Service) loadObservabilityToolGroups(from, to time.Time, limit int) ([]
 			model.ToolInvocationOutcomeSuccess,
 			model.ToolInvocationOutcomeError,
 		).
-		Where("created_at >= ? AND created_at < ? AND tool_group_name != ''", from, to).
+		Where("created_on >= ? AND created_on < ? AND tool_group_name != ''", from, to).
 		Group("tool_group_name").
 		Order("total_calls DESC").
 		Limit(limit).
@@ -337,14 +337,14 @@ func (s *Service) loadObservabilityToolGroups(from, to time.Time, limit int) ([]
 
 func (s *Service) loadObservabilityCallVolume(from, to time.Time) ([]types.DashboardTimeBucket, error) {
 	type eventPoint struct {
-		CreatedAt time.Time
+		CreatedOn time.Time
 		Outcome   string
 	}
 	var events []eventPoint
 	err := s.db.Model(&model.ToolInvocationEvent{}).
-		Select("created_at, outcome").
-		Where("created_at >= ? AND created_at < ?", from, to).
-		Order("created_at ASC").
+		Select("created_on, outcome").
+		Where("created_on >= ? AND created_on < ?", from, to).
+		Order("created_on ASC").
 		Scan(&events).Error
 	if err != nil {
 		return nil, err
@@ -352,7 +352,7 @@ func (s *Service) loadObservabilityCallVolume(from, to time.Time) ([]types.Dashb
 
 	buckets := map[time.Time]*types.DashboardTimeBucket{}
 	for _, event := range events {
-		hour := event.CreatedAt.UTC().Truncate(time.Hour)
+		hour := event.CreatedOn.UTC().Truncate(time.Hour)
 		bucket, ok := buckets[hour]
 		if !ok {
 			bucket = &types.DashboardTimeBucket{Timestamp: hour.Format(time.RFC3339)}

@@ -51,6 +51,7 @@ func (s *Service) CreateTeam(ctx context.Context, name string, teamType types.Te
 		Type:            teamType,
 		CreatedByUserID: createdByUserID,
 	}
+	model.StampCreateFromCtx(ctx, &team)
 	if err := s.db.WithContext(ctx).Create(&team).Error; err != nil {
 		return nil, fmt.Errorf("create team: %w", err)
 	}
@@ -60,6 +61,7 @@ func (s *Service) CreateTeam(ctx context.Context, name string, teamType types.Te
 		UserID:   createdByUserID,
 		Role:     types.TeamMemberRoleOwner,
 	}
+	model.StampCreateFromCtx(ctx, &member)
 	if err := s.db.WithContext(ctx).Create(&member).Error; err != nil {
 		return nil, fmt.Errorf("create team owner membership: %w", err)
 	}
@@ -212,8 +214,11 @@ func (s *Service) ListAssignmentsForTeam(ctx context.Context, teamID uint) ([]mo
 }
 
 func (s *Service) TeamIDsForResource(ctx context.Context, resourceType types.TeamResourceType, resourceName string, teamType types.TeamType) ([]uint, error) {
+	tid := tenant.MustFromContext(ctx)
 	var rows []model.TeamResourceAssignment
-	if err := s.dbTenant(ctx).
+	if err := s.db.WithContext(ctx).
+		Model(&model.TeamResourceAssignment{}).
+		Where("team_resource_assignments.tenant_id = ?", tid).
 		Joins("JOIN teams ON teams.id = team_resource_assignments.team_id AND teams.tenant_id = team_resource_assignments.tenant_id").
 		Where("team_resource_assignments.resource_type = ? AND team_resource_assignments.resource_name = ? AND teams.type = ?",
 			resourceType, resourceName, teamType).

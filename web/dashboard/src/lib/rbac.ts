@@ -29,6 +29,14 @@ export function hasAtLeastRole(role: UserRole | undefined, min: UserRole): boole
   return (ROLE_RANK[r] ?? 1) >= (ROLE_RANK[min] ?? 1);
 }
 
+export function canAccessTenantAdmin(platformAdmin?: boolean): boolean {
+  return Boolean(platformAdmin);
+}
+
+export function canSwitchTenant(hasMultipleTenants: boolean, platformAdmin?: boolean): boolean {
+  return hasMultipleTenants || Boolean(platformAdmin);
+}
+
 export function canAccessSystemSection(role?: UserRole): boolean {
   const r = role ?? "user";
   return r === "administrator" || r === "auditor";
@@ -42,8 +50,11 @@ export function canWriteDashboard(role?: UserRole): boolean {
   return role !== "auditor";
 }
 
-export function canSeeNavSection(section: string, role?: UserRole): boolean {
+export function canSeeNavSection(section: string, role?: UserRole, platformAdmin?: boolean): boolean {
   const r = role ?? "user";
+  if (section === "tenant_admin") {
+    return canAccessTenantAdmin(platformAdmin);
+  }
   switch (section) {
     case "home":
     case "tool_groups":
@@ -66,6 +77,19 @@ export function canSeeNavSection(section: string, role?: UserRole): boolean {
       return canManageUsers(r) || r === "auditor";
     default:
       return true;
+  }
+}
+
+export function formatUserRoleLabel(role?: UserRole | string | null): string {
+  switch (normalizeRole(role)) {
+    case "administrator":
+      return "Administrator";
+    case "provider":
+      return "Provider";
+    case "auditor":
+      return "Auditor";
+    default:
+      return "User";
   }
 }
 

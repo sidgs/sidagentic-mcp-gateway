@@ -54,9 +54,11 @@ func (s *ServerConfigService) Init(ctx context.Context, mode model.ServerMode) (
 			Mode:        mode,
 			Initialized: true,
 		}
+		model.StampCreateFromCtx(ctx, &config)
 		return true, s.db.WithContext(ctx).Create(&config).Error
 	}
 	config.Mode = mode
 	config.Initialized = true
+	model.StampUpdateFromCtx(ctx, &config)
 	return true, s.db.WithContext(ctx).Save(&config).Error
 }

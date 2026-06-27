@@ -1,6 +1,7 @@
 import { useEffect, useState, type ReactElement } from "react";
 import type { AppSection } from "@/lib/types";
 import type { UserRole } from "@/lib/rbac";
+import { formatUserRoleLabel } from "@/lib/rbac";
 import {
   ALL_NAV_SECTIONS,
   DEFAULT_NAV_GROUP_STATE,
@@ -37,6 +38,8 @@ import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
 import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
 import PeopleOutlinedIcon from "@mui/icons-material/PeopleOutlined";
+import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import SwapHorizOutlinedIcon from "@mui/icons-material/SwapHorizOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -87,6 +90,8 @@ function SectionIcon({ section, ...props }: { section: AppSection } & SvgIconPro
       return <InsightsOutlinedIcon {...props} />;
     case "lineage":
       return <AccountTreeOutlinedIcon {...props} />;
+    case "tenant_admin":
+      return <SettingsOutlinedIcon {...props} />;
     default:
       return null;
   }
@@ -186,6 +191,10 @@ export function NavSidebar({
   embedMode = false,
   signedInEmail,
   userRole,
+  userTenant,
+  platformAdmin = false,
+  showSwitchTenant = false,
+  onSwitchTenant,
 }: {
   active: AppSection;
   onSelect: (section: AppSection) => void;
@@ -195,8 +204,18 @@ export function NavSidebar({
   embedMode?: boolean;
   signedInEmail?: string;
   userRole?: UserRole;
+  userTenant?: string;
+  platformAdmin?: boolean;
+  showSwitchTenant?: boolean;
+  onSwitchTenant?: () => void;
 }) {
-  const navMenu = filterNavMenuByRole(filterNavMenu(NAV_MENU, embedMode), userRole);
+  const navMenu = filterNavMenuByRole(filterNavMenu(NAV_MENU, embedMode), userRole, platformAdmin);
+  const roleLabel = formatUserRoleLabel(userRole);
+  const tenantLabel = userTenant?.trim() || "—";
+  const sessionTooltip = [signedInEmail, `Role: ${roleLabel}`, `Tenant: ${tenantLabel}`]
+    .filter((part) => part && part.trim() !== "")
+    .join(" · ");
+  const showSessionInfo = Boolean(signedInEmail || userRole || userTenant?.trim());
   const collapsedNavItems = embedMode
     ? ALL_NAV_SECTIONS.filter((item) => item.key !== "home")
     : ALL_NAV_SECTIONS;
@@ -386,6 +405,29 @@ export function NavSidebar({
           )}
         </Stack>
 
+        {showSwitchTenant && onSwitchTenant ? (
+          expanded ? (
+            <Button
+              variant="text"
+              size="small"
+              fullWidth
+              startIcon={<SwapHorizOutlinedIcon />}
+              onClick={onSwitchTenant}
+              sx={{ mt: -1, mb: 0.5, textTransform: "none", justifyContent: "flex-start", px: "8px" }}
+            >
+              Switch tenant
+            </Button>
+          ) : (
+            <Box sx={{ display: "flex", justifyContent: "center", mt: -1, mb: 0.5 }}>
+              <Tooltip title="Switch tenant" placement="right">
+                <IconButton aria-label="Switch tenant" size="small" onClick={onSwitchTenant}>
+                  <SwapHorizOutlinedIcon fontSize="small" />
+                </IconButton>
+              </Tooltip>
+            </Box>
+          )
+        ) : null}
+
         <List disablePadding sx={{ px: 0, flex: 1, minHeight: 0, overflowY: "auto" }} aria-label="Dashboard sections">
           {expanded
             ? navMenu.map((entry) => renderMenuEntry(entry))
@@ -400,7 +442,7 @@ export function NavSidebar({
               ))}
         </List>
 
-        {embedMode && signedInEmail ? (
+        {(showSessionInfo || signOutHref) ? (
           <Box
             sx={{
               mt: "auto",
@@ -410,52 +452,62 @@ export function NavSidebar({
               flexShrink: 0,
             }}
           >
-            {expanded ? (
-              <Chip label={`Signed in as ${signedInEmail}`} size="small" sx={{ width: "100%" }} />
-            ) : (
-              <Tooltip title={`Signed in as ${signedInEmail}`} placement="right">
-                <Box sx={{ display: "flex", justifyContent: "center" }}>
-                  <Chip label={signedInEmail.slice(0, 1).toUpperCase()} size="small" />
+            {showSessionInfo ? (
+              expanded ? (
+                <Stack spacing={1} sx={{ mb: signOutHref ? 1 : 0 }}>
+                  {signedInEmail ? (
+                    <Typography
+                      variant="caption"
+                      color="text.secondary"
+                      sx={{ wordBreak: "break-word", lineHeight: 1.4 }}
+                    >
+                      {signedInEmail}
+                    </Typography>
+                  ) : null}
+                  <Stack direction="row" spacing={0.5} sx={{ flexWrap: "wrap" }}>
+                    <Chip label={roleLabel} size="small" variant="outlined" />
+                    <Chip label={`Tenant: ${tenantLabel}`} size="small" variant="outlined" />
+                  </Stack>
+                </Stack>
+              ) : (
+                <Box sx={{ display: "flex", justifyContent: "center", mb: signOutHref ? 1 : 0 }}>
+                  <Tooltip title={sessionTooltip} placement="right">
+                    <Chip
+                      label={signedInEmail?.slice(0, 1).toUpperCase() ?? roleLabel.slice(0, 1)}
+                      size="small"
+                    />
+                  </Tooltip>
                 </Box>
-              </Tooltip>
-            )}
-          </Box>
-        ) : signOutHref ? (
-          <Box
-            sx={{
-              mt: "auto",
-              pt: 1.5,
-              borderTop: 1,
-              borderColor: "divider",
-              flexShrink: 0,
-            }}
-          >
-            {expanded ? (
-              <Button
-                component="a"
-                href={signOutHref}
-                variant="outlined"
-                size="small"
-                fullWidth
-                startIcon={<LogoutOutlinedIcon />}
-                sx={{
-                  fontSize: "0.88rem",
-                  minHeight: 36,
-                  borderRadius: "12px",
-                  textTransform: "none",
-                }}
-              >
-                Sign out
-              </Button>
-            ) : (
-              <Box sx={{ display: "flex", justifyContent: "center" }}>
-                <Tooltip title="Sign out" placement="right">
-                  <IconButton component="a" href={signOutHref} aria-label="Sign out" size="small" color="primary">
-                    <LogoutOutlinedIcon fontSize="small" />
-                  </IconButton>
-                </Tooltip>
-              </Box>
-            )}
+              )
+            ) : null}
+            {signOutHref ? (
+              expanded ? (
+                <Button
+                  component="a"
+                  href={signOutHref}
+                  variant="outlined"
+                  size="small"
+                  fullWidth
+                  startIcon={<LogoutOutlinedIcon />}
+                  sx={{
+                    fontSize: "0.88rem",
+                    minHeight: 36,
+                    borderRadius: "12px",
+                    textTransform: "none",
+                  }}
+                >
+                  Sign out
+                </Button>
+              ) : (
+                <Box sx={{ display: "flex", justifyContent: "center" }}>
+                  <Tooltip title="Sign out" placement="right">
+                    <IconButton component="a" href={signOutHref} aria-label="Sign out" size="small" color="primary">
+                      <LogoutOutlinedIcon fontSize="small" />
+                    </IconButton>
+                  </Tooltip>
+                </Box>
+              )
+            ) : null}
           </Box>
         ) : null}
       </Stack>

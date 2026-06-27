@@ -13,7 +13,8 @@ export type AppSection =
   | "resources"
   | "diagnostics"
   | "observability"
-  | "lineage";
+  | "lineage"
+  | "tenant_admin";
 
 export type TeamType = "provider" | "user" | "agent";
 
@@ -29,7 +30,7 @@ export interface DashboardTeam {
   tenant_id: string;
   name: string;
   type: TeamType;
-  created_by_user_id: number;
+  created_by: string;
 }
 
 export interface DashboardTeamMember {
@@ -56,6 +57,8 @@ export interface DashboardMeResponse {
   email?: string;
   sub?: string;
   role: string;
+  tenant_id: string;
+  platform_admin?: boolean;
   user_id: number;
   teams: DashboardTeamMembership[];
 }
@@ -97,7 +100,9 @@ export interface DashboardAuthStatusResponse {
   email?: string;
   sub?: string;
   role?: string;
+  tenant_id?: string;
   user_id?: number;
+  platform_admin?: boolean;
   teams?: DashboardTeamMembership[];
 }
 
@@ -603,4 +608,55 @@ export interface DashboardCreateAgentAppResponse {
   };
   client_secret: string;
   oauth_token_url?: string;
+}
+
+export type TenantStatus = "active" | "suspended" | "retired" | "removed";
+export type TenantMode = "normal" | "read_only";
+
+export interface AccessibleTenant {
+  id: string;
+  name: string;
+  status: TenantStatus;
+  mode: TenantMode;
+  retire_at?: string;
+  role?: string;
+  accessible: boolean;
+  reason?: string;
+}
+
+export interface ListAccessibleTenantsResponse {
+  platform_admin: boolean;
+  tenants: AccessibleTenant[];
+}
+
+export interface SelectTenantResponse {
+  access_token: string;
+  tenant_id: string;
+  role: string;
+  platform_admin: boolean;
+  expires_at: number;
+}
+
+export interface TenantPublic {
+  id: string;
+  name: string;
+  status: TenantStatus;
+  mode: TenantMode;
+  retire_at?: string;
+  owner_email: string;
+  created_on?: string;
+  created_by?: string;
+  updated_on?: string;
+  updated_by?: string;
+}
+
+export interface TenantMembershipPublic {
+  id: number;
+  tenant_id: string;
+  email: string;
+  role: string;
+  created_on?: string;
+  created_by?: string;
+  updated_on?: string;
+  updated_by?: string;
 }

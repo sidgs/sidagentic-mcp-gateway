@@ -237,6 +237,7 @@ func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description s
 		PromptGroupNames: pgJSON,
 		SkillSetNames:    ssJSON,
 	}
+	model.StampCreateFromCtx(ctx, app)
 	if err := s.dbTenant(ctx).Create(app).Error; err != nil {
 		return nil, "", err
 	}
@@ -342,6 +343,7 @@ func (s *Service) UpdatePatch(ctx context.Context, id uint, ownerScopeKey string
 	app.PromptGroupNames = pgj
 	app.SkillSetNames = ssj
 
+	model.StampUpdateFromCtx(ctx, app)
 	if err := s.dbTenant(ctx).Save(app).Error; err != nil {
 		return nil, err
 	}

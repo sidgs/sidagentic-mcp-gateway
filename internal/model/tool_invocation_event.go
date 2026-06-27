@@ -20,7 +20,8 @@ const (
 // ToolInvocationEvent records a single tool call for observability and analytics.
 type ToolInvocationEvent struct {
 	ID            uint      `gorm:"primaryKey"`
-	CreatedAt     time.Time `gorm:"index;not null"`
+	CreatedOn     time.Time `gorm:"column:created_on;index"`
+	CreatedBy     string    `gorm:"size:320;not null;default:system"`
 	TenantID      string    `gorm:"size:255;not null;default:sami;index:idx_tool_inv_tenant_created,priority:1"`
 	AgentAppID    *uint     `gorm:"index:idx_tool_inv_agent_created,priority:1"`
 	ToolGroupName string    `gorm:"size:255;index:idx_tool_inv_group_created,priority:1"`

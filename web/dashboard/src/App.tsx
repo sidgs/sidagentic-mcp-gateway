@@ -60,6 +60,7 @@ import type {
   DashboardAgentAppGroupEndpoints,
   DashboardAgentAppsResponse,
   DashboardAuthStatusResponse,
+  AccessibleTenant,
   DashboardCreateAgentAppInput,
   DashboardPatchAgentAppInput,
   DashboardCreatePromptGroupInput,
@@ -98,7 +99,10 @@ import { NavSidebar } from "@/components/NavSidebar";
 import { AgentTeamAssignmentFields } from "@/components/AgentTeamAssignmentFields";
 import { TeamsPage } from "@/components/TeamsPage";
 import { UsersPage } from "@/components/UsersPage";
-import { canWriteDashboard, normalizeRole } from "@/lib/rbac";
+import { TenantPickerPage } from "@/components/TenantPickerPage";
+import { TenantAdminPage } from "@/components/TenantAdminPage";
+import { canAccessSystemSection, canSwitchTenant, canWriteDashboard, normalizeRole } from "@/lib/rbac";
+import { clearTenantSession, getActiveTenantId, getTenantJWT, hasTenantSession, parseTenantJWTClaims, readTenantSessionClaims, setTenantSession } from "@/lib/tenantSession";
 import { NavTabs } from "@/components/NavTabs";
 import { LineagePage } from "@/components/LineagePage";
 import { ObservabilityPage } from "@/components/ObservabilityPage";
@@ -165,7 +169,7 @@ function PencilIcon() {
   );
 }
 
-type LoadState = "idle" | "checking_session" | "loading" | "ready" | "error";
+type LoadState = "idle" | "checking_session" | "selecting_tenant" | "loading" | "ready" | "error";
 type FeedbackTone = "success" | "error";
 
 interface DashboardData {
@@ -406,6 +410,10 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
   lineage: {
     title: "Lineage",
     subtitle: "Discover how agent apps, tool groups, servers, and tools connect.",
+  },
+  tenant_admin: {
+    title: "Tenant Admin",
+    subtitle: "Manage tenant registry, lifecycle, and cross-tenant memberships.",
   },
 };
 
@@ -1028,11 +1036,38 @@ function createInitialPromptGroupForm(): PromptGroupFormState {
   };
 }
 
+function mergeTenantJWTIntoAuthSession(
+  prev: DashboardAuthStatusResponse | null,
+  token: string,
+  fallback?: { tenant_id?: string; role?: string; platform_admin?: boolean },
+): DashboardAuthStatusResponse {
+  const claims = parseTenantJWTClaims(token);
+  return {
+    ...(prev ?? { authenticated: true, oidc_enabled: true }),
+    authenticated: true,
+    oidc_enabled: prev?.oidc_enabled ?? true,
+    login_path: prev?.login_path,
+    logout_path: prev?.logout_path,
+    email: claims.email ?? prev?.email,
+    sub: claims.sub ?? prev?.sub,
+    role: claims.role ?? fallback?.role ?? prev?.role,
+    tenant_id: claims.tenantId ?? fallback?.tenant_id ?? prev?.tenant_id ?? getActiveTenantId() ?? undefined,
+    platform_admin: claims.platformAdmin ?? fallback?.platform_admin ?? prev?.platform_admin,
+  };
+}
+
+function roleFromTenantSession(fallback?: string | null): string | undefined {
+  return readTenantSessionClaims()?.role ?? fallback ?? undefined;
+}
+
 export default function App() {
   const externalAuth = isExternalAuthMode();
   const componentMode = isComponentMode();
   const [section, setSection] = useState<AppSection>(resolveInitialAppSection);
   const [authSession, setAuthSession] = useState<DashboardAuthStatusResponse | null>(null);
+  const [accessibleTenants, setAccessibleTenants] = useState<AccessibleTenant[]>([]);
+  const [tenantPickerPlatformAdmin, setTenantPickerPlatformAdmin] = useState(false);
+  const [tenantPickerError, setTenantPickerError] = useState<string | null>(null);
 
   const selectSection = useCallback((next: AppSection) => {
     if (componentMode && next === "home") {
@@ -1221,7 +1256,17 @@ export default function App() {
     return () => window.removeEventListener("hashchange", onHashChange);
   }, [authSession]);
 
-  async function fetchDashboardPanelsAfterOverview(overview: DashboardOverviewResponse) {
+  async function fetchDiagnosticsIfAllowed(role?: string | null): Promise<DashboardDiagnosticsResponse | undefined> {
+    if (!canAccessSystemSection(normalizeRole(role))) {
+      return undefined;
+    }
+    return api.diagnostics();
+  }
+
+  async function fetchDashboardPanelsAfterOverview(
+    overview: DashboardOverviewResponse,
+    role?: string | null,
+  ) {
     const [servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets] =
       await Promise.all([
       api.servers(),
@@ -1230,14 +1275,14 @@ export default function App() {
       api.promptGroups(),
       api.prompts(),
       api.resources(),
-      api.diagnostics(),
+      fetchDiagnosticsIfAllowed(role),
       api.agentApps(),
       api.skillSets(),
     ]);
     return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets };
   }
 
-  async function fetchFullDashboard() {
+  async function fetchFullDashboard(role?: string | null) {
     const [overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets] =
       await Promise.all([
       api.overview(),
@@ -1247,7 +1292,7 @@ export default function App() {
       api.promptGroups(),
       api.prompts(),
       api.resources(),
-      api.diagnostics(),
+      fetchDiagnosticsIfAllowed(role),
       api.agentApps(),
       api.skillSets(),
     ]);
@@ -1338,6 +1383,52 @@ export default function App() {
   }
 
   /** Probe auth (public when OIDC is on); load dashboard data only when allowed. */
+  async function applyTenantSelection(tenantId: string) {
+    setTenantPickerError(null);
+    const selected = await api.selectTenant(tenantId);
+    setTenantSession(selected.tenant_id, selected.access_token);
+    setLoadState("loading");
+    const jwtRole = parseTenantJWTClaims(selected.access_token).role ?? selected.role;
+    setAuthSession((prev) => mergeTenantJWTIntoAuthSession(prev, selected.access_token, selected));
+    const me = await api.me();
+    setAuthSession((prev) => ({
+      ...mergeTenantJWTIntoAuthSession(prev, selected.access_token, selected),
+      email: me.email ?? prev?.email,
+      sub: me.sub ?? prev?.sub,
+      role: jwtRole || me.role,
+      tenant_id: selected.tenant_id,
+      user_id: me.user_id,
+      platform_admin: selected.platform_admin ?? me.platform_admin,
+      teams: me.teams,
+    }));
+    const overviewRes = await api.overview();
+    const payload = await fetchDashboardPanelsAfterOverview(overviewRes, jwtRole || me.role);
+    applyDashboardPayload(payload);
+    const tenantList = await api.listTenants();
+    setAccessibleTenants(tenantList.tenants);
+    setTenantPickerPlatformAdmin(tenantList.platform_admin);
+    setLoadState("ready");
+  }
+
+  async function ensureTenantSession(authRes: DashboardAuthStatusResponse): Promise<boolean> {
+    if (externalAuth || !authRes.oidc_enabled || !authRes.authenticated) {
+      return true;
+    }
+    if (hasTenantSession()) {
+      return true;
+    }
+    const tenantList = await api.listTenants();
+    setTenantPickerPlatformAdmin(tenantList.platform_admin);
+    setAccessibleTenants(tenantList.tenants);
+    const accessible = tenantList.tenants.filter((t) => t.accessible);
+    if (accessible.length === 1) {
+      await applyTenantSelection(accessible[0].id);
+      return false;
+    }
+    setLoadState("selecting_tenant");
+    return false;
+  }
+
   async function bootstrapDashboard() {
     setLoadState("checking_session");
     setErrorMessage("");
@@ -1358,8 +1449,20 @@ export default function App() {
           sub: claims.sub,
         });
         setLoadState("loading");
+        const me = await api.me();
+        setAuthSession((prev) => ({
+          ...(prev ?? { authenticated: true, oidc_enabled: true }),
+          authenticated: true,
+          oidc_enabled: true,
+          email: me.email ?? claims.email,
+          sub: me.sub ?? claims.sub,
+          role: me.role,
+          tenant_id: me.tenant_id,
+          user_id: me.user_id,
+          teams: me.teams,
+        }));
         const overviewRes = await api.overview();
-        const payload = await fetchDashboardPanelsAfterOverview(overviewRes);
+        const payload = await fetchDashboardPanelsAfterOverview(overviewRes, me.role);
         applyDashboardPayload(payload);
         setLoadState("ready");
         return;
@@ -1369,9 +1472,45 @@ export default function App() {
       setAuthSession(authRes);
 
       if (!authRes.oidc_enabled || authRes.authenticated) {
+        if (!(await ensureTenantSession(authRes))) {
+          return;
+        }
+        if (hasTenantSession()) {
+          const jwt = getTenantJWT();
+          if (jwt) {
+            setAuthSession((prev) => ({
+              ...mergeTenantJWTIntoAuthSession(prev ?? authRes, jwt),
+              authenticated: true,
+              oidc_enabled: authRes.oidc_enabled,
+              login_path: authRes.login_path,
+              logout_path: authRes.logout_path,
+            }));
+          }
+        }
         setLoadState("loading");
+        let role = roleFromTenantSession(authRes.role);
+        try {
+          const me = await api.me();
+          role = roleFromTenantSession(me.role) ?? me.role;
+          setAuthSession((prev) => ({
+            ...(prev ?? authRes),
+            authenticated: true,
+            oidc_enabled: authRes.oidc_enabled,
+            login_path: authRes.login_path,
+            logout_path: authRes.logout_path,
+            email: me.email ?? prev?.email ?? authRes.email,
+            sub: me.sub ?? prev?.sub ?? authRes.sub,
+            role,
+            tenant_id: me.tenant_id ?? prev?.tenant_id,
+            user_id: me.user_id,
+            platform_admin: prev?.platform_admin ?? me.platform_admin,
+            teams: me.teams,
+          }));
+        } catch {
+          // Keep role from tenant JWT when /me is unavailable.
+        }
         const overviewRes = await api.overview();
-        const payload = await fetchDashboardPanelsAfterOverview(overviewRes);
+        const payload = await fetchDashboardPanelsAfterOverview(overviewRes, role);
         applyDashboardPayload(payload);
         setLoadState("ready");
         return;
@@ -1401,13 +1540,36 @@ export default function App() {
     }
   }
 
+  async function switchTenantWorkspace() {
+    clearTenantSession();
+    setData({});
+    setTenantPickerError(null);
+    setLoadState("checking_session");
+    try {
+      const authRes = await api.authStatus();
+      setAuthSession(authRes);
+      if (!authRes.authenticated) {
+        setLoadState("ready");
+        return;
+      }
+      const tenantList = await api.listTenants();
+      setTenantPickerPlatformAdmin(tenantList.platform_admin);
+      setAccessibleTenants(tenantList.tenants);
+      setLoadState("selecting_tenant");
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown error";
+      setErrorMessage(message);
+      setLoadState("error");
+    }
+  }
+
   async function loadDashboardData(silent = false) {
     if (!silent) {
       setLoadState("loading");
     }
     setErrorMessage("");
     try {
-      const payload = await fetchFullDashboard();
+      const payload = await fetchFullDashboard(roleFromTenantSession(authSession?.role));
       applyDashboardPayload(payload);
       setLoadState("ready");
     } catch (error) {
@@ -4160,8 +4322,15 @@ export default function App() {
           onSelect={selectSection}
           signOutHref={dashboardSignOutHref}
           embedMode={externalAuth}
-          signedInEmail={embedSignedInEmail}
+          signedInEmail={authSession?.email?.trim() || embedSignedInEmail}
           userRole={normalizeRole(authSession?.role)}
+          userTenant={authSession?.tenant_id}
+          platformAdmin={authSession?.platform_admin}
+          showSwitchTenant={canSwitchTenant(
+            accessibleTenants.filter((t) => t.accessible).length > 1,
+            authSession?.platform_admin,
+          )}
+          onSwitchTenant={() => void switchTenantWorkspace()}
         />
       ) : null}
       <Box
@@ -4183,7 +4352,12 @@ export default function App() {
         }}
       >
         {showNav && componentMode ? (
-          <NavTabs active={section} onSelect={selectSection} />
+          <NavTabs
+            active={section}
+            onSelect={selectSection}
+            role={normalizeRole(authSession?.role)}
+            platformAdmin={authSession?.platform_admin}
+          />
         ) : null}
         {dashboardReady ? (
         <Stack component="header" direction={{ xs: "column", lg: "row" }} spacing={2} sx={{ mb: 2 }}>
@@ -4279,6 +4453,22 @@ export default function App() {
               </Typography>
             </Stack>
           </Paper>
+        ) : null}
+
+        {loadState === "selecting_tenant" ? (
+          <TenantPickerPage
+            tenants={accessibleTenants}
+            platformAdmin={tenantPickerPlatformAdmin}
+            email={authSession?.email}
+            error={tenantPickerError}
+            onSelect={async (tenantId) => {
+              try {
+                await applyTenantSelection(tenantId);
+              } catch (error) {
+                setTenantPickerError(error instanceof Error ? error.message : "Failed to select tenant");
+              }
+            }}
+          />
         ) : null}
 
         {loadState === "loading" ? (
@@ -5358,6 +5548,12 @@ export default function App() {
             {section === "users" ? (
               <SectionCard title="Users">
                 <UsersPage role={normalizeRole(authSession?.role)} />
+              </SectionCard>
+            ) : null}
+
+            {section === "tenant_admin" ? (
+              <SectionCard title="Tenant Admin">
+                <TenantAdminPage />
               </SectionCard>
             ) : null}
 

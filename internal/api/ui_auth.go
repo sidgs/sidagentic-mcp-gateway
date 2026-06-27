@@ -21,10 +21,12 @@ const (
 
 // dashboardUserSession is an authenticated dashboard UI user (Cognito or platform JWT).
 type dashboardUserSession struct {
-	ExpiresAt time.Time
-	Sub       string
-	Email     string
-	Source    dashboardAuthSource
+	ExpiresAt     time.Time
+	Sub           string
+	Email         string
+	Role          string
+	PlatformAdmin bool
+	Source        dashboardAuthSource
 }
 
 func (s *Server) platformJWTConfigured() bool {
@@ -49,6 +51,8 @@ type platformBearerClaims struct {
 	Email          string `json:"email"`
 	TenantID       string `json:"tenant_id"`
 	CustomTenantID string `json:"custom:tenant_id"`
+	Role           string `json:"role"`
+	PlatformAdmin  bool   `json:"platform_admin"`
 }
 
 func (s *Server) parsePlatformBearerToken(rawToken string) (*platformBearerClaims, bool) {
@@ -103,10 +107,12 @@ func (s *Server) platformSessionFromClaims(c *gin.Context, claims *platformBeare
 	}
 
 	return &dashboardUserSession{
-		ExpiresAt: expiresAt,
-		Sub:       claims.Subject,
-		Email:     strings.TrimSpace(claims.Email),
-		Source:    dashboardAuthPlatformBearer,
+		ExpiresAt:     expiresAt,
+		Sub:           claims.Subject,
+		Email:         strings.TrimSpace(claims.Email),
+		Role:          strings.TrimSpace(claims.Role),
+		PlatformAdmin: claims.PlatformAdmin,
+		Source:        dashboardAuthPlatformBearer,
 	}, true
 }
 
@@ -144,20 +150,26 @@ func oidcSessionToDashboard(sess *oidcServerSession, source dashboardAuthSource)
 		return nil
 	}
 	return &dashboardUserSession{
-		ExpiresAt: sess.ExpiresAt,
-		Sub:       sess.Sub,
-		Email:     sess.Email,
-		Source:    source,
+		ExpiresAt:     sess.ExpiresAt,
+		Sub:           sess.Sub,
+		Email:         sess.Email,
+		PlatformAdmin: isPlatformAdminEmail(sess.Email),
+		Source:        source,
 	}
 }
 
 // validDashboardUserFromRequest accepts Cognito cookie/bearer or platform bearer tokens.
+// When a tenant-scoped platform JWT is sent as Bearer, it takes precedence over the OIDC
+// cookie so role and tenant claims from select-tenant are honored.
 func (s *Server) validDashboardUserFromRequest(c *gin.Context) (*dashboardUserSession, bool) {
+	if sess, ok := s.validPlatformBearerFromRequest(c); ok {
+		return sess, true
+	}
 	if sess, ok := s.validOIDCSessionFromRequest(c); ok {
 		return oidcSessionToDashboard(sess, dashboardAuthCognitoCookie), true
 	}
 	if sess, ok := s.validOIDCBearerFromRequest(c); ok {
 		return oidcSessionToDashboard(sess, dashboardAuthCognitoBearer), true
 	}
-	return s.validPlatformBearerFromRequest(c)
+	return nil, false
 }

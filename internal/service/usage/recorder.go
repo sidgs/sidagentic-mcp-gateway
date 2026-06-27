@@ -6,6 +6,7 @@ import (
 
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/internal/telemetry"
+	"sami.io/mcpgateway/pkg/auditctx"
 	"gorm.io/gorm"
 )
 
@@ -43,8 +44,10 @@ func (noopRecorder) RecordToolInvocation(context.Context, ToolInvocationParams) 
 
 func (r *gormRecorder) RecordToolInvocation(ctx context.Context, params ToolInvocationParams) {
 	meta := MetadataFromContext(ctx)
+	now := time.Now().UTC()
 	event := model.ToolInvocationEvent{
-		CreatedAt:     time.Now().UTC(),
+		CreatedOn:     now,
+		CreatedBy:     auditctx.SystemActor,
 		TenantID:      meta.TenantID,
 		AgentAppID:    meta.AgentAppID,
 		ToolGroupName: meta.ToolGroupName,

@@ -100,7 +100,7 @@ func (s *Service) Servers() (*types.DashboardServersResponse, error) {
 			PromptCount:       inv.PromptCount,
 			ResourceCount:     inv.ResourceCount,
 			LastDiscoveredAt:  formatTime(inv.LastEntitySeen),
-			UpdatedAt:         formatTime(inv.UpdatedAt),
+			UpdatedAt:         formatTime(inv.UpdatedOn),
 			ConnectionSummary: summary.SanitizedSummary,
 			ConfigSummary:     summary,
 		})
@@ -307,7 +307,7 @@ func (s *Service) loadServerInventory() ([]serverInventory, error) {
 			ActiveToolCount:     activeToolCount,
 			ActivePromptCount:   activePromptCount,
 			ActiveResourceCount: activeResourceCount,
-			LastEntitySeen:      server.UpdatedAt,
+			LastEntitySeen:      server.UpdatedOn,
 		})
 	}
 	return inventory, nil

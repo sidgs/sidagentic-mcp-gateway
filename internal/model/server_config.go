@@ -30,7 +30,7 @@ func IsEnterpriseMode(mode ServerMode) bool {
 
 // ServerConfig represents the configuration for the SAMI MCP Gateway server.
 type ServerConfig struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_server_config_tenant"`
 

@@ -161,7 +161,7 @@ func (s *Server) dashboardDeleteTeamHandler() gin.HandlerFunc {
 			handleServiceError(c, err)
 			return
 		}
-		if team.CreatedByUserID != p.UserID && !p.CanManageUsers() {
+		if team.CreatedBy != p.Email && team.CreatedBy != fmtUserActor(p.UserID) && !p.CanManageMembersOfTeam(id) && !p.CanManageUsers() {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}
@@ -289,10 +289,10 @@ func parseTeamID(c *gin.Context) (uint, error) {
 
 func teamToPublic(team *model.Team) types.TeamPublic {
 	return types.TeamPublic{
-		ID:              team.ID,
-		TenantID:        team.TenantID,
-		Name:            team.Name,
-		Type:            string(team.Type),
-		CreatedByUserID: team.CreatedByUserID,
+		ID:        team.ID,
+		TenantID:  team.TenantID,
+		Name:      team.Name,
+		Type:      string(team.Type),
+		CreatedBy: team.CreatedBy,
 	}
 }

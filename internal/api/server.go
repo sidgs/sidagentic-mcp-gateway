@@ -23,6 +23,7 @@ import (
 	"sami.io/mcpgateway/internal/service/skill"
 	"sami.io/mcpgateway/internal/service/skillset"
 	"sami.io/mcpgateway/internal/service/team"
+	"sami.io/mcpgateway/internal/service/tenantregistry"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/internal/telemetry"
@@ -57,6 +58,7 @@ type ServerOptions struct {
 	GlobalMCPAPIKey string
 	UserService      *user.UserService
 	TeamService      *team.Service
+	TenantRegistry   *tenantregistry.Service
 	ToolGroupService  *toolgroup.ToolGroupService
 	PromptGroupService *promptgroup.PromptGroupService
 	SkillService       *skill.Service
@@ -116,6 +118,7 @@ type Server struct {
 	globalMcpAPIKey string
 	userService      *user.UserService
 	teamService      *team.Service
+	tenantRegistry   *tenantregistry.Service
 	toolGroupService  *toolgroup.ToolGroupService
 	promptGroupService *promptgroup.PromptGroupService
 	skillService       *skill.Service
@@ -248,6 +251,7 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		configService:   opts.ConfigService,
 		userService:           opts.UserService,
 		teamService:           opts.TeamService,
+		tenantRegistry:        opts.TenantRegistry,
 		toolGroupService:      opts.ToolGroupService,
 		promptGroupService:    opts.PromptGroupService,
 		skillService:          opts.SkillService,
@@ -361,6 +365,12 @@ func (s *Server) resolveTenantConfig(ctx context.Context) (model.ServerConfig, e
 		return model.ServerConfig{}, err
 	}
 	return s.configService.GetConfig(ctx)
+}
+
+func (s *Server) ensureTenantBootstrap(ctx context.Context, tenantID string) error {
+	ctx = tenant.WithContext(ctx, tenantID)
+	_, err := s.resolveTenantConfig(ctx)
+	return err
 }
 
 // InitDev initializes the server configuration in the Development mode.
@@ -760,6 +770,9 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		)
 		{
 			dashboardPublic.GET("/auth-status", s.dashboardAuthStatusHandler())
+			dashboardPublic.GET("/auth/tenants", s.dashboardAuthTenantsHandler())
+			dashboardPublic.POST("/auth/select-tenant", s.dashboardSelectTenantHandler())
+			dashboardPublic.POST("/auth/switch-tenant", s.dashboardSelectTenantHandler())
 		}
 		dashboardAPI := g.Group(
 			"/dashboard",
@@ -767,8 +780,10 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			requireDashboardModeOrOIDC,
 			s.dashboardEmbedCORS(),
 			requireOIDCSessionIfEnabled,
+			s.requireTenantOperational(),
 			s.requireDashboardPrincipal(),
 			s.rejectAuditorWrites(),
+			s.rejectReadOnlyTenantWrites(),
 		)
 		{
 			dashboardAPI.GET("/me", s.dashboardMeHandler())
@@ -836,6 +851,21 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.POST("/teams/:id/members", s.dashboardAddTeamMemberHandler())
 			dashboardAPI.DELETE("/teams/:id/members/:userId", s.dashboardRemoveTeamMemberHandler())
 			dashboardAPI.PUT("/teams/:id/assignments", s.dashboardSetTeamAssignmentsHandler())
+
+			platformAPI := dashboardAPI.Group("/platform", s.requirePlatformAdmin())
+			{
+				platformAPI.GET("/tenants", s.dashboardPlatformListTenantsHandler())
+				platformAPI.POST("/tenants", s.dashboardPlatformCreateTenantHandler())
+				platformAPI.PATCH("/tenants/:id", s.dashboardPlatformPatchTenantHandler())
+				platformAPI.POST("/tenants/:id/suspend", s.dashboardPlatformSuspendTenantHandler())
+				platformAPI.POST("/tenants/:id/retire", s.dashboardPlatformRetireTenantHandler())
+				platformAPI.POST("/tenants/:id/remove", s.dashboardPlatformRemoveTenantHandler())
+				platformAPI.PATCH("/tenants/:id/mode", s.dashboardPlatformSetTenantModeHandler())
+				platformAPI.GET("/tenants/:id/members", s.dashboardPlatformListMembersHandler())
+				platformAPI.POST("/tenants/:id/members", s.dashboardPlatformAddMemberHandler())
+				platformAPI.PATCH("/tenants/:id/members/:membershipId", s.dashboardPlatformPatchMemberHandler())
+				platformAPI.DELETE("/tenants/:id/members/:membershipId", s.dashboardPlatformDeleteMemberHandler())
+			}
 		}
 	}
 

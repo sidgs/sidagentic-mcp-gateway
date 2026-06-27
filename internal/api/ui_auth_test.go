@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -269,7 +270,43 @@ func TestAgentAppOwnerScopeFromDashboard_AcceptsPlatformBearer(t *testing.T) {
 	require.Equal(t, "ui:platform-user-42", scope)
 }
 
-func TestValidDashboardUserFromRequest_PrefersCognitoOverPlatform(t *testing.T) {
+func TestValidDashboardUserFromRequest_PrefersPlatformTenantJWTOverCognitoCookie(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	s, _, _, _ := newOIDCTestServer(t)
+	s.platformJWTSecret = testPlatformJWTSecret
+	s.platformJWTAud = defaultPlatformJWTAud
+
+	cognitoSess := oidcServerSession{
+		Sub:       "cognito-sub",
+		Email:     "cognito@example.com",
+		ExpiresAt: time.Now().Add(time.Hour),
+	}
+	require.NoError(t, s.oidcSessionStore.Set(context.Background(), "session-id", cognitoSess, time.Hour))
+
+	platformTok := signTestPlatformJWT(t, testPlatformJWTSecret, platformBearerClaims{
+		RegisteredClaims: jwt.RegisteredClaims{
+			Subject:  "platform-user-1",
+			Audience: jwt.ClaimStrings{defaultPlatformJWTAud},
+		},
+		Email:    "platform@example.com",
+		TenantID: "sid-agentic",
+		Role:     "administrator",
+	})
+
+	c, _ := gin.CreateTestContext(httptest.NewRecorder())
+	c.Request = httptest.NewRequest(http.MethodGet, "/dashboard/overview", nil)
+	c.Request.AddCookie(&http.Cookie{Name: oidcSessionCookieName, Value: "session-id"})
+	c.Request.Header.Set("Authorization", "Bearer "+platformTok)
+	c.Request.Header.Set(tenant.HeaderName, "sid-agentic")
+
+	sess, ok := s.validDashboardUserFromRequest(c)
+	require.True(t, ok)
+	require.Equal(t, dashboardAuthPlatformBearer, sess.Source)
+	require.Equal(t, "administrator", sess.Role)
+	require.Equal(t, "platform@example.com", sess.Email)
+}
+
+func TestValidDashboardUserFromRequest_PrefersCognitoBearerOverInvalidPlatform(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	s, priv, issuer, clientID := newOIDCTestServer(t)
 	s.platformJWTSecret = testPlatformJWTSecret

@@ -2,22 +2,21 @@ package model
 
 import (
 	"sami.io/mcpgateway/pkg/types"
-	"gorm.io/gorm"
 )
 
 // Team groups users for scoped access to catalog resources or agent apps.
 type Team struct {
-	gorm.Model
+	BaseModel
 
 	TenantID        string         `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_team_tenant_name_type"`
 	Name            string         `json:"name" gorm:"size:255;not null;uniqueIndex:ux_team_tenant_name_type"`
 	Type            types.TeamType `json:"type" gorm:"size:32;not null;uniqueIndex:ux_team_tenant_name_type"`
-	CreatedByUserID uint           `json:"created_by_user_id" gorm:"not null"`
+	CreatedByUserID uint           `json:"created_by_user_id" gorm:"not null;index"`
 }
 
 // TeamMember links a gateway user to a team with a membership role.
 type TeamMember struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string               `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_team_member_tenant_team_user"`
 	TeamID   uint                 `json:"team_id" gorm:"not null;uniqueIndex:ux_team_member_tenant_team_user;index"`
@@ -47,7 +46,7 @@ func CanManageTeamMembers(role types.TeamMemberRole) bool {
 
 // TeamResourceAssignment binds a resource to a team for scoped visibility or management.
 type TeamResourceAssignment struct {
-	gorm.Model
+	BaseModel
 
 	TenantID     string                 `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_team_resource_tenant_team_type_name"`
 	TeamID       uint                   `json:"team_id" gorm:"not null;uniqueIndex:ux_team_resource_tenant_team_type_name;index"`

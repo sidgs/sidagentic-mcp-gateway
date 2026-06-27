@@ -140,7 +140,9 @@ type DashboardAuthStatusResponse struct {
 	Email         string                    `json:"email,omitempty"`
 	Sub           string                    `json:"sub,omitempty"`
 	Role          string                    `json:"role,omitempty"`
+	TenantID      string                    `json:"tenant_id,omitempty"`
 	UserID        uint                      `json:"user_id,omitempty"`
+	PlatformAdmin bool                      `json:"platform_admin,omitempty"`
 	Teams         []DashboardTeamMembership `json:"teams,omitempty"`
 }
 

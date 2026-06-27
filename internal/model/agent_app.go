@@ -5,7 +5,6 @@ import (
 	"fmt"
 
 	"gorm.io/datatypes"
-	"gorm.io/gorm"
 )
 
 // AgentAppStatus controls whether an agent-app may mint tokens or call MCP.
@@ -18,7 +17,7 @@ const (
 
 // AgentApp is a user-owned portal credential binding tool groups and prompt groups for MCP access.
 type AgentApp struct {
-	gorm.Model
+	BaseModel
 
 	TenantID         string         `json:"tenant_id" gorm:"size:255;not null;uniqueIndex:ux_agentapp_client;uniqueIndex:ux_agentapp_scope_name"`
 	OwnerScopeKey      string         `json:"-" gorm:"size:768;not null;uniqueIndex:ux_agentapp_scope_name"`

@@ -29,16 +29,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.migrate
-    image: sami-mcp-gateway-migrate:local
+    image: sidgs.jfrog.io/sami/sami-mcp-gateway-migrate:${SAMI_MCP_GATEWAY_IMAGE_TAG:-latest-stdio}
     environment:
-      FLYWAY_URL: jdbc:postgresql://db:5432/sami
+      FLYWAY_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres-dev-sl.sidglobal.cloud}:${POSTGRES_PORT:-5432}/sami-mcp-gateway
       FLYWAY_USER: sami
       FLYWAY_PASSWORD: sami
-    depends_on:
-      db:
-        condition: service_healthy
-    profiles:
-      - enterprise
 
   redis:
     image: redis:7-alpine
@@ -54,7 +49,7 @@ services:
       context: .
       dockerfile: Dockerfile.api
     environment:
-      DATABASE_URL: postgres://sami:sami@${POSTGRES_HOST:-postgres-dev-sl.sidglobal.cloud}:${POSTGRES_PORT:-5432}/sami-mcp-gateway-enterprise
+      DATABASE_URL: postgres://sami:sami@${POSTGRES_HOST:-postgres-dev-sl.sidglobal.cloud}:${POSTGRES_PORT:-5432}/sami-mcp-gateway
       SERVER_MODE: ${SERVER_MODE:-enterprise}
       OTEL_ENABLED: ${OTEL_ENABLED:-true}
       MCP_SERVER_INIT_REQ_TIMEOUT_SEC: ${MCP_SERVER_INIT_REQ_TIMEOUT_SEC:-10}
@@ -74,11 +69,12 @@ services:
       PUBLIC_URL_SCHEME: ${PUBLIC_URL_SCHEME:-}
       POST_LOGIN_REDIRECT_URL: ${POST_LOGIN_REDIRECT_URL:-/#home}
       GLOBAL_MCP_API_KEY: ${GLOBAL_MCP_API_KEY:-1234567890}
-      # JWT_SECRET: ${JWT_SECRET:-UqERGDws8Dylda1uBEuoVhBzkqmYAu2mD4Tztuf36dM=}
-      # JWT_USE_UNSIGNED: ${JWT_USE_UNSIGNED:-true}
+      JWT_SECRET: ${JWT_SECRET:-UqERGDws8Dylda1uBEuoVhBzkqmYAu2mD4Tztuf36dM=}
+      JWT_USE_UNSIGNED: ${JWT_USE_UNSIGNED:-false}
       # PLATFORM_JWT_AUD: ${PLATFORM_JWT_AUD:-sami-cms}
       DASHBOARD_EMBED_ALLOWED_ORIGINS: ${DASHBOARD_EMBED_ALLOWED_ORIGINS:-http://localhost:5173}
       DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-sid-agentic}
+      PLATFORM_ADMIN_LIST: ${PLATFORM_ADMIN_LIST:-ajayn@sidgs.com}
 
     ports:
       - "${HOST_PORT:-8080}:8080"
@@ -91,6 +87,8 @@ services:
     depends_on:
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     restart: always
 
   api-local:
@@ -120,6 +118,7 @@ services:
       JWT_USE_UNSIGNED: ${JWT_USE_UNSIGNED:-false}
       DASHBOARD_EMBED_ALLOWED_ORIGINS: ${DASHBOARD_EMBED_ALLOWED_ORIGINS:-http://localhost:5173}
       DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-sid-agentic}
+      PLATFORM_ADMIN_LIST: ${PLATFORM_ADMIN_LIST:-ajayn@sidgs.com}
     ports:
       - "${HOST_PORT:-8080}:8080"
     volumes:

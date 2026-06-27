@@ -3,12 +3,11 @@ package model
 
 import (
 	"sami.io/mcpgateway/pkg/types"
-	"gorm.io/gorm"
 )
 
 // User represents an authenticated, human user in enterprise mode.
 type User struct {
-	gorm.Model
+	BaseModel
 
 	TenantID string `json:"tenant_id" gorm:"size:255;not null;default:sami;uniqueIndex:ux_user_tenant_username;uniqueIndex:ux_user_tenant_token"`
 

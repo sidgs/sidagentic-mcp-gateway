@@ -41,6 +41,7 @@ func (u *UserService) CreateAdminUser(ctx context.Context) (*model.User, error) 
 		Role:        types.UserRoleAdministrator,
 		AccessToken: token,
 	}
+	model.StampCreateFromCtx(ctx, &user)
 	if err := u.db.WithContext(ctx).Create(&user).Error; err != nil {
 		return nil, fmt.Errorf("failed to create admin user: %w", err)
 	}
@@ -123,7 +124,7 @@ func (u *UserService) GetByEmail(ctx context.Context, email string) (*model.User
 }
 
 // UpsertFromDashboardSession finds or creates a dashboard user for the OIDC/JWT session.
-func (u *UserService) UpsertFromDashboardSession(ctx context.Context, sub, email string, bootstrapAdmin bool) (*model.User, error) {
+func (u *UserService) UpsertFromDashboardSession(ctx context.Context, sub, email string, bootstrapAdmin bool, sessionRole types.UserRole) (*model.User, error) {
 	sub = strings.TrimSpace(sub)
 	email = strings.TrimSpace(email)
 	if sub == "" && email == "" {
@@ -132,7 +133,7 @@ func (u *UserService) UpsertFromDashboardSession(ctx context.Context, sub, email
 	if existing, err := u.GetByOIDCSub(ctx, sub); err != nil {
 		return nil, err
 	} else if existing != nil {
-		return u.maybeUpgradeBootstrapAdmin(ctx, existing, bootstrapAdmin)
+		return u.syncSessionUser(ctx, existing, bootstrapAdmin, sessionRole)
 	}
 	if email != "" {
 		if existing, err := u.GetByEmail(ctx, email); err != nil {
@@ -140,11 +141,12 @@ func (u *UserService) UpsertFromDashboardSession(ctx context.Context, sub, email
 		} else if existing != nil {
 			if sub != "" && existing.OIDCSub == "" {
 				existing.OIDCSub = sub
+				model.StampUpdateFromCtx(ctx, existing)
 				if err := u.db.WithContext(ctx).Save(existing).Error; err != nil {
 					return nil, err
 				}
 			}
-			return u.maybeUpgradeBootstrapAdmin(ctx, existing, bootstrapAdmin)
+			return u.syncSessionUser(ctx, existing, bootstrapAdmin, sessionRole)
 		}
 	}
 	token, err := internal.GenerateAccessToken()
@@ -156,6 +158,9 @@ func (u *UserService) UpsertFromDashboardSession(ctx context.Context, sub, email
 	if bootstrapAdmin {
 		role = types.UserRoleAdministrator
 	}
+	if sessionRole != "" {
+		role = types.NormalizeUserRole(sessionRole)
+	}
 	user := model.User{
 		TenantID:    tenant.MustFromContext(ctx),
 		Username:    username,
@@ -166,10 +171,29 @@ func (u *UserService) UpsertFromDashboardSession(ctx context.Context, sub, email
 	if email != "" {
 		user.Email = email
 	}
+	model.StampCreateFromCtx(ctx, &user)
 	if err := u.db.WithContext(ctx).Create(&user).Error; err != nil {
-		return nil, fmt.Errorf("provision dashboard user: %w", err)
+		return nil, err
 	}
 	return &user, nil
+}
+
+func (u *UserService) syncSessionUser(ctx context.Context, user *model.User, bootstrapAdmin bool, sessionRole types.UserRole) (*model.User, error) {
+	user, err := u.maybeUpgradeBootstrapAdmin(ctx, user, bootstrapAdmin)
+	if err != nil {
+		return nil, err
+	}
+	if sessionRole != "" {
+		normalized := types.NormalizeUserRole(sessionRole)
+		if user.Role != normalized {
+			user.Role = normalized
+			model.StampUpdateFromCtx(ctx, user)
+			if err := u.db.WithContext(ctx).Save(user).Error; err != nil {
+				return nil, err
+			}
+		}
+	}
+	return user, nil
 }
 
 func (u *UserService) maybeUpgradeBootstrapAdmin(ctx context.Context, user *model.User, bootstrapAdmin bool) (*model.User, error) {
@@ -177,6 +201,7 @@ func (u *UserService) maybeUpgradeBootstrapAdmin(ctx context.Context, user *mode
 		return user, nil
 	}
 	user.Role = types.UserRoleAdministrator
+	model.StampUpdateFromCtx(ctx, user)
 	if err := u.db.WithContext(ctx).Save(user).Error; err != nil {
 		return nil, err
 	}
