@@ -1,0 +1,69 @@
+---
+title: "RBAC roles and teams"
+description: "Human role hierarchy, provider/user/agent teams, and scoped visibility for dashboard users."
+---
+
+The dashboard uses **gateway-managed roles** linked to OIDC or platform JWT sessions. Every authenticated user defaults to the **`user`** role until an administrator assigns a higher role.
+
+## Role hierarchy
+
+Roles are cumulative in the write hierarchy:
+
+| Role | Inherits | Additional capabilities |
+|------|----------|-------------------------|
+| **user** | — | See catalog items per user-team rules; create/manage own agent apps; create agent teams |
+| **provider** | user | Manage provider + product catalog items (provider-team scoped on provider entities); create provider teams |
+| **administrator** | provider | Manage users and roles; create user teams; access System section; agent apps follow team visibility rules for non-owned apps |
+| **auditor** | — (read-only) | Read-only access to allowed sections including users and system |
+
+## Default role
+
+On first dashboard login, the gateway **auto-provisions** a user record with role **`user`**. Optional bootstrap env vars upgrade a specific identity to administrator:
+
+- `BOOTSTRAP_ADMIN_EMAIL`
+- `BOOTSTRAP_ADMIN_SUB`
+
+## Team types
+
+### Provider teams
+
+- Created by **provider+** roles
+- Assigned to provider catalog entities (servers, skills)
+- **0 teams** → any provider+ user can manage
+- **1+ teams** → only provider+ members of assigned teams can manage
+
+Tools, prompts, and resources inherit team visibility from their parent server.
+
+### User teams
+
+- Created by **administrators**
+- Assigned to catalog entities (servers, skills, tool groups, prompt groups, skill sets)
+- **0 teams** → any logged-in user can see
+- **1+ teams** → only members can see
+
+Agent apps are **not** assigned to user teams.
+
+### Agent teams
+
+- Created by **user+** roles; creator is owner
+- Assigned **only** to agent apps (0 or many teams per app)
+- **0 teams** → only the app owner can see/manage
+- **1+ teams** → owner plus all members (owner, manager, member) of assigned teams can see
+- Managers may add/remove members
+
+## Dashboard APIs
+
+| Endpoint | Purpose |
+|----------|---------|
+| `GET /dashboard/me` | Current role, user id, team memberships |
+| `GET/POST/PATCH/DELETE /dashboard/users` | User administration (administrator) |
+| `GET/POST/DELETE /dashboard/teams` | Team CRUD |
+| `GET /dashboard/teams/:id` | Team detail + members |
+| `POST/DELETE /dashboard/teams/:id/members` | Membership management |
+| `PUT /dashboard/teams/:id/assignments` | Bulk resource assignment |
+
+Auditors receive **403** on all mutating dashboard routes.
+
+## Runtime MCP access
+
+Agent runtime access (MCP proxy, group routes) continues to use **agent app credentials** and group `security_option` settings. Human RBAC applies to the **dashboard** and `/dashboard/*` JSON APIs.

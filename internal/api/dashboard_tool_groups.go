@@ -68,6 +68,7 @@ func marshalStringSliceJSON(items []string) (datatypes.JSON, error) {
 
 func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		ctx := c.Request.Context()
 		groups, err := s.toolGroupService.ListToolGroups(ctx)
 		if err != nil {
@@ -79,6 +80,14 @@ func (s *Server) dashboardToolGroupsHandler() gin.HandlerFunc {
 			ToolGroups: make([]dashboardToolGroup, 0, len(groups)),
 		}
 		for _, group := range groups {
+			ok, err := s.canSeeCatalog(c, p, types.TeamResourceToolGroup, group.Name)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if !ok {
+				continue
+			}
 			item, err := s.buildDashboardToolGroup(c, group)
 			if err != nil {
 				handleServiceError(c, err)
@@ -118,6 +127,9 @@ func (s *Server) dashboardGetToolGroupHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardCreateToolGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		var input dashboardToolGroupCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -170,6 +182,9 @@ func (s *Server) dashboardCreateToolGroupHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardUpdateToolGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		name := c.Param("name")
 		if name == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "group name is required"})
@@ -226,6 +241,9 @@ func (s *Server) dashboardUpdateToolGroupHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardDeleteToolGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		if err := s.toolGroupService.DeleteToolGroup(c.Request.Context(), c.Param("name")); err != nil {
 			handleServiceError(c, err)
 			return

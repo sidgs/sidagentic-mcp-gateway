@@ -10,6 +10,8 @@ const SECTIONS = new Set<string>([
   "skills",
   "skill_sets",
   "agent_apps",
+  "teams",
+  "users",
   "prompts",
   "resources",
   "diagnostics",

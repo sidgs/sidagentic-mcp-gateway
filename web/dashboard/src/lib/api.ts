@@ -303,4 +303,29 @@ export const api = {
     requestJSON(`/dashboard/skillsets/${encodeURIComponent(name)}`, {
       method: "DELETE",
     }),
+  me: () => requestJSON<import("./types").DashboardMeResponse>("/dashboard/me"),
+  teams: (type?: import("./types").TeamType) => {
+    const query = type ? `?type=${encodeURIComponent(type)}` : "";
+    return requestJSON<import("./types").DashboardTeam[]>(`/dashboard/teams${query}`);
+  },
+  team: (id: number) => requestJSON<import("./types").DashboardTeamDetail>(`/dashboard/teams/${id}`),
+  createTeam: (body: { name: string; type: import("./types").TeamType }) =>
+    requestJSON<import("./types").DashboardTeam>("/dashboard/teams", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  users: () => requestJSON<import("./types").DashboardUser[]>("/dashboard/users"),
+  createUser: (body: { username: string; role?: string; email?: string }) =>
+    requestJSON("/dashboard/users", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    }),
+  patchUserRole: (id: number, role: string) =>
+    requestJSON(`/dashboard/users/${id}/role`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ role }),
+    }),
 };

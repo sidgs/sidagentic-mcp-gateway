@@ -1,9 +1,11 @@
 import { useEffect, useState, type ReactElement } from "react";
 import type { AppSection } from "@/lib/types";
+import type { UserRole } from "@/lib/rbac";
 import {
   ALL_NAV_SECTIONS,
   DEFAULT_NAV_GROUP_STATE,
   filterNavMenu,
+  filterNavMenuByRole,
   findNavGroupForSection,
   NAV_MENU,
   readNavGroupState,
@@ -33,7 +35,8 @@ import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
 import CategoryOutlinedIcon from "@mui/icons-material/CategoryOutlined";
 import HubOutlinedIcon from "@mui/icons-material/HubOutlined";
 import LogoutOutlinedIcon from "@mui/icons-material/LogoutOutlined";
-import SettingsOutlinedIcon from "@mui/icons-material/SettingsOutlined";
+import GroupOutlinedIcon from "@mui/icons-material/GroupOutlined";
+import PeopleOutlinedIcon from "@mui/icons-material/PeopleOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Chip from "@mui/material/Chip";
@@ -70,6 +73,10 @@ function SectionIcon({ section, ...props }: { section: AppSection } & SvgIconPro
       return <LibraryBooksOutlinedIcon {...props} />;
     case "agent_apps":
       return <AppsOutlinedIcon {...props} />;
+    case "teams":
+      return <GroupOutlinedIcon {...props} />;
+    case "users":
+      return <PeopleOutlinedIcon {...props} />;
     case "prompts":
       return <AssignmentOutlinedIcon {...props} />;
     case "resources":
@@ -178,6 +185,7 @@ export function NavSidebar({
   signOutHref,
   embedMode = false,
   signedInEmail,
+  userRole,
 }: {
   active: AppSection;
   onSelect: (section: AppSection) => void;
@@ -186,8 +194,9 @@ export function NavSidebar({
   /** Embedded mode: hide Home and Sign out; show signed-in email when provided. */
   embedMode?: boolean;
   signedInEmail?: string;
+  userRole?: UserRole;
 }) {
-  const navMenu = filterNavMenu(NAV_MENU, embedMode);
+  const navMenu = filterNavMenuByRole(filterNavMenu(NAV_MENU, embedMode), userRole);
   const collapsedNavItems = embedMode
     ? ALL_NAV_SECTIONS.filter((item) => item.key !== "home")
     : ALL_NAV_SECTIONS;

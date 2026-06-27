@@ -26,6 +26,7 @@ type dashboardAgentApp struct {
 	ToolGroupNames       []string                          `json:"tool_group_names"`
 	PromptGroupNames     []string                          `json:"prompt_group_names"`
 	SkillSetNames        []string                          `json:"skill_set_names"`
+	AgentTeamIDs         []uint                            `json:"agent_team_ids,omitempty"`
 	OAuthTokenURL        string                            `json:"oauth_token_url"`
 	ToolGroupEndpoints   []dashboardAgentAppGroupEndpoints `json:"tool_group_endpoints"`
 	PromptGroupEndpoints []dashboardAgentAppGroupEndpoints `json:"prompt_group_endpoints"`
@@ -42,6 +43,7 @@ type dashboardAgentAppCreateRequest struct {
 	ToolGroupNames     []string `json:"tool_group_names,omitempty"`
 	PromptGroupNames   []string `json:"prompt_group_names,omitempty"`
 	SkillSetNames      []string `json:"skill_set_names,omitempty"`
+	AgentTeamIDs       []uint   `json:"agent_team_ids,omitempty"`
 }
 
 type dashboardAgentAppPatchRequest struct {
@@ -51,6 +53,7 @@ type dashboardAgentAppPatchRequest struct {
 	ToolGroupNames     *[]string `json:"tool_group_names,omitempty"`
 	PromptGroupNames   *[]string `json:"prompt_group_names,omitempty"`
 	SkillSetNames      *[]string `json:"skill_set_names,omitempty"`
+	AgentTeamIDs       *[]uint   `json:"agent_team_ids,omitempty"`
 }
 
 func (s *Server) buildDashboardAgentApp(c *gin.Context, app *model.AgentApp) (dashboardAgentApp, error) {
@@ -76,6 +79,12 @@ func (s *Server) buildDashboardAgentApp(c *gin.Context, app *model.AgentApp) (da
 		PromptGroupNames: pg,
 		SkillSetNames:    ss,
 		OAuthTokenURL:    s.agentAppOAuthTokenURL(c),
+	}
+	if s.teamService != nil {
+		out.AgentTeamIDs, err = s.teamService.AgentTeamIDsForApp(c.Request.Context(), app.ID)
+		if err != nil {
+			return dashboardAgentApp{}, err
+		}
 	}
 	for _, n := range tg {
 		ep := s.getToolGroupEndpoints(c, n)
@@ -108,19 +117,44 @@ func (s *Server) dashboardAgentAppsHandler() gin.HandlerFunc {
 			c.JSON(http.StatusOK, dashboardAgentAppsResponse{Apps: []dashboardAgentApp{}})
 			return
 		}
+		p := mustDashboardPrincipal(c)
 		scope, err := agentAppOwnerScopeFromDashboard(s, c)
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
-		apps, err := s.agentAppService.ListByOwnerScope(c.Request.Context(), scope)
-		if err != nil {
-			handleServiceError(c, err)
-			return
+		var appIDs []uint
+		if s.teamService != nil {
+			agentTeamIDs := p.TeamIDsOfType(types.TeamTypeAgent)
+			appIDs, err = s.teamService.ListVisibleAgentAppIDs(c.Request.Context(), p.UserID, scope, agentTeamIDs)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+		} else {
+			apps, listErr := s.agentAppService.ListByOwnerScope(c.Request.Context(), scope)
+			if listErr != nil {
+				handleServiceError(c, listErr)
+				return
+			}
+			for _, app := range apps {
+				appIDs = append(appIDs, app.ID)
+			}
 		}
-		resp := dashboardAgentAppsResponse{Apps: make([]dashboardAgentApp, 0, len(apps))}
-		for i := range apps {
-			item, err := s.buildDashboardAgentApp(c, &apps[i])
+		resp := dashboardAgentAppsResponse{Apps: make([]dashboardAgentApp, 0, len(appIDs))}
+		for _, id := range appIDs {
+			app, err := s.agentAppService.GetByID(c.Request.Context(), id)
+			if err != nil {
+				continue
+			}
+			var teamIDs []uint
+			if s.teamService != nil {
+				teamIDs, _ = s.teamService.AgentTeamIDsForApp(c.Request.Context(), app.ID)
+			}
+			if !p.CanSeeAgentApp(app.OwnerScopeKey, teamIDs) {
+				continue
+			}
+			item, err := s.buildDashboardAgentApp(c, app)
 			if err != nil {
 				handleServiceError(c, err)
 				return
@@ -137,6 +171,14 @@ func (s *Server) dashboardCreateAgentAppHandler() gin.HandlerFunc {
 			c.JSON(http.StatusServiceUnavailable, gin.H{"error": "agent-apps are not available"})
 			return
 		}
+		if s.forbidAuditorWrite(c) {
+			return
+		}
+		p := mustDashboardPrincipal(c)
+		if !p.CanWriteOwnAgentApp() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 		scope, err := agentAppOwnerScopeFromDashboard(s, c)
 		if err != nil {
 			handleServiceError(c, err)
@@ -151,6 +193,12 @@ func (s *Server) dashboardCreateAgentAppHandler() gin.HandlerFunc {
 		if err != nil {
 			handleServiceError(c, err)
 			return
+		}
+		if s.teamService != nil && len(req.AgentTeamIDs) > 0 {
+			if err := s.teamService.SetAgentAppTeams(c.Request.Context(), app.ID, req.AgentTeamIDs); err != nil {
+				handleServiceError(c, err)
+				return
+			}
 		}
 		item, err := s.buildDashboardAgentApp(c, app)
 		if err != nil {
@@ -180,16 +228,29 @@ func (s *Server) dashboardPatchAgentAppHandler() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
+		if s.forbidAuditorWrite(c) {
+			return
+		}
 		id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil || id64 == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 			return
 		}
-		scope, err := agentAppOwnerScopeFromDashboard(s, c)
+		p := mustDashboardPrincipal(c)
+		app, err := s.agentAppService.GetByID(c.Request.Context(), uint(id64))
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
+		teamIDs := []uint(nil)
+		if s.teamService != nil {
+			teamIDs, _ = s.teamService.AgentTeamIDsForApp(c.Request.Context(), app.ID)
+		}
+		if !p.CanManageAgentApp(app.OwnerScopeKey, teamIDs) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		scope := app.OwnerScopeKey
 		var req dashboardAgentAppPatchRequest
 		if err := c.ShouldBindJSON(&req); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -204,10 +265,16 @@ func (s *Server) dashboardPatchAgentAppHandler() gin.HandlerFunc {
 			}
 			st = &v
 		}
-		app, err := s.agentAppService.UpdatePatch(c.Request.Context(), uint(id64), scope, req.Name, req.Description, st, req.ToolGroupNames, req.PromptGroupNames, req.SkillSetNames)
+		app, err = s.agentAppService.UpdatePatch(c.Request.Context(), uint(id64), scope, req.Name, req.Description, st, req.ToolGroupNames, req.PromptGroupNames, req.SkillSetNames)
 		if err != nil {
 			handleServiceError(c, err)
 			return
+		}
+		if req.AgentTeamIDs != nil && s.teamService != nil {
+			if err := s.teamService.SetAgentAppTeams(c.Request.Context(), app.ID, *req.AgentTeamIDs); err != nil {
+				handleServiceError(c, err)
+				return
+			}
 		}
 		item, err := s.buildDashboardAgentApp(c, app)
 		if err != nil {
@@ -224,17 +291,29 @@ func (s *Server) dashboardDeleteAgentAppHandler() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
+		if s.forbidAuditorWrite(c) {
+			return
+		}
 		id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil || id64 == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 			return
 		}
-		scope, err := agentAppOwnerScopeFromDashboard(s, c)
+		p := mustDashboardPrincipal(c)
+		app, err := s.agentAppService.GetByID(c.Request.Context(), uint(id64))
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
-		if err := s.agentAppService.Delete(c.Request.Context(), uint(id64), scope); err != nil {
+		teamIDs := []uint(nil)
+		if s.teamService != nil {
+			teamIDs, _ = s.teamService.AgentTeamIDsForApp(c.Request.Context(), app.ID)
+		}
+		if !p.CanManageAgentApp(app.OwnerScopeKey, teamIDs) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		if err := s.agentAppService.Delete(c.Request.Context(), uint(id64), app.OwnerScopeKey); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -248,17 +327,29 @@ func (s *Server) dashboardRotateAgentAppSecretHandler() gin.HandlerFunc {
 			c.JSON(http.StatusNotFound, gin.H{"error": "not found"})
 			return
 		}
+		if s.forbidAuditorWrite(c) {
+			return
+		}
 		id64, err := strconv.ParseUint(c.Param("id"), 10, 64)
 		if err != nil || id64 == 0 {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "invalid id"})
 			return
 		}
-		scope, err := agentAppOwnerScopeFromDashboard(s, c)
+		p := mustDashboardPrincipal(c)
+		app, err := s.agentAppService.GetByID(c.Request.Context(), uint(id64))
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
-		sec, err := s.agentAppService.RotateSecret(c.Request.Context(), uint(id64), scope)
+		teamIDs := []uint(nil)
+		if s.teamService != nil {
+			teamIDs, _ = s.teamService.AgentTeamIDsForApp(c.Request.Context(), app.ID)
+		}
+		if !p.CanManageAgentApp(app.OwnerScopeKey, teamIDs) {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		sec, err := s.agentAppService.RotateSecret(c.Request.Context(), uint(id64), app.OwnerScopeKey)
 		if err != nil {
 			handleServiceError(c, err)
 			return

@@ -22,6 +22,9 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(&model.ServerConfig{}); err != nil {
 		return fmt.Errorf("auto‑migration failed for ServerConfig model: %v", err)
 	}
+	if err := ensureUserIdentityColumns(db); err != nil {
+		return err
+	}
 	if err := db.AutoMigrate(&model.User{}); err != nil {
 		return fmt.Errorf("auto‑migration failed for User model: %v", err)
 	}
@@ -67,10 +70,55 @@ func Migrate(db *gorm.DB) error {
 	if err := db.AutoMigrate(&model.SkillReference{}); err != nil {
 		return fmt.Errorf("auto-migration failed for SkillReference model: %v", err)
 	}
+	if err := db.AutoMigrate(&model.Team{}); err != nil {
+		return fmt.Errorf("auto-migration failed for Team model: %v", err)
+	}
+	if err := db.AutoMigrate(&model.TeamMember{}); err != nil {
+		return fmt.Errorf("auto-migration failed for TeamMember model: %v", err)
+	}
+	if err := db.AutoMigrate(&model.TeamResourceAssignment{}); err != nil {
+		return fmt.Errorf("auto-migration failed for TeamResourceAssignment model: %v", err)
+	}
 	if err := backfillServerKind(db); err != nil {
 		return err
 	}
+	if err := backfillAdminRole(db); err != nil {
+		return err
+	}
 	return backfillTenantColumns(db)
+}
+
+func ensureUserIdentityColumns(db *gorm.DB) error {
+	stmts := []string{
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS email varchar(320) NOT NULL DEFAULT ''`,
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS oidc_sub varchar(255) NOT NULL DEFAULT ''`,
+	}
+	for _, q := range stmts {
+		if err := db.Exec(q).Error; err != nil {
+			return fmt.Errorf("users identity columns: %w", err)
+		}
+	}
+	indexStmts := []string{
+		`CREATE UNIQUE INDEX IF NOT EXISTS ux_user_tenant_email ON users (tenant_id, email) WHERE email <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS ux_user_tenant_oidc_sub ON users (tenant_id, oidc_sub) WHERE oidc_sub <> ''`,
+	}
+	for _, q := range indexStmts {
+		if err := db.Exec(q).Error; err != nil {
+			return fmt.Errorf("users identity indexes: %w", err)
+		}
+	}
+	return nil
+}
+
+func backfillAdminRole(db *gorm.DB) error {
+	if err := db.Exec(
+		"UPDATE users SET role = ? WHERE role = ?",
+		string(types.UserRoleAdministrator),
+		string(types.UserRoleAdmin),
+	).Error; err != nil {
+		return fmt.Errorf("admin role backfill: %w", err)
+	}
+	return nil
 }
 
 func backfillServerKind(db *gorm.DB) error {

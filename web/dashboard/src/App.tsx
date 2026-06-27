@@ -95,6 +95,10 @@ import { CopyButton } from "@/components/CopyButton";
 import { EmptyStateCard } from "@/components/EmptyStateCard";
 import { HomePage } from "@/components/HomePage";
 import { NavSidebar } from "@/components/NavSidebar";
+import { AgentTeamAssignmentFields } from "@/components/AgentTeamAssignmentFields";
+import { TeamsPage } from "@/components/TeamsPage";
+import { UsersPage } from "@/components/UsersPage";
+import { canWriteDashboard, normalizeRole } from "@/lib/rbac";
 import { NavTabs } from "@/components/NavTabs";
 import { LineagePage } from "@/components/LineagePage";
 import { ObservabilityPage } from "@/components/ObservabilityPage";
@@ -382,6 +386,14 @@ const sectionMeta: Record<AppSection, { title: string; subtitle: string }> = {
   agent_apps: {
     title: "Agent Apps",
     subtitle: "OAuth clients scoped to attached tool, prompt, or skill set groups.",
+  },
+  teams: {
+    title: "Teams",
+    subtitle: "Provider, user, and agent teams control scoped visibility and management.",
+  },
+  users: {
+    title: "Users",
+    subtitle: "Gateway user accounts and role assignments.",
   },
   diagnostics: {
     title: "System Info",
@@ -1128,6 +1140,7 @@ export default function App() {
   const [agentAppToolGroup, setAgentAppToolGroup] = useState("");
   const [agentAppPromptGroup, setAgentAppPromptGroup] = useState("");
   const [agentAppSkillSets, setAgentAppSkillSets] = useState<string[]>([]);
+  const [agentAppTeamIds, setAgentAppTeamIds] = useState<number[]>([]);
   const [agentAppLegacyConfigInvalid, setAgentAppLegacyConfigInvalid] = useState(false);
   const [agentAppCreateError, setAgentAppCreateError] = useState("");
   const [agentAppSecretReveal, setAgentAppSecretReveal] = useState<{ title: string; secret: string } | null>(
@@ -2565,6 +2578,7 @@ export default function App() {
     setAgentAppToolGroup("");
     setAgentAppPromptGroup("");
     setAgentAppSkillSets([]);
+    setAgentAppTeamIds([]);
     setAgentAppLegacyConfigInvalid(false);
     setAgentAppCreateError("");
     setAgentAppDialogOpen(true);
@@ -2592,6 +2606,7 @@ export default function App() {
       setAgentAppToolGroup(tg[0] ?? "");
       setAgentAppPromptGroup(pg[0] ?? "");
       setAgentAppSkillSets(ss);
+      setAgentAppTeamIds(app.agent_team_ids ?? []);
     }
     setAgentAppDialogOpen(true);
   }
@@ -2605,6 +2620,7 @@ export default function App() {
     setAgentAppToolGroup("");
     setAgentAppPromptGroup("");
     setAgentAppSkillSets([]);
+    setAgentAppTeamIds([]);
     setAgentAppLegacyConfigInvalid(false);
   }
 
@@ -2635,6 +2651,7 @@ export default function App() {
           tool_group_names: toolGroupNames,
           prompt_group_names: promptGroupNames,
           skill_set_names: skillSetNames,
+          agent_team_ids: agentAppTeamIds,
         };
         await api.patchAgentApp(editingId, patch);
         closeAgentAppModal();
@@ -2648,6 +2665,7 @@ export default function App() {
         tool_group_names: toolGroupNames,
         prompt_group_names: promptGroupNames,
         skill_set_names: skillSetNames,
+        agent_team_ids: agentAppTeamIds,
       };
       const res = await api.createAgentApp(payload);
       setAgentAppSecretReveal({
@@ -4143,6 +4161,7 @@ export default function App() {
           signOutHref={dashboardSignOutHref}
           embedMode={externalAuth}
           signedInEmail={embedSignedInEmail}
+          userRole={normalizeRole(authSession?.role)}
         />
       ) : null}
       <Box
@@ -5327,6 +5346,21 @@ export default function App() {
               </>
             ) : null}
 
+            {section === "teams" ? (
+              <SectionCard title="Teams">
+                <TeamsPage
+                  role={normalizeRole(authSession?.role)}
+                  userId={authSession?.user_id}
+                />
+              </SectionCard>
+            ) : null}
+
+            {section === "users" ? (
+              <SectionCard title="Users">
+                <UsersPage role={normalizeRole(authSession?.role)} />
+              </SectionCard>
+            ) : null}
+
             {section === "observability" ? (
               <ObservabilityPage
                 data={observabilityData}
@@ -6203,6 +6237,11 @@ export default function App() {
                     : "Optional. Attach zero or more skill sets in addition to the tool or prompt group."}
                 </FormHelperText>
               </FormControl>
+              <AgentTeamAssignmentFields
+                value={agentAppTeamIds}
+                onChange={setAgentAppTeamIds}
+                disabled={!canWriteDashboard(normalizeRole(authSession?.role))}
+              />
               {agentAppCreateError ? (
                 <Typography color="error" variant="body2">
                   {agentAppCreateError}

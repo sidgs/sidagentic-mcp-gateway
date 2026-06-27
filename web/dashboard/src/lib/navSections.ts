@@ -1,4 +1,5 @@
 import type { AppSection } from "./types";
+import { canSeeNavSection, normalizeRole, type UserRole } from "./rbac";
 
 export interface NavSectionItem {
   key: AppSection;
@@ -38,11 +39,13 @@ export const NAV_MENU: NavMenuEntry[] = [
     ],
   },
   { kind: "item", key: "agent_apps", label: "Agent Apps" },
+  { kind: "item", key: "teams", label: "Teams" },
   {
     kind: "group",
     id: "system",
     label: "System",
     items: [
+      { key: "users", label: "Users" },
       { key: "observability", label: "Observability" },
       { key: "lineage", label: "Lineage" },
       { key: "diagnostics", label: "System Info" },
@@ -117,4 +120,22 @@ export function filterNavMenu(menu: NavMenuEntry[], excludeHome: boolean): NavMe
     return menu;
   }
   return menu.filter((entry) => entry.kind !== "item" || entry.key !== "home");
+}
+
+export function filterNavMenuByRole(menu: NavMenuEntry[], role?: UserRole): NavMenuEntry[] {
+  const effectiveRole = normalizeRole(role);
+  const filtered: NavMenuEntry[] = [];
+  for (const entry of menu) {
+    if (entry.kind === "item") {
+      if (canSeeNavSection(entry.key, effectiveRole)) {
+        filtered.push(entry);
+      }
+      continue;
+    }
+    const items = entry.items.filter((item) => canSeeNavSection(item.key, effectiveRole));
+    if (items.length > 0) {
+      filtered.push({ ...entry, items });
+    }
+  }
+  return filtered;
 }

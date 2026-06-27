@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 
 	"sami.io/mcpgateway/internal"
 	"sami.io/mcpgateway/internal/model"
@@ -23,7 +24,11 @@ func NewUserService(db *gorm.DB) *UserService {
 	return &UserService{db: db}
 }
 
-// CreateAdminUser creates an admin user in the SAMI MCP Gateway system.
+func (u *UserService) dbTenant(ctx context.Context) *gorm.DB {
+	return u.db.WithContext(ctx).Where("tenant_id = ?", tenant.MustFromContext(ctx))
+}
+
+// CreateAdminUser creates an administrator user in the SAMI MCP Gateway system.
 func (u *UserService) CreateAdminUser(ctx context.Context) (*model.User, error) {
 	tid := tenant.MustFromContext(ctx)
 	token, err := internal.GenerateAccessToken()
@@ -33,7 +38,7 @@ func (u *UserService) CreateAdminUser(ctx context.Context) (*model.User, error) 
 	user := model.User{
 		TenantID:    tid,
 		Username:    "admin",
-		Role:        types.UserRoleAdmin,
+		Role:        types.UserRoleAdministrator,
 		AccessToken: token,
 	}
 	if err := u.db.WithContext(ctx).Create(&user).Error; err != nil {
@@ -48,10 +53,10 @@ func (u *UserService) GetBootstrapAdminUser(ctx context.Context) (*model.User, e
 	tid := tenant.MustFromContext(ctx)
 	var user model.User
 	err := u.db.WithContext(ctx).Where(
-		"tenant_id = ? AND username = ? AND role = ?",
+		"tenant_id = ? AND username = ? AND role IN ?",
 		tid,
 		"admin",
-		types.UserRoleAdmin,
+		[]types.UserRole{types.UserRoleAdministrator, types.UserRoleAdmin},
 	).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -63,11 +68,9 @@ func (u *UserService) GetBootstrapAdminUser(ctx context.Context) (*model.User, e
 }
 
 // GetUserByAccessToken returns a user associated with the provided access token.
-// If no user is found, an error is returned.
 func (u *UserService) GetUserByAccessToken(ctx context.Context, token string) (*model.User, error) {
-	tid := tenant.MustFromContext(ctx)
 	var user model.User
-	if err := u.db.WithContext(ctx).Where("tenant_id = ? AND access_token = ?", tid, token).First(&user).Error; err != nil {
+	if err := u.dbTenant(ctx).Where("access_token = ?", token).First(&user).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("user not found: %w", apierrors.ErrNotFound)
 		}
@@ -76,24 +79,145 @@ func (u *UserService) GetUserByAccessToken(ctx context.Context, token string) (*
 	return &user, nil
 }
 
-// CreateUser creates a new user with the specified username.
-// This method currently only supports creating a standard user, ie, user with the "user" role.
+func (u *UserService) GetByID(ctx context.Context, id uint) (*model.User, error) {
+	var user model.User
+	if err := u.dbTenant(ctx).Where("id = ?", id).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("user not found: %w", apierrors.ErrNotFound)
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (u *UserService) GetByOIDCSub(ctx context.Context, sub string) (*model.User, error) {
+	sub = strings.TrimSpace(sub)
+	if sub == "" {
+		return nil, nil
+	}
+	var user model.User
+	err := u.dbTenant(ctx).Where("oidc_sub = ?", sub).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+func (u *UserService) GetByEmail(ctx context.Context, email string) (*model.User, error) {
+	email = strings.TrimSpace(strings.ToLower(email))
+	if email == "" {
+		return nil, nil
+	}
+	var user model.User
+	err := u.dbTenant(ctx).Where("LOWER(email) = ?", email).First(&user).Error
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// UpsertFromDashboardSession finds or creates a dashboard user for the OIDC/JWT session.
+func (u *UserService) UpsertFromDashboardSession(ctx context.Context, sub, email string, bootstrapAdmin bool) (*model.User, error) {
+	sub = strings.TrimSpace(sub)
+	email = strings.TrimSpace(email)
+	if sub == "" && email == "" {
+		return nil, fmt.Errorf("session identity required: %w", apierrors.ErrInvalidInput)
+	}
+	if existing, err := u.GetByOIDCSub(ctx, sub); err != nil {
+		return nil, err
+	} else if existing != nil {
+		return u.maybeUpgradeBootstrapAdmin(ctx, existing, bootstrapAdmin)
+	}
+	if email != "" {
+		if existing, err := u.GetByEmail(ctx, email); err != nil {
+			return nil, err
+		} else if existing != nil {
+			if sub != "" && existing.OIDCSub == "" {
+				existing.OIDCSub = sub
+				if err := u.db.WithContext(ctx).Save(existing).Error; err != nil {
+					return nil, err
+				}
+			}
+			return u.maybeUpgradeBootstrapAdmin(ctx, existing, bootstrapAdmin)
+		}
+	}
+	token, err := internal.GenerateAccessToken()
+	if err != nil {
+		return nil, err
+	}
+	username := dashboardUsername(sub, email)
+	role := types.UserRoleUser
+	if bootstrapAdmin {
+		role = types.UserRoleAdministrator
+	}
+	user := model.User{
+		TenantID:    tenant.MustFromContext(ctx),
+		Username:    username,
+		Role:        role,
+		AccessToken: token,
+		OIDCSub:     sub,
+	}
+	if email != "" {
+		user.Email = email
+	}
+	if err := u.db.WithContext(ctx).Create(&user).Error; err != nil {
+		return nil, fmt.Errorf("provision dashboard user: %w", err)
+	}
+	return &user, nil
+}
+
+func (u *UserService) maybeUpgradeBootstrapAdmin(ctx context.Context, user *model.User, bootstrapAdmin bool) (*model.User, error) {
+	if !bootstrapAdmin || user.EffectiveRole() == types.UserRoleAdministrator {
+		return user, nil
+	}
+	user.Role = types.UserRoleAdministrator
+	if err := u.db.WithContext(ctx).Save(user).Error; err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+func dashboardUsername(sub, email string) string {
+	if email != "" {
+		at := strings.Index(email, "@")
+		if at > 0 {
+			return strings.ToLower(email[:at])
+		}
+		return strings.ToLower(email)
+	}
+	if len(sub) > 64 {
+		return "user-" + sub[:32]
+	}
+	return "user-" + sub
+}
+
+// CreateUser creates a new user with the specified username and optional role.
 func (u *UserService) CreateUser(ctx context.Context, input *model.User) (*model.User, error) {
 	tid := tenant.MustFromContext(ctx)
+	role := types.NormalizeUserRole(input.Role)
+	if role == types.UserRoleUser && input.Role == "" {
+		role = types.UserRoleUser
+	}
 	user := model.User{
 		TenantID: tid,
 		Username: input.Username,
-		Role:     types.UserRoleUser,
+		Role:     role,
+		Email:    strings.TrimSpace(input.Email),
+		OIDCSub:  strings.TrimSpace(input.OIDCSub),
 	}
 	if input.AccessToken == "" {
-		// no custom access token provided, generate a new one
 		token, err := internal.GenerateAccessToken()
 		if err != nil {
 			return nil, err
 		}
 		user.AccessToken = token
 	} else {
-		// validate the user-provided custom access token
 		if err := internal.ValidateAccessToken(input.AccessToken); err != nil {
 			return nil, fmt.Errorf("invalid access token: %v: %w", err, apierrors.ErrInvalidInput)
 		}
@@ -105,30 +229,36 @@ func (u *UserService) CreateUser(ctx context.Context, input *model.User) (*model
 	return &user, nil
 }
 
-// UpdateUser updates an existing user's information based on the provided input.
-// Currently it only supports updating the user's access token.
+func (u *UserService) UpdateRole(ctx context.Context, userID uint, role types.UserRole) (*model.User, error) {
+	user, err := u.GetByID(ctx, userID)
+	if err != nil {
+		return nil, err
+	}
+	user.Role = types.NormalizeUserRole(role)
+	if err := u.db.WithContext(ctx).Save(user).Error; err != nil {
+		return nil, err
+	}
+	return user, nil
+}
+
+// UpdateUser updates an existing user's access token.
 func (u *UserService) UpdateUser(ctx context.Context, input *model.User) (*model.User, error) {
-	tid := tenant.MustFromContext(ctx)
 	var user model.User
-	err := u.db.WithContext(ctx).Where("tenant_id = ? AND username = ?", tid, input.Username).First(&user).Error
+	err := u.dbTenant(ctx).Where("username = ?", input.Username).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("user with username %s not found: %w", input.Username, apierrors.ErrNotFound)
 		}
 		return nil, fmt.Errorf("failed to find user: %w", err)
 	}
-
 	if input.AccessToken == "" {
 		return nil, fmt.Errorf("access token cannot be empty: %w", apierrors.ErrInvalidInput)
 	}
-	// validate the user-provided custom access token
 	if err := internal.ValidateAccessToken(input.AccessToken); err != nil {
 		return nil, fmt.Errorf("invalid access token: %v: %w", err, apierrors.ErrInvalidInput)
 	}
 	user.AccessToken = input.AccessToken
-
-	err = u.db.WithContext(ctx).Save(&user).Error
-	if err != nil {
+	if err := u.db.WithContext(ctx).Save(&user).Error; err != nil {
 		return nil, fmt.Errorf("failed to update user: %w", err)
 	}
 	return &user, nil
@@ -136,34 +266,25 @@ func (u *UserService) UpdateUser(ctx context.Context, input *model.User) (*model
 
 // ListUsers retrieves all users from the database.
 func (u *UserService) ListUsers(ctx context.Context) ([]model.User, error) {
-	tid := tenant.MustFromContext(ctx)
 	var users []model.User
-	if err := u.db.WithContext(ctx).Where("tenant_id = ?", tid).Find(&users).Error; err != nil {
+	if err := u.dbTenant(ctx).Order("username ASC").Find(&users).Error; err != nil {
 		return nil, fmt.Errorf("failed to list users: %w", err)
 	}
 	return users, nil
 }
 
 // DeleteUser removes a user with the specified username from the database.
-// If a user's role is admin, the deletion will be rejected.
 func (u *UserService) DeleteUser(ctx context.Context, username string) error {
-	tid := tenant.MustFromContext(ctx)
 	var user model.User
-	err := u.db.WithContext(ctx).Where("tenant_id = ? AND username = ?", tid, username).First(&user).Error
+	err := u.dbTenant(ctx).Where("username = ?", username).First(&user).Error
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fmt.Errorf("user with username %s not found: %w", username, apierrors.ErrNotFound)
 		}
 		return fmt.Errorf("failed to find user: %w", err)
 	}
-
-	if user.Role == types.UserRoleAdmin {
-		return fmt.Errorf("cannot delete an admin user: %w", apierrors.ErrInvalidInput)
+	if user.EffectiveRole() == types.UserRoleAdministrator {
+		return fmt.Errorf("cannot delete an administrator user: %w", apierrors.ErrInvalidInput)
 	}
-
-	err = u.db.WithContext(ctx).Unscoped().Where("tenant_id = ? AND username = ?", tid, username).Delete(&model.User{}).Error
-	if err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
-	}
-	return nil
+	return u.dbTenant(ctx).Unscoped().Where("username = ?", username).Delete(&model.User{}).Error
 }

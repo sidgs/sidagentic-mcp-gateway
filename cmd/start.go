@@ -32,6 +32,7 @@ import (
 	"sami.io/mcpgateway/internal/service/promptgroup"
 	"sami.io/mcpgateway/internal/service/skill"
 	"sami.io/mcpgateway/internal/service/skillset"
+	"sami.io/mcpgateway/internal/service/team"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/service/usage"
 	"sami.io/mcpgateway/internal/service/user"
@@ -717,6 +718,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 
 	configService := config.NewServerConfigService(dbConn)
 	userService := user.NewUserService(dbConn)
+	teamService := team.NewService(dbConn)
 	dashboardService := dashboard.NewService(dbConn, otelProviders.IsEnabled())
 
 	toolGroupService, err := toolgroup.NewToolGroupService(dbConn, mcpService)
@@ -778,6 +780,7 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		GlobalMCPAPIKey:   globalMCPAPIKey,
 		ConfigService:        configService,
 		UserService:          userService,
+		TeamService:          teamService,
 		ToolGroupService:      toolGroupService,
 		PromptGroupService: promptGroupService,
 		SkillService:       skillService,

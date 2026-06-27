@@ -300,7 +300,7 @@ func SetupAdminTest(t *testing.T) (*TestDBSetup, *model.User) {
 	// Create a basic test admin user
 	testAdmin := &model.User{
 		Username:    "testadmin",
-		Role:        types.UserRoleAdmin,
+		Role:        types.UserRoleAdministrator,
 		AccessToken: "test-admin-token-456",
 	}
 

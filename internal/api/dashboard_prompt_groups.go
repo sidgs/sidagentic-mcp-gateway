@@ -50,6 +50,7 @@ type dashboardPromptGroupsResponse struct {
 
 func (s *Server) dashboardPromptGroupsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		groups, err := s.promptGroupService.ListPromptGroups(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
@@ -60,6 +61,14 @@ func (s *Server) dashboardPromptGroupsHandler() gin.HandlerFunc {
 			PromptGroups: make([]dashboardPromptGroup, 0, len(groups)),
 		}
 		for _, group := range groups {
+			ok, err := s.canSeeCatalog(c, p, types.TeamResourcePromptGroup, group.Name)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if !ok {
+				continue
+			}
 			item, err := s.buildDashboardPromptGroup(c, group)
 			if err != nil {
 				handleServiceError(c, err)
@@ -103,6 +112,9 @@ func (s *Server) dashboardGetPromptGroupHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardCreatePromptGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		var input dashboardPromptGroupCreateRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -137,6 +149,9 @@ func (s *Server) dashboardCreatePromptGroupHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardUpdatePromptGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		name := c.Param("name")
 		if name == "" {
 			c.JSON(http.StatusBadRequest, gin.H{"error": "group name is required"})
@@ -188,6 +203,9 @@ func (s *Server) dashboardUpdatePromptGroupHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardDeletePromptGroupHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		if err := s.promptGroupService.DeletePromptGroup(c.Request.Context(), c.Param("name")); err != nil {
 			handleServiceError(c, err)
 			return

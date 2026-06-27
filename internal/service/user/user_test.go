@@ -64,7 +64,7 @@ func TestCreateAdminUser(t *testing.T) {
 	testhelpers.AssertNotNil(t, user)
 	// Verify admin user properties
 	testhelpers.AssertEqual(t, "admin", user.Username)
-	testhelpers.AssertEqual(t, types.UserRoleAdmin, user.Role)
+	testhelpers.AssertEqual(t, types.UserRoleAdministrator, user.Role)
 	if user.AccessToken == "" {
 		t.Error("Expected access token to be generated")
 	}

@@ -9,6 +9,21 @@ import (
 	"sami.io/mcpgateway/pkg/types"
 )
 
+func (s *Server) enrichAuthStatus(c *gin.Context, resp types.DashboardAuthStatusResponse) types.DashboardAuthStatusResponse {
+	if !resp.Authenticated || s.userService == nil {
+		return resp
+	}
+	principal, err := s.buildDashboardPrincipal(c)
+	if err != nil || principal == nil {
+		return resp
+	}
+	me := s.principalToMeResponse(principal)
+	resp.Role = me.Role
+	resp.UserID = me.UserID
+	resp.Teams = me.Teams
+	return resp
+}
+
 func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		loginPath := OIDCUIRootRelativePath(s.httpPathPrefix, "login")
@@ -17,12 +32,12 @@ func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 		if !s.oidcConfigured() {
 			if s.platformJWTConfigured() {
 				if sess, ok := s.validPlatformBearerFromRequest(c); ok {
-					c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+					c.JSON(http.StatusOK, s.enrichAuthStatus(c, types.DashboardAuthStatusResponse{
 						Authenticated: true,
 						OIDCEnabled:   false,
 						Email:         sess.Email,
 						Sub:           sess.Sub,
-					})
+					}))
 					return
 				}
 				c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
@@ -31,21 +46,21 @@ func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 				})
 				return
 			}
-			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+			c.JSON(http.StatusOK, s.enrichAuthStatus(c, types.DashboardAuthStatusResponse{
 				Authenticated: true,
 				OIDCEnabled:   false,
-			})
+			}))
 			return
 		}
 
 		if sess, ok := s.validDashboardUserFromRequest(c); ok {
-			c.JSON(http.StatusOK, types.DashboardAuthStatusResponse{
+			c.JSON(http.StatusOK, s.enrichAuthStatus(c, types.DashboardAuthStatusResponse{
 				Authenticated: true,
 				OIDCEnabled:   true,
 				LogoutPath:    logoutPath,
 				Email:         sess.Email,
 				Sub:           sess.Sub,
-			})
+			}))
 			return
 		}
 
@@ -75,50 +90,107 @@ func (s *Server) dashboardOverviewHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardServersHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		resp, err := s.dashboardService.Servers()
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
+		filtered := make([]types.DashboardServer, 0, len(resp.Servers))
+		for _, srv := range resp.Servers {
+			ok, err := s.canSeeCatalog(c, p, types.TeamResourceServer, srv.Name)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if ok {
+				filtered = append(filtered, srv)
+			}
+		}
+		resp.Servers = filtered
 		c.JSON(http.StatusOK, resp)
 	}
 }
 
 func (s *Server) dashboardToolsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		resp, err := s.dashboardService.Tools()
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
+		filtered := make([]types.DashboardTool, 0, len(resp.Tools))
+		for _, tool := range resp.Tools {
+			ok, err := s.inheritServerTeamVisibility(c, p, tool.Server, types.TeamResourceServer)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if ok {
+				filtered = append(filtered, tool)
+			}
+		}
+		resp.Tools = filtered
 		c.JSON(http.StatusOK, resp)
 	}
 }
 
 func (s *Server) dashboardPromptsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		resp, err := s.dashboardService.Prompts()
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
+		filtered := make([]types.DashboardPrompt, 0, len(resp.Prompts))
+		for _, prompt := range resp.Prompts {
+			ok, err := s.inheritServerTeamVisibility(c, p, prompt.Server, types.TeamResourceServer)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if ok {
+				filtered = append(filtered, prompt)
+			}
+		}
+		resp.Prompts = filtered
 		c.JSON(http.StatusOK, resp)
 	}
 }
 
 func (s *Server) dashboardResourcesHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		resp, err := s.dashboardService.Resources()
 		if err != nil {
 			handleServiceError(c, err)
 			return
 		}
+		filtered := make([]types.DashboardResource, 0, len(resp.Resources))
+		for _, resource := range resp.Resources {
+			ok, err := s.inheritServerTeamVisibility(c, p, resource.Server, types.TeamResourceServer)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if ok {
+				filtered = append(filtered, resource)
+			}
+		}
+		resp.Resources = filtered
 		c.JSON(http.StatusOK, resp)
 	}
 }
 
 func (s *Server) dashboardDiagnosticsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
+		if !p.CanAccessSystemSection() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 		mode := c.MustGet("mode").(model.ServerMode)
 		resp, err := s.dashboardService.Diagnostics(mode, s.publicTenantMCPRoot(c))
 		if err != nil {
@@ -131,6 +203,11 @@ func (s *Server) dashboardDiagnosticsHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardObservabilityHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
+		if !p.CanAccessSystemSection() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 		limit := 0
 		if raw := c.Query("limit"); raw != "" {
 			if _, err := fmt.Sscanf(raw, "%d", &limit); err != nil {
@@ -154,6 +231,11 @@ func (s *Server) dashboardObservabilityHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardLineageHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
+		if !p.CanAccessSystemSection() {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 		resp, err := s.dashboardService.Lineage(c.Query("range"))
 		if err != nil {
 			handleServiceError(c, err)

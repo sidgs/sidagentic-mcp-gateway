@@ -36,6 +36,7 @@ type dashboardSkillSetSummary struct {
 
 func (s *Server) dashboardSkillSetsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		sets, err := s.skillSetService.ListSkillSets(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
@@ -43,6 +44,14 @@ func (s *Server) dashboardSkillSetsHandler() gin.HandlerFunc {
 		}
 		out := make([]dashboardSkillSetSummary, 0, len(sets))
 		for _, set := range sets {
+			ok, err := s.canSeeCatalog(c, p, types.TeamResourceSkillSet, set.Name)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if !ok {
+				continue
+			}
 			detail, err := s.skillSetService.GetSkillSetDetail(c.Request.Context(), set.Name)
 			if err != nil {
 				handleServiceError(c, err)

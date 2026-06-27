@@ -34,6 +34,7 @@ import (
 	"sami.io/mcpgateway/internal/service/dashboard"
 	mcpSvc "sami.io/mcpgateway/internal/service/mcp"
 	"sami.io/mcpgateway/internal/service/promptgroup"
+	"sami.io/mcpgateway/internal/service/team"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	userSvc "sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/internal/telemetry"
@@ -167,6 +168,7 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 		ConfigService:      cfgSvc,
 		DashboardService:   dashboard.NewService(db, false),
 		UserService:        usrSvc,
+		TeamService:        team.NewService(db),
 		ToolGroupService:   tgSvc,
 		PromptGroupService: pgSvc,
 		Metrics:            telemetry.NewNoopCustomMetrics(),

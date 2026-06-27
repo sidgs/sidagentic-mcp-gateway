@@ -14,6 +14,7 @@ type dashboardSkillsResponse struct {
 
 func (s *Server) dashboardSkillsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		p := mustDashboardPrincipal(c)
 		items, err := s.skillService.ListSkillSummaries(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
@@ -22,7 +23,18 @@ func (s *Server) dashboardSkillsHandler() gin.HandlerFunc {
 		if items == nil {
 			items = []types.SkillVersionSummary{}
 		}
-		c.JSON(http.StatusOK, dashboardSkillsResponse{Skills: items})
+		filtered := make([]types.SkillVersionSummary, 0, len(items))
+		for _, item := range items {
+			ok, err := s.canSeeCatalog(c, p, types.TeamResourceSkill, item.Name)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			if ok {
+				filtered = append(filtered, item)
+			}
+		}
+		c.JSON(http.StatusOK, dashboardSkillsResponse{Skills: filtered})
 	}
 }
 

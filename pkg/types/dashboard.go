@@ -133,12 +133,15 @@ type DashboardResourcesResponse struct {
 
 // DashboardAuthStatusResponse is returned by GET /dashboard/auth-status (callable without OIDC cookie).
 type DashboardAuthStatusResponse struct {
-	Authenticated bool   `json:"authenticated"`
-	OIDCEnabled   bool   `json:"oidc_enabled"`
-	LoginPath     string `json:"login_path,omitempty"`
-	LogoutPath    string `json:"logout_path,omitempty"`
-	Email         string `json:"email,omitempty"`
-	Sub           string `json:"sub,omitempty"`
+	Authenticated bool                      `json:"authenticated"`
+	OIDCEnabled   bool                      `json:"oidc_enabled"`
+	LoginPath     string                    `json:"login_path,omitempty"`
+	LogoutPath    string                    `json:"logout_path,omitempty"`
+	Email         string                    `json:"email,omitempty"`
+	Sub           string                    `json:"sub,omitempty"`
+	Role          string                    `json:"role,omitempty"`
+	UserID        uint                      `json:"user_id,omitempty"`
+	Teams         []DashboardTeamMembership `json:"teams,omitempty"`
 }
 
 type DashboardDiagnosticsResponse struct {

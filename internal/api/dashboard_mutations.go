@@ -33,6 +33,9 @@ type dashboardOAuthSessionResponse struct {
 
 func (s *Server) dashboardRegisterServerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		var input types.RegisterServerInput
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -80,7 +83,21 @@ func (s *Server) dashboardRegisterServerHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardDeleteServerHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		if err := s.mcpService.DeregisterMcpServer(c.Request.Context(), c.Param("name")); err != nil {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
+		p := mustDashboardPrincipal(c)
+		name := c.Param("name")
+		ok, err := s.canManageCatalog(c, p, types.TeamResourceServer, name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
+		if err := s.mcpService.DeregisterMcpServer(c.Request.Context(), name); err != nil {
 			handleServiceError(c, err)
 			return
 		}
@@ -90,6 +107,20 @@ func (s *Server) dashboardDeleteServerHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardSetServerEnabledHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
+		p := mustDashboardPrincipal(c)
+		name := c.Param("name")
+		ok, err := s.canManageCatalog(c, p, types.TeamResourceServer, name)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		if !ok {
+			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
+			return
+		}
 		var input dashboardToggleRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -107,6 +138,9 @@ func (s *Server) dashboardSetServerEnabledHandler() gin.HandlerFunc {
 
 func (s *Server) dashboardSetToolEnabledHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		if s.forbidUnlessProviderWrite(c) {
+			return
+		}
 		var input dashboardToggleRequest
 		if err := c.ShouldBindJSON(&input); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})

@@ -28,6 +28,8 @@ See [Access control](/governance/access-control) for the main workflow.
 
 ## Users
 
+Dashboard users authenticate via OIDC or platform JWT. Roles and teams are stored in the gateway database and enforced on `/dashboard/*` routes. See [RBAC roles and teams](/governance/rbac-and-teams) for the full model.
+
 Users are human accounts for operators who need authenticated CLI or API access.
 
 Compared with admins, a standard user has a narrower permission set. They can inspect and use Mcpgateway, but they do not get the same write capabilities as an admin.

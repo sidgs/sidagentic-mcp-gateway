@@ -38,7 +38,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	}
 
 	cmd.Println("You are now logged in as " + user.Username)
-	if user.Role == string(types.UserRoleAdmin) {
+	if user.Role == string(types.UserRoleAdministrator) || user.Role == string(types.UserRoleAdmin) {
 		cmd.Println("You are an administrator of SAMI MCP Gateway")
 	}
 

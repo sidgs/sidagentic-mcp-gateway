@@ -7,11 +7,57 @@ export type AppSection =
   | "skills"
   | "skill_sets"
   | "agent_apps"
+  | "teams"
+  | "users"
   | "prompts"
   | "resources"
   | "diagnostics"
   | "observability"
   | "lineage";
+
+export type TeamType = "provider" | "user" | "agent";
+
+export interface DashboardTeamMembership {
+  id: number;
+  name: string;
+  type: TeamType;
+  member_role: string;
+}
+
+export interface DashboardTeam {
+  id: number;
+  name: string;
+  type: TeamType;
+  created_by_user_id: number;
+}
+
+export interface DashboardTeamMember {
+  user_id: number;
+  username?: string;
+  email?: string;
+  role: string;
+}
+
+export interface DashboardTeamDetail {
+  team: DashboardTeam;
+  members: DashboardTeamMember[];
+}
+
+export interface DashboardUser {
+  id?: number;
+  username: string;
+  role: string;
+  email?: string;
+}
+
+export interface DashboardMeResponse {
+  authenticated: boolean;
+  email?: string;
+  sub?: string;
+  role: string;
+  user_id: number;
+  teams: DashboardTeamMembership[];
+}
 
 export interface DashboardEmptyState {
   title: string;
@@ -49,6 +95,9 @@ export interface DashboardAuthStatusResponse {
   logout_path?: string;
   email?: string;
   sub?: string;
+  role?: string;
+  user_id?: number;
+  teams?: DashboardTeamMembership[];
 }
 
 export type ServerKind = "mcp_protocol" | "rest_openapi" | "rest_endpoint";
@@ -413,6 +462,7 @@ export interface DashboardAgentApp {
   tool_group_names: string[];
   prompt_group_names: string[];
   skill_set_names: string[];
+  agent_team_ids?: number[];
   oauth_token_url: string;
   tool_group_endpoints: DashboardAgentAppGroupEndpoints[];
   prompt_group_endpoints: DashboardAgentAppGroupEndpoints[];
@@ -524,6 +574,7 @@ export interface DashboardCreateAgentAppInput {
   tool_group_names?: string[];
   prompt_group_names?: string[];
   skill_set_names?: string[];
+  agent_team_ids?: number[];
 }
 
 /** Body for PATCH /dashboard/agent-apps/:id (all fields optional). */
@@ -535,6 +586,7 @@ export interface DashboardPatchAgentAppInput {
   tool_group_names?: string[];
   prompt_group_names?: string[];
   skill_set_names?: string[];
+  agent_team_ids?: number[];
 }
 
 export interface DashboardCreateAgentAppResponse {

@@ -22,6 +22,7 @@ import (
 	"sami.io/mcpgateway/internal/service/promptgroup"
 	"sami.io/mcpgateway/internal/service/skill"
 	"sami.io/mcpgateway/internal/service/skillset"
+	"sami.io/mcpgateway/internal/service/team"
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/internal/telemetry"
@@ -55,6 +56,7 @@ type ServerOptions struct {
 	// GlobalMCPAPIKey is required for global MCP (/mcp, /sse, /message) and /api/v0 REST access in all modes.
 	GlobalMCPAPIKey string
 	UserService      *user.UserService
+	TeamService      *team.Service
 	ToolGroupService  *toolgroup.ToolGroupService
 	PromptGroupService *promptgroup.PromptGroupService
 	SkillService       *skill.Service
@@ -113,6 +115,7 @@ type Server struct {
 
 	globalMcpAPIKey string
 	userService      *user.UserService
+	teamService      *team.Service
 	toolGroupService  *toolgroup.ToolGroupService
 	promptGroupService *promptgroup.PromptGroupService
 	skillService       *skill.Service
@@ -244,6 +247,7 @@ func NewServer(opts *ServerOptions) (*Server, error) {
 		globalMcpAPIKey: strings.TrimSpace(opts.GlobalMCPAPIKey),
 		configService:   opts.ConfigService,
 		userService:           opts.UserService,
+		teamService:           opts.TeamService,
 		toolGroupService:      opts.ToolGroupService,
 		promptGroupService:    opts.PromptGroupService,
 		skillService:          opts.SkillService,
@@ -763,8 +767,11 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			requireDashboardModeOrOIDC,
 			s.dashboardEmbedCORS(),
 			requireOIDCSessionIfEnabled,
+			s.requireDashboardPrincipal(),
+			s.rejectAuditorWrites(),
 		)
 		{
+			dashboardAPI.GET("/me", s.dashboardMeHandler())
 			dashboardAPI.GET("/overview", s.dashboardOverviewHandler())
 			dashboardAPI.GET("/servers", s.dashboardServersHandler())
 			dashboardAPI.POST("/servers", s.dashboardRegisterServerHandler())
@@ -816,6 +823,19 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 			dashboardAPI.GET("/diagnostics", s.dashboardDiagnosticsHandler())
 			dashboardAPI.GET("/observability", s.dashboardObservabilityHandler())
 			dashboardAPI.GET("/lineage", s.dashboardLineageHandler())
+
+			dashboardAPI.GET("/users", s.dashboardListUsersHandler())
+			dashboardAPI.POST("/users", s.dashboardCreateUserHandler())
+			dashboardAPI.PATCH("/users/:id/role", s.dashboardPatchUserRoleHandler())
+			dashboardAPI.DELETE("/users/:id", s.dashboardDeleteUserHandler())
+
+			dashboardAPI.GET("/teams", s.dashboardListTeamsHandler())
+			dashboardAPI.POST("/teams", s.dashboardCreateTeamHandler())
+			dashboardAPI.GET("/teams/:id", s.dashboardGetTeamHandler())
+			dashboardAPI.DELETE("/teams/:id", s.dashboardDeleteTeamHandler())
+			dashboardAPI.POST("/teams/:id/members", s.dashboardAddTeamMemberHandler())
+			dashboardAPI.DELETE("/teams/:id/members/:userId", s.dashboardRemoveTeamMemberHandler())
+			dashboardAPI.PUT("/teams/:id/assignments", s.dashboardSetTeamAssignmentsHandler())
 		}
 	}
 
