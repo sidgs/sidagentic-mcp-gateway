@@ -368,7 +368,7 @@ export function NavSidebar({
                   component="span"
                   sx={{ fontWeight: 700, fontSize: 16, whiteSpace: "nowrap", overflow: "hidden" }}
                 >
-                  SAMI MCPHub
+                  SAMI AI CapStack
                 </Typography>
               </Box>
               <Tooltip title="Collapse menu">

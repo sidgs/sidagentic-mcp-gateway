@@ -7,6 +7,7 @@ import DescriptionOutlinedIcon from "@mui/icons-material/DescriptionOutlined";
 import ShieldOutlinedIcon from "@mui/icons-material/ShieldOutlined";
 import SpeedOutlinedIcon from "@mui/icons-material/SpeedOutlined";
 import AppsOutlinedIcon from "@mui/icons-material/AppsOutlined";
+import AutoStoriesOutlinedIcon from "@mui/icons-material/AutoStoriesOutlined";
 import Box from "@mui/material/Box";
 import Button from "@mui/material/Button";
 import Card from "@mui/material/Card";
@@ -35,7 +36,12 @@ const benefitItems: Array<{
   {
     icon: HandymanOutlinedIcon,
     title: "Unified discovery",
-    body: "Tools, prompts, and resources from every server appear in one dashboard. Toggle exposure per server, tool, or prompt without redeploying clients.",
+    body: "Tools, prompts, resources, and Agent Skills from every server appear in one dashboard. Toggle exposure per server, tool, prompt, or skill without redeploying clients.",
+  },
+  {
+    icon: AutoStoriesOutlinedIcon,
+    title: "Agent Skills catalog",
+    body: "Publish versioned Agent Skills with lifecycle and DLC status. Pin active versions into skill sets and expose them alongside MCP tools from a single governance surface.",
   },
   {
     icon: LayersOutlinedIcon,
@@ -177,7 +183,7 @@ export function HomePage({
           </Box>
           <Stack spacing={2.5} sx={{ maxWidth: 720 }}>
             <Typography variant="overline" sx={{ letterSpacing: "0.12em", opacity: 0.92, fontWeight: 600 }}>
-              Model Context Protocol
+              MCP &amp; Agent Skills
             </Typography>
             <Typography
               component="h1"
@@ -189,7 +195,7 @@ export function HomePage({
                 textShadow: "0 1px 24px rgba(0,0,0,0.2)",
               }}
             >
-              SAMI MCPHub
+              SAMI AI CapStack
             </Typography>
             <Typography
               variant="h6"
@@ -202,8 +208,9 @@ export function HomePage({
                 maxWidth: 640,
               }}
             >
-              Run every MCP server behind one secure, discoverable hub. Register backends once, expose a single MCP surface
-              to your AI clients, and govern tools with the same dashboard your team already uses for operations.
+              Run MCP servers and Agent Skills behind one secure, discoverable capability stack. Register backends once,
+              expose a unified surface to your AI clients, and govern tools and skills from the same dashboard your team
+              uses for operations.
             </Typography>
             <Stack direction={{ xs: "column", sm: "row" }} spacing={1.5} sx={{ pt: 1 }}>
               <Button
@@ -253,6 +260,15 @@ export function HomePage({
               <Button
                 variant="text"
                 size="large"
+                startIcon={<AutoStoriesOutlinedIcon />}
+                onClick={() => onNavigate("skills")}
+                sx={{ color: "common.white", fontWeight: 600, "&:hover": { bgcolor: "rgba(255,255,255,0.1)" } }}
+              >
+                Skills
+              </Button>
+              <Button
+                variant="text"
+                size="large"
                 startIcon={<AppsOutlinedIcon />}
                 onClick={() => onNavigate("agent_apps")}
                 sx={{ color: "common.white", fontWeight: 600, "&:hover": { bgcolor: "rgba(255,255,255,0.1)" } }}
@@ -289,13 +305,14 @@ export function HomePage({
 
       <Container maxWidth="lg" disableGutters sx={{ px: { xs: 0, sm: 0 } }}>
         <Typography variant="h5" component="h2" sx={{ fontWeight: 700, mb: 1 }}>
-          Why use SAMI MCPHub?
+          Why use SAMI AI CapStack?
         </Typography>
         <Typography color="text.secondary" sx={{ mb: 3, maxWidth: 800, lineHeight: 1.6 }}>
-          MCP connects assistants to your systems, but every new server usually means another client config, another set
-          of credentials, and another place to look for tools. A gateway collapses that sprawl: one registration pipeline,
-          one discovery index, and one place to apply policy—whether you are solo on a laptop or running shared
-          infrastructure for a team.
+          MCP connects assistants to your systems, and Agent Skills package reusable know-how for those agents—but each
+          new server or skill usually means another client config, another set of credentials, and another place to look
+          for capabilities. CapStack collapses that sprawl: one registration pipeline, one discovery index for tools and
+          skills, and one place to apply policy—whether you are solo on a laptop or running shared infrastructure for a
+          team.
         </Typography>
 
         <Box
