@@ -36,12 +36,7 @@ func (s *Server) dashboardListTeamsHandler() gin.HandlerFunc {
 			if !s.canSeeTeam(p, &team) {
 				continue
 			}
-			out = append(out, types.TeamPublic{
-				ID:              team.ID,
-				Name:            team.Name,
-				Type:            string(team.Type),
-				CreatedByUserID: team.CreatedByUserID,
-			})
+			out = append(out, teamToPublic(&team))
 		}
 		c.JSON(http.StatusOK, out)
 	}
@@ -98,12 +93,7 @@ func (s *Server) dashboardCreateTeamHandler() gin.HandlerFunc {
 			handleServiceError(c, err)
 			return
 		}
-		c.JSON(http.StatusCreated, types.TeamPublic{
-			ID:              team.ID,
-			Name:            team.Name,
-			Type:            string(team.Type),
-			CreatedByUserID: team.CreatedByUserID,
-		})
+		c.JSON(http.StatusCreated, teamToPublic(team))
 	}
 }
 
@@ -134,12 +124,7 @@ func (s *Server) dashboardGetTeamHandler() gin.HandlerFunc {
 			return
 		}
 		resp := types.TeamDetailResponse{
-			Team: types.TeamPublic{
-				ID:              team.ID,
-				Name:            team.Name,
-				Type:            string(team.Type),
-				CreatedByUserID: team.CreatedByUserID,
-			},
+			Team:    teamToPublic(team),
 			Members: make([]types.TeamMemberPublic, 0, len(members)),
 		}
 		for _, m := range members {
@@ -300,4 +285,14 @@ func parseTeamID(c *gin.Context) (uint, error) {
 		return 0, err
 	}
 	return uint(id64), nil
+}
+
+func teamToPublic(team *model.Team) types.TeamPublic {
+	return types.TeamPublic{
+		ID:              team.ID,
+		TenantID:        team.TenantID,
+		Name:            team.Name,
+		Type:            string(team.Type),
+		CreatedByUserID: team.CreatedByUserID,
+	}
 }

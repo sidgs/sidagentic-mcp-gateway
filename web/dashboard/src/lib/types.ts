@@ -26,6 +26,7 @@ export interface DashboardTeamMembership {
 
 export interface DashboardTeam {
   id: number;
+  tenant_id: string;
   name: string;
   type: TeamType;
   created_by_user_id: number;

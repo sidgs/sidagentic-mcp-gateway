@@ -155,6 +155,9 @@ func backfillTenantColumns(db *gorm.DB) error {
 		ns.TableName("AgentApp"),
 		ns.TableName("Skill"),
 		ns.TableName("SkillSet"),
+		ns.TableName("Team"),
+		ns.TableName("TeamMember"),
+		ns.TableName("TeamResourceAssignment"),
 		ns.TableName("UpstreamOAuthPendingSession"),
 		ns.TableName("UpstreamOAuthToken"),
 	} {

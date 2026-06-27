@@ -25,10 +25,24 @@ func (s *Service) dbTenant(ctx context.Context) *gorm.DB {
 	return s.db.WithContext(ctx).Where("tenant_id = ?", tenant.MustFromContext(ctx))
 }
 
+func (s *Service) userInTenant(ctx context.Context, userID uint) (*model.User, error) {
+	var user model.User
+	if err := s.dbTenant(ctx).Where("id = ?", userID).First(&user).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("user not found: %w", apierrors.ErrNotFound)
+		}
+		return nil, err
+	}
+	return &user, nil
+}
+
 func (s *Service) CreateTeam(ctx context.Context, name string, teamType types.TeamType, createdByUserID uint) (*model.Team, error) {
 	name = strings.TrimSpace(name)
 	if name == "" {
 		return nil, fmt.Errorf("team name is required: %w", apierrors.ErrInvalidInput)
+	}
+	if _, err := s.userInTenant(ctx, createdByUserID); err != nil {
+		return nil, err
 	}
 	tid := tenant.MustFromContext(ctx)
 	team := model.Team{
@@ -41,7 +55,7 @@ func (s *Service) CreateTeam(ctx context.Context, name string, teamType types.Te
 		return nil, fmt.Errorf("create team: %w", err)
 	}
 	member := model.TeamMember{
-		TenantID: tid,
+		TenantID: team.TenantID,
 		TeamID:   team.ID,
 		UserID:   createdByUserID,
 		Role:     types.TeamMemberRoleOwner,
@@ -90,6 +104,9 @@ func (s *Service) DeleteTeam(ctx context.Context, id uint) error {
 }
 
 func (s *Service) ListMembers(ctx context.Context, teamID uint) ([]model.TeamMember, error) {
+	if _, err := s.GetTeam(ctx, teamID); err != nil {
+		return nil, err
+	}
 	var members []model.TeamMember
 	if err := s.dbTenant(ctx).Where("team_id = ?", teamID).Order("id ASC").Find(&members).Error; err != nil {
 		return nil, err
@@ -98,15 +115,21 @@ func (s *Service) ListMembers(ctx context.Context, teamID uint) ([]model.TeamMem
 }
 
 func (s *Service) AddMember(ctx context.Context, teamID, userID uint, role types.TeamMemberRole) error {
+	team, err := s.GetTeam(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	if _, err := s.userInTenant(ctx, userID); err != nil {
+		return err
+	}
 	if role == types.TeamMemberRoleOwner {
 		return fmt.Errorf("cannot add another owner: %w", apierrors.ErrInvalidInput)
 	}
 	if role != types.TeamMemberRoleManager && role != types.TeamMemberRoleMember {
 		return fmt.Errorf("invalid member role: %w", apierrors.ErrInvalidInput)
 	}
-	tid := tenant.MustFromContext(ctx)
 	member := model.TeamMember{
-		TenantID: tid,
+		TenantID: team.TenantID,
 		TeamID:   teamID,
 		UserID:   userID,
 		Role:     role,
@@ -118,6 +141,9 @@ func (s *Service) AddMember(ctx context.Context, teamID, userID uint, role types
 }
 
 func (s *Service) RemoveMember(ctx context.Context, teamID, userID uint) error {
+	if _, err := s.GetTeam(ctx, teamID); err != nil {
+		return err
+	}
 	var member model.TeamMember
 	if err := s.dbTenant(ctx).Where("team_id = ? AND user_id = ?", teamID, userID).First(&member).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -140,6 +166,13 @@ func (s *Service) ListMembershipsForUser(ctx context.Context, userID uint) ([]mo
 }
 
 func (s *Service) SetAssignments(ctx context.Context, teamID uint, teamType types.TeamType, assignments []types.TeamAssignmentRequest) error {
+	team, err := s.GetTeam(ctx, teamID)
+	if err != nil {
+		return err
+	}
+	if team.Type != teamType {
+		return fmt.Errorf("team type mismatch: %w", apierrors.ErrInvalidInput)
+	}
 	for _, a := range assignments {
 		rt := types.TeamResourceType(strings.TrimSpace(a.ResourceType))
 		if !types.ResourceTypeAllowedForTeamType(teamType, rt) {
@@ -149,14 +182,13 @@ func (s *Service) SetAssignments(ctx context.Context, teamID uint, teamType type
 	if err := s.dbTenant(ctx).Where("team_id = ?", teamID).Delete(&model.TeamResourceAssignment{}).Error; err != nil {
 		return err
 	}
-	tid := tenant.MustFromContext(ctx)
 	for _, a := range assignments {
 		name := strings.TrimSpace(a.ResourceName)
 		if name == "" {
 			continue
 		}
 		row := model.TeamResourceAssignment{
-			TenantID:     tid,
+			TenantID:     team.TenantID,
 			TeamID:       teamID,
 			ResourceType: types.TeamResourceType(strings.TrimSpace(a.ResourceType)),
 			ResourceName: name,
@@ -169,6 +201,9 @@ func (s *Service) SetAssignments(ctx context.Context, teamID uint, teamType type
 }
 
 func (s *Service) ListAssignmentsForTeam(ctx context.Context, teamID uint) ([]model.TeamResourceAssignment, error) {
+	if _, err := s.GetTeam(ctx, teamID); err != nil {
+		return nil, err
+	}
 	var rows []model.TeamResourceAssignment
 	if err := s.dbTenant(ctx).Where("team_id = ?", teamID).Find(&rows).Error; err != nil {
 		return nil, err
@@ -219,11 +254,10 @@ func (s *Service) AssignResourceToTeams(ctx context.Context, resourceType types.
 		Delete(&model.TeamResourceAssignment{}).Error; err != nil {
 		return err
 	}
-	tid := tenant.MustFromContext(ctx)
-	for _, teamID := range teamIDs {
+	for _, t := range teams {
 		row := model.TeamResourceAssignment{
-			TenantID:     tid,
-			TeamID:       teamID,
+			TenantID:     t.TenantID,
+			TeamID:       t.ID,
 			ResourceType: resourceType,
 			ResourceName: resourceName,
 		}
@@ -248,6 +282,7 @@ func teamTypeForResource(resourceType types.TeamResourceType) (types.TeamType, b
 }
 
 func (s *Service) AssignResourceToTeamsOfType(ctx context.Context, resourceType types.TeamResourceType, resourceName string, teamType types.TeamType, teamIDs []uint) error {
+	teamsByID := make(map[uint]model.Team, len(teamIDs))
 	for _, id := range teamIDs {
 		if id == 0 {
 			continue
@@ -262,6 +297,7 @@ func (s *Service) AssignResourceToTeamsOfType(ctx context.Context, resourceType 
 		if !types.ResourceTypeAllowedForTeamType(teamType, resourceType) {
 			return fmt.Errorf("resource not allowed for team type: %w", apierrors.ErrInvalidInput)
 		}
+		teamsByID[id] = *team
 	}
 	if err := s.dbTenant(ctx).
 		Where(`resource_type = ? AND resource_name = ? AND team_id IN (
@@ -273,13 +309,13 @@ func (s *Service) AssignResourceToTeamsOfType(ctx context.Context, resourceType 
 	if len(teamIDs) == 0 {
 		return nil
 	}
-	tid := tenant.MustFromContext(ctx)
 	for _, teamID := range teamIDs {
 		if teamID == 0 {
 			continue
 		}
+		team := teamsByID[teamID]
 		row := model.TeamResourceAssignment{
-			TenantID:     tid,
+			TenantID:     team.TenantID,
 			TeamID:       teamID,
 			ResourceType: resourceType,
 			ResourceName: resourceName,
