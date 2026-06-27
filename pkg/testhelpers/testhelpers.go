@@ -8,17 +8,20 @@ import (
 	"fmt"
 	"testing"
 
-	"github.com/glebarez/sqlite"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
+	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
 
-// CreateTestDB creates a test database using SQLite in-memory database
-func CreateTestDB() (*gorm.DB, error) {
-	return gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
+// CreateTestDB starts Postgres, runs Flyway migrations, and returns a GORM handle.
+func CreateTestDB(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, cleanup := migrations.SetupTestDB(t)
+	t.Cleanup(cleanup)
+	return db
 }
 
 // AssertError asserts that an error occurred
@@ -246,28 +249,12 @@ type TestDBSetup struct {
 	DB *gorm.DB
 }
 
-// SetupTestDB creates a test database with all common models migrated
+// SetupTestDB creates a test database with Flyway migrations applied.
 func SetupTestDB(t *testing.T) *TestDBSetup {
 	t.Helper()
 
-	db, err := CreateTestDB()
-	AssertNoError(t, err)
-
-	// Migrate all common models
-	err = db.AutoMigrate(
-		&model.User{},
-		&model.McpServer{},
-		&model.Tool{},
-		&model.ServerConfig{},
-		&model.ToolGroup{},
-		&model.PromptGroup{},
-		&model.AgentApp{},
-		&model.Prompt{},
-		&model.Resource{},
-		&model.UpstreamOAuthPendingSession{},
-		&model.UpstreamOAuthToken{},
-	)
-	AssertNoError(t, err)
+	db, cleanup := migrations.SetupTestDB(t)
+	t.Cleanup(cleanup)
 
 	return &TestDBSetup{DB: db}
 }

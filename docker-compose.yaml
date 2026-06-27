@@ -1,6 +1,9 @@
 # SAMI MCP Gateway Docker Compose configuration for individual users.
 # Use this compose file if you want to run SAMI MCP Gateway locally for your personal MCP management & Gateway.
 # The sami-mcp-gateway server runs in development mode.
+#
+# Local Postgres + migrations: docker compose --profile enterprise up
+# Remote Postgres (default api service): docker compose up api redis
 services:
   db:
     image: postgres:17
@@ -19,6 +22,21 @@ services:
       timeout: 5s
       retries: 5
     restart: unless-stopped
+    profiles:
+      - enterprise
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile.migrate
+    image: sami-mcp-gateway-migrate:local
+    environment:
+      FLYWAY_URL: jdbc:postgresql://db:5432/sami
+      FLYWAY_USER: sami
+      FLYWAY_PASSWORD: sami
+    depends_on:
+      db:
+        condition: service_healthy
     profiles:
       - enterprise
 
@@ -71,11 +89,49 @@ services:
       # - ${HOME}:/host/home:ro
       # - /tmp:/host/tmp:rw
     depends_on:
-      # db:
-      #   condition: service_healthy
       redis:
         condition: service_started
     restart: always
+
+  api-local:
+    image: sidgs.jfrog.io/sami/sami-mcp-gateway:${SAMI_MCP_GATEWAY_IMAGE_TAG:-latest-stdio}
+    container_name: sami-mcp-gateway-server-local
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    environment:
+      DATABASE_URL: postgres://sami:sami@db:5432/sami
+      SERVER_MODE: ${SERVER_MODE:-enterprise}
+      OTEL_ENABLED: ${OTEL_ENABLED:-true}
+      MCP_SERVER_INIT_REQ_TIMEOUT_SEC: ${MCP_SERVER_INIT_REQ_TIMEOUT_SEC:-10}
+      HTTP_PATH_PREFIX: ${HTTP_PATH_PREFIX:-/api/v1/sami-mcp-gateway}
+      COGNITO_ISSUER_URL: ${COGNITO_ISSUER_URL:-https://cognito-idp.us-east-1.amazonaws.com/us-east-1_D0dfwkRq0}
+      COGNITO_CLIENT_ID: ${COGNITO_CLIENT_ID:-1k5ltdnfpgs208e2j3eltsmqbn}
+      COGNITO_CLIENT_SECRET: ${COGNITO_CLIENT_SECRET:-38qm6oububnuafmsioncaagh2p932kn1bk134rocuc3a2ngctbj}
+      COGNITO_REGION: ${COGNITO_REGION:-us-east-1}
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+      REGISTRY_SYNC_ENABLED: ${REGISTRY_SYNC_ENABLED:-true}
+      OIDC_SESSION_TTL_SECONDS: ${OIDC_SESSION_TTL_SECONDS:-259200}
+      OIDC_SCOPES: ${OIDC_SCOPES:-email openid phone aws.cognito.signin.user.admin}
+      PUBLIC_URL_SCHEME: ${PUBLIC_URL_SCHEME:-}
+      POST_LOGIN_REDIRECT_URL: ${POST_LOGIN_REDIRECT_URL:-/#home}
+      GLOBAL_MCP_API_KEY: ${GLOBAL_MCP_API_KEY:-1234567890}
+      JWT_SECRET: ${JWT_SECRET:-UqERGDws8Dylda1uBEuoVhBzkqmYAu2mD4Tztuf36dM=}
+      JWT_USE_UNSIGNED: ${JWT_USE_UNSIGNED:-false}
+      DASHBOARD_EMBED_ALLOWED_ORIGINS: ${DASHBOARD_EMBED_ALLOWED_ORIGINS:-http://localhost:5173}
+      DEFAULT_TENANT_ID: ${DEFAULT_TENANT_ID:-sid-agentic}
+    ports:
+      - "${HOST_PORT:-8080}:8080"
+    volumes:
+      - .:/host:ro
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_started
+    restart: always
+    profiles:
+      - enterprise
 
 volumes:
   db_data:

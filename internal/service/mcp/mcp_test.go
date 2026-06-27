@@ -30,11 +30,7 @@ func TestNewMCPService(t *testing.T) {
 			var db *gorm.DB
 			if tt.name == "nil proxy server" {
 				// For this test, we need a real DB but nil proxy server
-				var err error
-				db, err = testhelpers.CreateTestDB()
-				testhelpers.AssertNoError(t, err)
-				err = db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.Prompt{}, &model.Resource{})
-				testhelpers.AssertNoError(t, err)
+				db = testhelpers.CreateTestDB(t)
 			} else {
 				db = tt.db
 			}
@@ -109,12 +105,7 @@ func TestMCPServiceInitialization(t *testing.T) {
 }
 
 func TestMCPServiceCallbacks(t *testing.T) {
-	db, err := testhelpers.CreateTestDB()
-	testhelpers.AssertNoError(t, err)
-
-	// Auto-migrate the required models
-	err = db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.Prompt{}, &model.Resource{})
-	testhelpers.AssertNoError(t, err)
+	db := testhelpers.CreateTestDB(t)
 
 	proxyServer := &server.MCPServer{}
 
@@ -144,12 +135,7 @@ func TestMCPServiceCallbacks(t *testing.T) {
 }
 
 func TestMCPServiceConcurrency(t *testing.T) {
-	db, err := testhelpers.CreateTestDB()
-	testhelpers.AssertNoError(t, err)
-
-	// Auto-migrate the required models
-	err = db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.Prompt{}, &model.Resource{})
-	testhelpers.AssertNoError(t, err)
+	db := testhelpers.CreateTestDB(t)
 
 	proxyServer := &server.MCPServer{}
 
@@ -187,12 +173,7 @@ func TestMCPServiceConcurrency(t *testing.T) {
 }
 
 func TestMCPServiceToolInstances(t *testing.T) {
-	db, err := testhelpers.CreateTestDB()
-	testhelpers.AssertNoError(t, err)
-
-	// Auto-migrate the required models
-	err = db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.Prompt{}, &model.Resource{})
-	testhelpers.AssertNoError(t, err)
+	db := testhelpers.CreateTestDB(t)
 
 	proxyServer := &server.MCPServer{}
 
@@ -229,12 +210,7 @@ func TestMCPServiceErrorHandling(t *testing.T) {
 	// This would require mocking the database to simulate connection failures
 	// For now, we'll test the basic error handling in the constructor
 
-	db, err := testhelpers.CreateTestDB()
-	testhelpers.AssertNoError(t, err)
-
-	// Auto-migrate the required models
-	err = db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.Prompt{}, &model.Resource{})
-	testhelpers.AssertNoError(t, err)
+	db := testhelpers.CreateTestDB(t)
 
 	proxyServer := &server.MCPServer{}
 

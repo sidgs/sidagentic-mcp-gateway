@@ -11,7 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 	mcpserver "github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/agentappauth"
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/internal/mcpgatewayctx"
 	"sami.io/mcpgateway/internal/service/agentapp"
@@ -35,11 +34,7 @@ type groupMcpTestServer struct {
 func setupGroupMCPTestServer(t *testing.T, jwtKey string) *groupMcpTestServer {
 	t.Helper()
 	setup := testhelpers.SetupTestDB(t)
-	t.Cleanup(setup.Cleanup)
 	db := setup.DB
-	if err := migrations.Migrate(db); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
 
 	mcpProxy := mcpserver.NewMCPServer("test", "0.0.1")
 	sseMcpProxy := mcpserver.NewMCPServer("test-sse", "0.0.1")

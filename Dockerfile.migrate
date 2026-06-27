@@ -1,0 +1,15 @@
+# SAMI MCP Gateway database migrations (Flyway).
+# Build: docker build -f Dockerfile.migrate -t sidgs.jfrog.io/sami/sami-mcp-gateway-migrate:${TAG} .
+#
+# K8s Job env (from Secret): FLYWAY_URL, FLYWAY_USER, FLYWAY_PASSWORD
+# Example FLYWAY_URL: jdbc:postgresql://host:5432/dbname
+
+FROM flyway/flyway:10-alpine
+
+COPY db/migration/ /flyway/sql/
+COPY db/flyway.conf /flyway/conf/flyway.conf
+
+ENV FLYWAY_LOCATIONS=filesystem:/flyway/sql
+
+ENTRYPOINT ["flyway", "-configFiles=/flyway/conf/flyway.conf"]
+CMD ["migrate"]

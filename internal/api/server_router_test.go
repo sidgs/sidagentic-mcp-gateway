@@ -7,7 +7,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
-	"sami.io/mcpgateway/internal/migrations"
 	configSvc "sami.io/mcpgateway/internal/service/config"
 	"sami.io/mcpgateway/internal/service/agentapp"
 	"sami.io/mcpgateway/internal/service/dashboard"
@@ -17,17 +16,13 @@ import (
 	userSvc "sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/testhelpers"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func newTestAPIServer(t *testing.T, httpPathPrefix string, oidcCfg *OIDCSettings) *Server {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	testhelpers.AssertNoError(t, err)
-	testhelpers.AssertNoError(t, migrations.Migrate(db))
+	db := testhelpers.CreateTestDB(t)
 
 	mcpProxy := server.NewMCPServer("test", "0.0.1",
 		server.WithToolCapabilities(true),

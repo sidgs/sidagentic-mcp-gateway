@@ -1,0 +1,25 @@
+# Reference manifest for running database migrations before API rollout.
+# Override image tag and FLYWAY_URL for your environment.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: sami-mcp-gateway-migrate
+  annotations:
+    helm.sh/hook: pre-upgrade,pre-install
+    helm.sh/hook-weight: "-5"
+    helm.sh/hook-delete-policy: before-hook-creation,hook-succeeded
+spec:
+  backoffLimit: 3
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: sidgs.jfrog.io/sami/sami-mcp-gateway-migrate:latest
+          env:
+            - name: FLYWAY_URL
+              value: jdbc:postgresql://postgres-dev-sl.sidglobal.cloud:5432/sami-mcp-gateway-enterprise
+          envFrom:
+            - secretRef:
+                name: sami-mcp-gateway-db

@@ -5,18 +5,14 @@ import (
 	"testing"
 	"time"
 
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/require"
 	"gorm.io/datatypes"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func TestLineage_BuildsConfiguredAndUsageEdges(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, migrations.Migrate(db))
+	db := testhelpers.CreateTestDB(t)
 
 	server := model.McpServer{Name: "calc", Transport: "stdio", Enabled: true, TenantID: "sami"}
 	require.NoError(t, db.Create(&server).Error)
@@ -31,13 +27,13 @@ func TestLineage_BuildsConfiguredAndUsageEdges(t *testing.T) {
 
 	agentID := uint(1)
 	require.NoError(t, db.Create(&model.AgentApp{
-		Model: gorm.Model{ID: agentID}, TenantID: "sami", OwnerScopeKey: "scope",
+		BaseModel: model.BaseModel{ID: agentID}, TenantID: "sami", OwnerScopeKey: "scope",
 		Name: "Ops Agent", ClientID: "ops-client", SecretHash: "hash", Status: model.AgentAppStatusEnabled,
 		ToolGroupNames: datatypes.JSON(`["ops"]`),
 	}).Error)
 
 	require.NoError(t, db.Create(&model.ToolInvocationEvent{
-		CreatedAt: time.Now().UTC(), TenantID: "sami", AgentAppID: &agentID,
+		CreatedOn: time.Now().UTC(), TenantID: "sami", AgentAppID: &agentID,
 		ToolGroupName: "ops", MCPServerName: "calc", ToolName: "add",
 		Outcome: model.ToolInvocationOutcomeSuccess, LatencyMs: 10,
 		Source: model.ToolInvocationSourceMCPProxy, AuthKind: model.ToolInvocationAuthAgentApp,

@@ -4,35 +4,32 @@ import (
 	"testing"
 	"time"
 
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func TestObservability_AggregatesEvents(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, migrations.Migrate(db))
+	db := testhelpers.CreateTestDB(t)
 
 	now := time.Now().UTC()
 	agentID := uint(7)
 	events := []model.ToolInvocationEvent{
 		{
-			CreatedAt: now.Add(-2 * time.Hour), TenantID: "sami", AgentAppID: &agentID,
+			CreatedOn: now.Add(-2 * time.Hour), TenantID: "sami", AgentAppID: &agentID,
 			ToolGroupName: "ops", MCPServerName: "calc", ToolName: "add",
 			Outcome: model.ToolInvocationOutcomeSuccess, LatencyMs: 100,
 			Source: model.ToolInvocationSourceMCPProxy, AuthKind: model.ToolInvocationAuthAgentApp,
 		},
 		{
-			CreatedAt: now.Add(-90 * time.Minute), TenantID: "sami", AgentAppID: &agentID,
+			CreatedOn: now.Add(-90 * time.Minute), TenantID: "sami", AgentAppID: &agentID,
 			ToolGroupName: "ops", MCPServerName: "calc", ToolName: "add",
 			Outcome: model.ToolInvocationOutcomeError, LatencyMs: 200,
 			Source: model.ToolInvocationSourceMCPProxy, AuthKind: model.ToolInvocationAuthAgentApp,
 		},
 		{
-			CreatedAt: now.Add(-30 * time.Minute), TenantID: "sami",
+			CreatedOn: now.Add(-30 * time.Minute), TenantID: "sami",
 			ToolGroupName: "ops", MCPServerName: "git", ToolName: "status",
 			Outcome: model.ToolInvocationOutcomeSuccess, LatencyMs: 50,
 			Source: model.ToolInvocationSourceRESTInvoke, AuthKind: model.ToolInvocationAuthAPIKey,
@@ -40,7 +37,7 @@ func TestObservability_AggregatesEvents(t *testing.T) {
 	}
 	require.NoError(t, db.Create(&events).Error)
 	require.NoError(t, db.Create(&model.AgentApp{
-		Model: gorm.Model{ID: agentID}, TenantID: "sami", OwnerScopeKey: "scope",
+		BaseModel: model.BaseModel{ID: agentID}, TenantID: "sami", OwnerScopeKey: "scope",
 		Name: "Ops Agent", ClientID: "ops-client", SecretHash: "hash", Status: model.AgentAppStatusEnabled,
 	}).Error)
 
@@ -63,9 +60,7 @@ func TestObservability_AggregatesEvents(t *testing.T) {
 }
 
 func TestObservability_EmptyRangeReturnsEmptyState(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, migrations.Migrate(db))
+	db := testhelpers.CreateTestDB(t)
 
 	svc := NewService(db, true)
 	resp, err := svc.Observability("24h", "", "", 10)

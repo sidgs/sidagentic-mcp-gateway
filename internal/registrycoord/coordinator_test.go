@@ -18,13 +18,7 @@ import (
 )
 
 func TestCoordinatorSkipsSameOrigin(t *testing.T) {
-	db, err := testhelpers.CreateTestDB()
-	if err != nil {
-		t.Fatalf("db: %v", err)
-	}
-	if err := db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.ToolGroup{}); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	db := testhelpers.CreateTestDB(t)
 
 	proxy := server.NewMCPServer("p", "0", server.WithToolCapabilities(true))
 	sse := server.NewMCPServer("s", "0", server.WithToolCapabilities(true))
@@ -74,13 +68,7 @@ func TestCoordinatorSkipsSameOrigin(t *testing.T) {
 }
 
 func TestCoordinatorServerCatalogReloadReloadsReferencedToolGroups(t *testing.T) {
-	db, err := testhelpers.CreateTestDB()
-	if err != nil {
-		t.Fatalf("db: %v", err)
-	}
-	if err := db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.ToolGroup{}); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	db := testhelpers.CreateTestDB(t)
 
 	proxy := server.NewMCPServer("p", "0", server.WithToolCapabilities(true))
 	sse := server.NewMCPServer("s", "0", server.WithToolCapabilities(true))

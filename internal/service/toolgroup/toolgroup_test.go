@@ -144,14 +144,7 @@ func TestValidGroupNameConsistency(t *testing.T) {
 
 func setupInMemoryDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	db, err := testhelpers.CreateTestDB()
-	if err != nil {
-		t.Fatalf("failed to open in-memory db: %v", err)
-	}
-	if err := db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.ToolGroup{}, &model.Prompt{}, &model.Resource{}); err != nil {
-		t.Fatalf("failed to migrate test models: %v", err)
-	}
-	return db
+	return testhelpers.CreateTestDB(t)
 }
 
 func newTestMCPService(t *testing.T, db *gorm.DB) *mcp.MCPService {

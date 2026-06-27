@@ -5,7 +5,6 @@ import (
 	"testing"
 
 	"github.com/mark3labs/mcp-go/server"
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	configSvc "sami.io/mcpgateway/internal/service/config"
 	"sami.io/mcpgateway/internal/service/agentapp"
@@ -17,16 +16,13 @@ import (
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/testhelpers"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func newBootstrapTestServer(t *testing.T) (*Server, *gorm.DB) {
 	t.Helper()
 
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	testhelpers.AssertNoError(t, err)
-	testhelpers.AssertNoError(t, migrations.Migrate(db))
+	db := testhelpers.CreateTestDB(t)
 
 	mcpProxy := server.NewMCPServer("test", "0.0.1",
 		server.WithToolCapabilities(true),

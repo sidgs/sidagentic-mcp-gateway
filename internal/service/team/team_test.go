@@ -8,17 +8,15 @@ import (
 	"sami.io/mcpgateway/internal/service/team"
 	"sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"sami.io/mcpgateway/pkg/types"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func setupTeamTest(t *testing.T) (*gorm.DB, context.Context) {
 	t.Helper()
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.Team{}, &model.TeamMember{}, &model.TeamResourceAssignment{}))
+	db := testhelpers.CreateTestDB(t)
 	ctx := tenant.WithContext(context.Background(), tenant.DefaultID)
 	return db, ctx
 }
@@ -34,6 +32,7 @@ func TestCreateAgentTeamAndAssignApp(t *testing.T) {
 	created, err := teamSvc.CreateTeam(ctx, "apps", types.TeamTypeAgent, owner.ID)
 	require.NoError(t, err)
 	require.Equal(t, types.TeamTypeAgent, created.Type)
+	require.Equal(t, owner.ID, created.CreatedByUserID)
 
 	require.NoError(t, teamSvc.SetAgentAppTeams(ctx, 42, []uint{created.ID}))
 	ids, err := teamSvc.AgentTeamIDsForApp(ctx, 42)

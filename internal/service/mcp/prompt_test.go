@@ -9,20 +9,15 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func setupTestDBWithPrompts(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	err = db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.Prompt{}, &model.Resource{})
-	require.NoError(t, err)
-
-	return db
+	t.Helper()
+	return testhelpers.CreateTestDB(t)
 }
 
 func createTestServer(t *testing.T, db *gorm.DB) *model.McpServer {

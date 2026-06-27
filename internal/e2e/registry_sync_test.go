@@ -16,9 +16,9 @@ import (
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/datatypes"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -30,13 +30,7 @@ func TestRegistrySyncToolGroupCrossPod(t *testing.T) {
 	}
 	defer mr.Close()
 
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	if err != nil {
-		t.Fatalf("db: %v", err)
-	}
-	if err := db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.ToolGroup{}); err != nil {
-		t.Fatalf("migrate: %v", err)
-	}
+	db := testhelpers.CreateTestDB(t)
 
 	mcpProxy := server.NewMCPServer("proxy", "0.0.1", server.WithToolCapabilities(true))
 	sseProxy := server.NewMCPServer("sse", "0.0.1", server.WithToolCapabilities(true))

@@ -12,30 +12,16 @@ import (
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"sami.io/mcpgateway/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func setupTestDBForServerLifecycle(t *testing.T) *gorm.DB {
 	t.Helper()
-
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	err = db.AutoMigrate(
-		&model.McpServer{},
-		&model.Tool{},
-		&model.Prompt{},
-		&model.Resource{},
-		&model.UpstreamOAuthToken{},
-		&model.UpstreamOAuthPendingSession{},
-	)
-	require.NoError(t, err)
-
-	return db
+	return testhelpers.CreateTestDB(t)
 }
 
 func newTestLifecycleService(t *testing.T, db *gorm.DB) *MCPService {

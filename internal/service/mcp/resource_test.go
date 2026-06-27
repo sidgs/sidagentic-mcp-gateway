@@ -13,21 +13,16 @@ import (
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/apierrors"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"sami.io/mcpgateway/pkg/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
 func setupTestDBWithResources(t *testing.T) *gorm.DB {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	err = db.AutoMigrate(&model.McpServer{}, &model.Tool{}, &model.Prompt{}, &model.Resource{})
-	require.NoError(t, err)
-
-	return db
+	t.Helper()
+	return testhelpers.CreateTestDB(t)
 }
 
 func createTestResource(t *testing.T, db *gorm.DB, server *model.McpServer, originalURI, name string) *model.Resource {

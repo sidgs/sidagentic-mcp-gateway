@@ -6,7 +6,6 @@ import (
 	"errors"
 	"testing"
 
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/apierrors"
 	"sami.io/mcpgateway/pkg/tenant"
@@ -65,10 +64,7 @@ func insertSkillSetRow(t *testing.T, db *gorm.DB, name string) {
 
 func setupAgentAppTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
-	setup := testhelpers.SetupTestDB(t)
-	db := setup.DB
-	require.NoError(t, migrations.Migrate(db))
-	return db
+	return testhelpers.CreateTestDB(t)
 }
 
 func TestValidateAgentAppGroupAttachment(t *testing.T) {

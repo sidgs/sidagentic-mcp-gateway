@@ -10,7 +10,6 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/mark3labs/mcp-go/server"
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	configSvc "sami.io/mcpgateway/internal/service/config"
 	"sami.io/mcpgateway/internal/service/agentapp"
@@ -20,17 +19,14 @@ import (
 	"sami.io/mcpgateway/internal/service/toolgroup"
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func TestDashboardObservabilityHandler_ReturnsAggregates(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, migrations.Migrate(db))
+	db := testhelpers.CreateTestDB(t)
 
 	ctx := tenant.WithContext(context.Background(), tenant.DefaultID)
 	cfg := configSvc.NewServerConfigService(db)
@@ -62,7 +58,7 @@ func TestDashboardObservabilityHandler_ReturnsAggregates(t *testing.T) {
 	require.NoError(t, err)
 
 	require.NoError(t, db.Create(&model.ToolInvocationEvent{
-		CreatedAt:     time.Now().UTC(),
+		CreatedOn:     time.Now().UTC(),
 		TenantID:      tenant.DefaultID,
 		MCPServerName: "calc",
 		ToolName:      "add",

@@ -9,24 +9,17 @@ import (
 	mcpclient "github.com/mark3labs/mcp-go/client"
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	mcpService "sami.io/mcpgateway/internal/service/mcp"
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
-	"gorm.io/gorm"
 )
 
 func TestPromptsIntegration(t *testing.T) {
-	// Setup test database
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	err = migrations.Migrate(db)
-	require.NoError(t, err)
+	db := testhelpers.CreateTestDB(t)
 
 	// Create MCP proxy server with prompt capabilities
 	mcpProxyServer := server.NewMCPServer(
@@ -124,11 +117,7 @@ func TestPromptsIntegration(t *testing.T) {
 }
 
 func TestResourcesIntegration(t *testing.T) {
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-
-	err = migrations.Migrate(db)
-	require.NoError(t, err)
+	db := testhelpers.CreateTestDB(t)
 
 	mcpProxyServer := server.NewMCPServer(
 		"Test SAMI MCP Gateway Proxy",

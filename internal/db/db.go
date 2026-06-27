@@ -3,61 +3,36 @@ package db
 
 import (
 	"fmt"
-	"log"
-	"os"
 
-	"github.com/glebarez/sqlite"
+	"sami.io/mcpgateway/internal/dbconfig"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// TODO: Turn this into a singleton class.
-// Only one database connection should be created and used throughout the application.
-
-const (
-	dbFilename           = "sami-mcp-gateway.db"
-	deprecatedDBFilename = "mcp.db"
-)
-
-// getSQLiteDBPath determines which SQLite database file to use.
-// It prioritizes the new sami-mcp-gateway.db file, but falls back to the old mcp.db file for backward compatibility.
-func getSQLiteDBPath() string {
-	// Check if the new database file exists
-	if _, err := os.Stat(dbFilename); err == nil {
-		return dbFilename
-	}
-
-	// Check if the old database file exists (backward compatibility)
-	if _, err := os.Stat(deprecatedDBFilename); err == nil {
-		log.Printf("[db] WARNING: Using deprecated database file '%s'. Please consider renaming it to '%s' for future compatibility.", deprecatedDBFilename, dbFilename)
-		return deprecatedDBFilename
-	}
-
-	// Neither exists, use the new file name
-	return dbFilename
-}
-
-// NewDBConnection creates a new database connection based on the provided DSN.
-// If the DSN is empty, it falls back to an embedded SQLite database.
-// For backward compatibility, it will use an existing "mcp.db" file if present,
-// otherwise it creates/uses "sami-mcp-gateway.db".
+// NewDBConnection creates a Postgres connection from a non-empty DSN.
 func NewDBConnection(dsn string) (*gorm.DB, error) {
-	var dialector gorm.Dialector
 	if dsn == "" {
-		dbPath := getSQLiteDBPath()
-		log.Printf("[db] DATABASE_URL not set – falling back to embedded SQLite ./%s", dbPath)
-		dialector = sqlite.Open(fmt.Sprintf("%s?_busy_timeout=5000&_journal_mode=WAL", dbPath))
-	} else {
-		dialector = postgres.Open(dsn)
+		return nil, fmt.Errorf("database DSN is required (Postgres only; set %s or POSTGRES_* env vars)", dbconfig.DatabaseURLEnvVar)
 	}
-
 	c := &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	}
-	db, err := gorm.Open(dialector, c)
+	db, err := gorm.Open(postgres.Open(dsn), c)
 	if err != nil {
 		return nil, fmt.Errorf("failed to connect to database: %w", err)
 	}
 	return db, nil
+}
+
+// SchemaReady reports whether core gateway tables exist (Flyway migrations applied).
+func SchemaReady(db *gorm.DB) (bool, error) {
+	var count int64
+	err := db.Raw(
+		`SELECT COUNT(*) FROM information_schema.tables WHERE table_schema = CURRENT_SCHEMA() AND table_name = 'mcp_servers'`,
+	).Scan(&count).Error
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }

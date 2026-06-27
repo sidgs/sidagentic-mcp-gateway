@@ -21,7 +21,7 @@ import (
 	"github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/api"
 	"sami.io/mcpgateway/internal/db"
-	"sami.io/mcpgateway/internal/migrations"
+	"sami.io/mcpgateway/internal/dbconfig"
 	"sami.io/mcpgateway/internal/registrycoord"
 	"sami.io/mcpgateway/internal/registrysync"
 	"sami.io/mcpgateway/internal/model"
@@ -644,29 +644,20 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// connect to the DB and run migrations
-	dsn := os.Getenv(DBUrlEnvVar)
-
-	if dsn == "" {
-		// If DATABASE_URL isn't set, try to construct a Postgres DSN if postgres-specific env vars are set.
-		pgDSN, ok, err := getPostgresDSN()
-		if err != nil {
-			return fmt.Errorf("failed to get postgres DSN: %w", err)
-		}
-		if ok {
-			dsn = pgDSN
-		}
+	dsn, err := dbconfig.ResolveDSN()
+	if err != nil {
+		return err
 	}
-
 	dbConn, err := db.NewDBConnection(dsn)
 	if err != nil {
 		return err
 	}
-	// Migrations should ideally be decoupled from both the server and the startup phase
-	// (should be run as a separate command).
-	// However, for the user's convenience, we run them as part of startup command for now.
-	if err := migrations.Migrate(dbConn); err != nil {
-		return fmt.Errorf("failed to run migrations: %v", err)
+	ready, err := db.SchemaReady(dbConn)
+	if err != nil {
+		return fmt.Errorf("failed to check database schema: %w", err)
+	}
+	if !ready {
+		return fmt.Errorf("database schema not initialized; run `mcpgateway migrate run` or the migrate Job before starting the server")
 	}
 
 	bindPort := getBindPort()

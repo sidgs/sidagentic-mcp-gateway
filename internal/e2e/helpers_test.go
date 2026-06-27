@@ -1,7 +1,7 @@
 // Package e2e contains end-to-end integration tests for SAMI MCP Gateway against
 // @modelcontextprotocol/server-everything.
 //
-// Tests spin up a full SAMI MCP Gateway HTTP server backed by an in-memory SQLite
+// Tests spin up a full SAMI MCP Gateway HTTP server backed by Postgres (Flyway migrations),
 // database, register server-everything as a stdio upstream, then exercise every
 // major API surface:
 //   - Global tools: list, get, invoke
@@ -27,7 +27,6 @@ import (
 	"github.com/mark3labs/mcp-go/mcp"
 	"github.com/mark3labs/mcp-go/server"
 	"sami.io/mcpgateway/internal/api"
-	"sami.io/mcpgateway/internal/migrations"
 	"sami.io/mcpgateway/internal/model"
 	configSvc "sami.io/mcpgateway/internal/service/config"
 	"sami.io/mcpgateway/internal/service/agentapp"
@@ -39,8 +38,8 @@ import (
 	userSvc "sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/internal/telemetry"
 	"sami.io/mcpgateway/pkg/tenant"
+	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/require"
-	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -113,8 +112,8 @@ func decodeJSON(t *testing.T, r *http.Response, target any) {
 	require.NoError(t, json.NewDecoder(r.Body).Decode(target))
 }
 
-// setupE2EServer spins up a full SAMI MCP Gateway HTTP server backed by an in-memory
-// SQLite DB, initialised in the requested mode.
+// setupE2EServer spins up a full SAMI MCP Gateway HTTP server backed by Postgres,
+// initialised in the requested mode.
 // HTTP routes are at the host root (HTTP_PATH_PREFIX is unset). To test a
 // prefixed deployment, set HTTP_PATH_PREFIX before start and use baseURL+prefix in requests.
 // The server is shut down via t.Cleanup.
@@ -124,9 +123,7 @@ func setupE2EServer(t *testing.T, mode model.ServerMode) *e2eEnv {
 		t.Skip("npx not found in PATH – skipping server-everything end-to-end tests")
 	}
 
-	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
-	require.NoError(t, err)
-	require.NoError(t, migrations.Migrate(db))
+	db := testhelpers.CreateTestDB(t)
 
 	mcpProxy := server.NewMCPServer("sami-mcp-gateway", "0.0.1",
 		server.WithToolCapabilities(true),
