@@ -31,7 +31,7 @@ type Config struct {
 	Topic         string
 	AppName       string
 	FromEmail     string
-	DashboardURL  string
+	DashboardURL  string // full URL including #/ hash route (see NOTIFICATIONS_DASHBOARD_BASE_URL)
 	Bootstrap     string
 	SecurityProto string
 	SASLMechanism string

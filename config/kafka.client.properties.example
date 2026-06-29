@@ -1,4 +1,8 @@
-# Example Kafka client properties for local development.
+# Optional notification settings (when NOTIFICATIONS_ENABLED=true):
+# NOTIFICATIONS_DASHBOARD_BASE_URL must be a full link with hash (#) routing, e.g.:
+#   https://apps.mysami.io/#/product-manager-dashboard/kafka-event-hub
+#   https://gateway.example.com/api/v1/sami-mcp-gateway/dashboard#/home
+
 # Copy to kafka.client.properties and set KAFKA_CONFIG_FILE to its path.
 # Prefer environment variables in production (see docs/reference/environment-variables.mdx).
 

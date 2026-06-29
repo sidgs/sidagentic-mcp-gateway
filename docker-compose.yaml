@@ -79,6 +79,8 @@ services:
       NOTIFICATIONS_KAFKA_TOPIC: ${NOTIFICATIONS_KAFKA_TOPIC:-notifications}
       NOTIFICATIONS_APP_NAME: ${NOTIFICATIONS_APP_NAME:-sami-mcp-gateway}
       NOTIFICATIONS_FROM_EMAIL: ${NOTIFICATIONS_FROM_EMAIL:-notifications@sidgs.com}
+      # Must include hash (#) routing, e.g. https://apps.mysami.io/#/product-manager-dashboard/kafka-event-hub
+      # or gateway: https://host/api/v1/sami-mcp-gateway/dashboard#/home
       NOTIFICATIONS_DASHBOARD_BASE_URL: ${NOTIFICATIONS_DASHBOARD_BASE_URL:-}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-}
       KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-SASL_SSL}
@@ -135,6 +137,7 @@ services:
       NOTIFICATIONS_KAFKA_TOPIC: ${NOTIFICATIONS_KAFKA_TOPIC:-notifications}
       NOTIFICATIONS_APP_NAME: ${NOTIFICATIONS_APP_NAME:-sami-mcp-gateway}
       NOTIFICATIONS_FROM_EMAIL: ${NOTIFICATIONS_FROM_EMAIL:-}
+      # Must include hash (#) routing — see NOTIFICATIONS_DASHBOARD_BASE_URL in docs/reference/environment-variables.mdx
       NOTIFICATIONS_DASHBOARD_BASE_URL: ${NOTIFICATIONS_DASHBOARD_BASE_URL:-}
       KAFKA_BOOTSTRAP_SERVERS: ${KAFKA_BOOTSTRAP_SERVERS:-}
       KAFKA_SECURITY_PROTOCOL: ${KAFKA_SECURITY_PROTOCOL:-SASL_SSL}

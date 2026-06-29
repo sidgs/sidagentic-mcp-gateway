@@ -1299,7 +1299,9 @@ export default function App() {
     return { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets };
   }
 
-  function applyDashboardPayload(payload: Required<DashboardData>) {
+  function applyDashboardPayload(
+    payload: Omit<Required<DashboardData>, "diagnostics"> & Pick<DashboardData, "diagnostics">,
+  ) {
     const { overview, servers, tools, toolGroups, promptGroups, prompts, resources, diagnostics, agentApps, skillSets } =
       payload;
     setData({

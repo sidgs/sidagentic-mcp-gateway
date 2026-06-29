@@ -186,7 +186,21 @@ When `NOTIFICATIONS_ENABLED=true`, the gateway publishes rendered email payloads
 </ParamField>
 
 <ParamField path="NOTIFICATIONS_DASHBOARD_BASE_URL" type="string">
-  Base URL embedded in invite and welcome email templates (e.g. `https://gateway.example.com/api/v1/sami-mcp-gateway/dashboard`).
+  Full dashboard link embedded in invite and welcome email templates. **Must include the hash (`#`) route** — the gateway dashboard uses client-side hash routing, not path-based URLs.
+
+  ```bash
+  # Gateway-hosted dashboard (standalone)
+  export NOTIFICATIONS_DASHBOARD_BASE_URL=https://gateway.example.com/api/v1/sami-mcp-gateway/dashboard#/home
+
+  # SAMI Apps shell (nested hash routes)
+  export NOTIFICATIONS_DASHBOARD_BASE_URL=https://apps.mysami.io/#/product-manager-dashboard/kafka-event-hub
+  ```
+
+  Common gateway sections: `#/home`, `#/tenant_admin`, `#/agent_apps`, `#/teams`, `#/users`.
+
+  <Note>
+    Do not omit the `#` fragment. A path-only URL such as `.../dashboard/home` will not load the correct screen.
+  </Note>
 </ParamField>
 
 <ParamField path="KAFKA_BOOTSTRAP_SERVERS" type="string">

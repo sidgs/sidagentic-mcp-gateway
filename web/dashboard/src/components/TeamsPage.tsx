@@ -79,7 +79,7 @@ export function TeamsPage({ role, userId, initialType = "agent" }: TeamsPageProp
 
   return (
     <Stack spacing={2}>
-      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} alignItems={{ sm: "center" }}>
+      <Stack direction={{ xs: "column", sm: "row" }} spacing={1} sx={{ alignItems: { sm: "center" } }}>
         <TextField
           select
           size="small"
@@ -148,7 +148,7 @@ export function TeamsPage({ role, userId, initialType = "agent" }: TeamsPageProp
                 </Typography>
               ) : (
                 detail.members.map((member) => (
-                  <Stack key={member.user_id} direction="row" spacing={1} alignItems="center">
+                  <Stack key={member.user_id} direction="row" spacing={1} sx={{ alignItems: "center" }}>
                     <Typography variant="body2">
                       {member.username || member.email || `User #${member.user_id}`}
                     </Typography>

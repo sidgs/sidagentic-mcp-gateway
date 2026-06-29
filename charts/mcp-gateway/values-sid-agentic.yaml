@@ -1,3 +1,10 @@
+migrate:
+  enabled: true
+  env:
+    FLYWAY_URL: jdbc:postgresql://postgres-dev-sl.sidglobal.cloud:5432/sami-mcp-gateway-enterprise
+    FLYWAY_USER: sami
+    FLYWAY_PASSWORD: sami
+
 env:
   DATABASE_URL: postgres://sami:sami@postgres-dev-sl.sidglobal.cloud:5432/sami-mcp-gateway-enterprise
   SERVER_MODE: enterprise

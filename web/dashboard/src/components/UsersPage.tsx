@@ -107,7 +107,7 @@ export function UsersPage({ role }: UsersPageProps) {
                 key={user.username}
                 direction={{ xs: "column", sm: "row" }}
                 spacing={1}
-                alignItems={{ sm: "center" }}
+                sx={{ alignItems: { sm: "center" } }}
               >
                 <Typography variant="body2" sx={{ minWidth: 140 }}>
                   {user.username}
