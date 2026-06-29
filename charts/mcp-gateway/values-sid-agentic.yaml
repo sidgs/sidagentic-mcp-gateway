@@ -13,6 +13,7 @@ env:
   HTTP_PATH_PREFIX: /api/v1/sami-mcp-gateway
   DEFAULT_TENANT_ID: sid-agentic
   HTTP_PORT: "8080"
+  PLATFORM_ADMIN_LIST: "ajayn@sidgs.com"
   # Cognito OIDC dashboard session store (recommended with multiple replicas)
   # Redis: OIDC sessions + registry sync for multi-replica deployments (see REGISTRY_SYNC_* env vars)
   # REDIS_URL: redis://redis-master.svc.cluster.local:6379/0
@@ -31,6 +32,7 @@ env:
   POST_LOGIN_REDIRECT_URL: "/apps/mcp-gateway-dashboard/#/home"
   COGNITO_REDIRECT_URI: "https://apps.sidglobal.cloud/api/v1/sami-mcp-gateway/auth/callback"
   PUBLIC_URL_SCHEME: "https"
+  MCP_SERVER_INIT_REQ_TIMEOUT_SEC: "60"
 
 secrets:
   COGNITO_CLIENT_SECRET: "38qm6oububnuafmsioncaagh2p932kn1bk134rocuc3a2ngctbj"

@@ -203,7 +203,7 @@ func (s *Service) Lineage(usageRange string) (*types.DashboardLineageResponse, e
 			tool_name,
 			tool_group_name,
 			COUNT(*) AS total_calls`).
-		Where("created_at >= ? AND created_at < ?", window.From, window.To).
+		Where("created_on >= ? AND created_on < ?", window.From, window.To).
 		Group("agent_app_id, mcp_server_name, tool_name, tool_group_name").
 		Scan(&usageRows).Error; err != nil {
 		return nil, err
