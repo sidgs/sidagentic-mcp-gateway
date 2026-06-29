@@ -165,6 +165,68 @@ When the server starts it resolves the database connection in this order:
 
 ---
 
+## Email notifications (Kafka)
+
+When `NOTIFICATIONS_ENABLED=true`, the gateway publishes rendered email payloads to a Kafka topic for a downstream mail service.
+
+<ParamField path="NOTIFICATIONS_ENABLED" type="boolean" default="false">
+  Enable Kafka email notifications for governance events (team/tenant membership, role changes, tenant creation, agent-app creation).
+</ParamField>
+
+<ParamField path="NOTIFICATIONS_KAFKA_TOPIC" type="string" default="notifications">
+  Kafka topic for email notification messages.
+</ParamField>
+
+<ParamField path="NOTIFICATIONS_APP_NAME" type="string" default="sami-mcp-gateway">
+  Value for the required `app` field in each notification message.
+</ParamField>
+
+<ParamField path="NOTIFICATIONS_FROM_EMAIL" type="string">
+  Optional sender address (`from` field). Omitted when unset.
+</ParamField>
+
+<ParamField path="NOTIFICATIONS_DASHBOARD_BASE_URL" type="string">
+  Base URL embedded in invite and welcome email templates (e.g. `https://gateway.example.com/api/v1/sami-mcp-gateway/dashboard`).
+</ParamField>
+
+<ParamField path="KAFKA_BOOTSTRAP_SERVERS" type="string">
+  Kafka bootstrap servers. Required when notifications are enabled.
+</ParamField>
+
+<ParamField path="KAFKA_SECURITY_PROTOCOL" type="string" default="SASL_SSL">
+  Kafka `security.protocol` setting.
+</ParamField>
+
+<ParamField path="KAFKA_SASL_MECHANISMS" type="string" default="PLAIN">
+  Kafka SASL mechanism (e.g. `PLAIN`).
+</ParamField>
+
+<ParamField path="KAFKA_SASL_USERNAME" type="string">
+  Kafka SASL username (Confluent API key). Required when notifications are enabled.
+</ParamField>
+
+<ParamField path="KAFKA_SASL_PASSWORD" type="string">
+  Kafka SASL password (Confluent API secret). Use `KAFKA_SASL_PASSWORD_FILE` for file-based secrets.
+</ParamField>
+
+<ParamField path="KAFKA_SASL_PASSWORD_FILE" type="string">
+  Path to a file containing the Kafka SASL password.
+</ParamField>
+
+<ParamField path="KAFKA_CLIENT_ID" type="string">
+  Kafka client ID. Auto-generated when unset.
+</ParamField>
+
+<ParamField path="KAFKA_SESSION_TIMEOUT_MS" type="integer" default="45000">
+  Kafka session timeout in milliseconds.
+</ParamField>
+
+<ParamField path="KAFKA_CONFIG_FILE" type="string">
+  Optional path to a Java-style properties file (see `config/kafka.client.properties.example`). Environment variables override file values.
+</ParamField>
+
+---
+
 ## Docker
 
 <ParamField path="MCPGATEWAY_IMAGE_TAG" type="string">
@@ -203,4 +265,7 @@ When the server starts it resolves the database connection in this order:
 | `OTEL_ENABLED` | Observability | mode-dependent | Enable OpenTelemetry metrics. |
 | `OTEL_RESOURCE_ATTRIBUTES` | Observability | — | Additional OTel resource attributes. |
 | `SESSION_IDLE_TIMEOUT_SEC` | Connections | `-1` | Idle timeout for stateful sessions. |
+| `NOTIFICATIONS_ENABLED` | Notifications | `false` | Publish governance email events to Kafka. |
+| `NOTIFICATIONS_KAFKA_TOPIC` | Notifications | `notifications` | Kafka topic for email payloads. |
+| `KAFKA_BOOTSTRAP_SERVERS` | Notifications | — | Kafka bootstrap servers. |
 | `MCPGATEWAY_IMAGE_TAG` | Docker | `latest` | Docker image tag for Compose deployments. |

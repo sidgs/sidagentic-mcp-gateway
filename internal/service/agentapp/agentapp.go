@@ -13,6 +13,8 @@ import (
 	"sami.io/mcpgateway/internal"
 	"sami.io/mcpgateway/internal/agentappauth"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/notifications"
+	"sami.io/mcpgateway/internal/service/user"
 	"sami.io/mcpgateway/pkg/apierrors"
 	"sami.io/mcpgateway/pkg/tenant"
 	"golang.org/x/crypto/bcrypt"
@@ -34,8 +36,10 @@ type bearerClaims struct {
 
 // Service persists agent-apps and mints agent-app Bearer tokens.
 type Service struct {
-	db        *gorm.DB
-	jwtSecret []byte
+	db              *gorm.DB
+	jwtSecret       []byte
+	dispatcher      *notifications.Dispatcher
+	ownerEmailLookup func(ctx context.Context, ownerScopeKey string) string
 }
 
 // New creates an agent-app service. jwtSigningKey must be non-empty for token mint and Bearer JWT validation.
@@ -55,6 +59,16 @@ func (s *Service) jwtEnabled() bool {
 // JWTConfigured reports whether AGENT_APP_JWT_SIGNING_KEY was set (Bearer JWT mint/validation).
 func (s *Service) JWTConfigured() bool {
 	return s.jwtEnabled()
+}
+
+// SetNotificationDispatcher wires optional email notifications and owner email resolution.
+func (s *Service) SetNotificationDispatcher(d *notifications.Dispatcher, userSvc *user.UserService) {
+	s.dispatcher = d
+	if userSvc != nil {
+		s.ownerEmailLookup = func(ctx context.Context, ownerScopeKey string) string {
+			return resolveOwnerEmail(ctx, userSvc, ownerScopeKey)
+		}
+	}
 }
 
 func (s *Service) dbTenant(ctx context.Context) *gorm.DB {
@@ -240,6 +254,11 @@ func (s *Service) Create(ctx context.Context, ownerScopeKey, name, description s
 	model.StampCreateFromCtx(ctx, app)
 	if err := s.dbTenant(ctx).Create(app).Error; err != nil {
 		return nil, "", err
+	}
+	if s.dispatcher != nil && s.ownerEmailLookup != nil {
+		if ownerEmail := s.ownerEmailLookup(ctx, ownerScopeKey); ownerEmail != "" {
+			s.dispatcher.AgentAppCredentials(ctx, ownerEmail, app.TenantID, app.Name, clientID, secretPlain)
+		}
 	}
 	return app, secretPlain, nil
 }

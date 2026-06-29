@@ -1,0 +1,11 @@
+Hello,
+
+You have been invited as the owner of tenant "{{.TenantName}}" ({{.TenantID}}).
+
+Sign in with this email address ({{.OwnerEmail}}) to activate your access.
+{{if .ActorEmail}}
+Tenant created by: {{.ActorEmail}}
+{{end}}
+{{if .DashboardURL}}
+Get started: {{.DashboardURL}}
+{{end}}

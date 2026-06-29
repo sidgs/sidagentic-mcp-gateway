@@ -25,6 +25,7 @@ import (
 	"sami.io/mcpgateway/internal/registrycoord"
 	"sami.io/mcpgateway/internal/registrysync"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/notifications"
 	"sami.io/mcpgateway/internal/service/agentapp"
 	"sami.io/mcpgateway/internal/service/config"
 	"sami.io/mcpgateway/internal/service/dashboard"
@@ -103,6 +104,12 @@ const (
 	PlatformJWTAudEnvVar = "PLATFORM_JWT_AUD"
 	// JWTUseUnsignedEnvVar allows alg=none platform UI JWTs when true (default true).
 	JWTUseUnsignedEnvVar = "JWT_USE_UNSIGNED"
+
+	NotificationsEnabledEnvVar      = notifications.EnvNotificationsEnabled
+	NotificationsKafkaTopicEnvVar   = notifications.EnvNotificationsKafkaTopic
+	NotificationsAppNameEnvVar      = notifications.EnvNotificationsAppName
+	NotificationsFromEmailEnvVar    = notifications.EnvNotificationsFromEmail
+	NotificationsDashboardURLEnvVar = notifications.EnvNotificationsDashboardURL
 )
 
 const (
@@ -515,6 +522,29 @@ func generateOriginID() string {
 	return fmt.Sprintf("%s:%d", host, os.Getpid())
 }
 
+func initNotificationDispatcher() (*notifications.Dispatcher, error) {
+	cfg, err := notifications.LoadConfigFromEnv(parseEnvBoolDefault)
+	if err != nil {
+		return nil, err
+	}
+	if !cfg.Enabled {
+		d, err := notifications.NewDispatcher(cfg, notifications.NoopNotifier{})
+		if err != nil {
+			return nil, err
+		}
+		return d, nil
+	}
+	if err := cfg.ValidateForEnabled(); err != nil {
+		return nil, err
+	}
+	kafkaNotifier, err := notifications.NewKafkaNotifier(cfg)
+	if err != nil {
+		return nil, err
+	}
+	log.Printf("[server] email notifications enabled (kafka topic=%q app=%q)", cfg.Topic, cfg.AppName)
+	return notifications.NewDispatcher(cfg, kafkaNotifier)
+}
+
 // getPostgresDSN constructs a Postgres DSN from individual Postgres-specific environment variables & files.
 // It is used to provide an alternative way to specify Postgres connection details
 // in case the user doesn't want to use a full DATABASE_URL.
@@ -729,6 +759,16 @@ func runStartServer(cmd *cobra.Command, args []string) error {
 
 	skillService := skill.New(dbConn)
 	skillSetService := skillset.New(dbConn, skillService)
+
+	notificationDispatcher, err := initNotificationDispatcher()
+	if err != nil {
+		return fmt.Errorf("notifications: %w", err)
+	}
+	defer notificationDispatcher.Close()
+	teamService.SetNotificationDispatcher(notificationDispatcher)
+	tenantRegistry.SetNotificationDispatcher(notificationDispatcher)
+	userService.SetNotificationDispatcher(notificationDispatcher)
+	agentAppService.SetNotificationDispatcher(notificationDispatcher, userService)
 
 	defaultTenantID, err := getDefaultTenantID()
 	if err != nil {

@@ -1,0 +1,11 @@
+# Example Kafka client properties for local development.
+# Copy to kafka.client.properties and set KAFKA_CONFIG_FILE to its path.
+# Prefer environment variables in production (see docs/reference/environment-variables.mdx).
+
+bootstrap.servers=your-broker:9092
+security.protocol=SASL_SSL
+sasl.mechanisms=PLAIN
+sasl.username=YOUR_API_KEY
+sasl.password=YOUR_API_SECRET
+session.timeout.ms=45000
+client.id=sami-mcp-gateway-local

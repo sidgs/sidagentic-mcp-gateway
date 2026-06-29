@@ -7,18 +7,26 @@ import (
 	"strings"
 
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/notifications"
 	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/auditctx"
 	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
 
 type Service struct {
-	db *gorm.DB
+	db         *gorm.DB
+	dispatcher *notifications.Dispatcher
 }
 
 func NewService(db *gorm.DB) *Service {
 	return &Service{db: db}
+}
+
+// SetNotificationDispatcher wires optional email notifications.
+func (s *Service) SetNotificationDispatcher(d *notifications.Dispatcher) {
+	s.dispatcher = d
 }
 
 func (s *Service) dbTenant(ctx context.Context) *gorm.DB {
@@ -139,11 +147,17 @@ func (s *Service) AddMember(ctx context.Context, teamID, userID uint, role types
 	if err := s.db.WithContext(ctx).Create(&member).Error; err != nil {
 		return fmt.Errorf("add team member: %w", err)
 	}
+	if s.dispatcher != nil {
+		if u, err := s.userInTenant(ctx, userID); err == nil && u.Email != "" {
+			s.dispatcher.TeamMemberAdded(ctx, u.Email, u.Username, team.Name, team.TenantID, string(role), auditctx.ActorFrom(ctx))
+		}
+	}
 	return nil
 }
 
 func (s *Service) RemoveMember(ctx context.Context, teamID, userID uint) error {
-	if _, err := s.GetTeam(ctx, teamID); err != nil {
+	team, err := s.GetTeam(ctx, teamID)
+	if err != nil {
 		return err
 	}
 	var member model.TeamMember
@@ -156,7 +170,17 @@ func (s *Service) RemoveMember(ctx context.Context, teamID, userID uint) error {
 	if member.Role == types.TeamMemberRoleOwner {
 		return fmt.Errorf("cannot remove team owner: %w", apierrors.ErrInvalidInput)
 	}
-	return s.dbTenant(ctx).Where("team_id = ? AND user_id = ?", teamID, userID).Delete(&model.TeamMember{}).Error
+	var removedUser *model.User
+	if s.dispatcher != nil {
+		removedUser, _ = s.userInTenant(ctx, userID)
+	}
+	if err := s.dbTenant(ctx).Where("team_id = ? AND user_id = ?", teamID, userID).Delete(&model.TeamMember{}).Error; err != nil {
+		return err
+	}
+	if s.dispatcher != nil && removedUser != nil && removedUser.Email != "" {
+		s.dispatcher.TeamMemberRemoved(ctx, removedUser.Email, removedUser.Username, team.Name, team.TenantID, auditctx.ActorFrom(ctx))
+	}
+	return nil
 }
 
 func (s *Service) ListMembershipsForUser(ctx context.Context, userID uint) ([]model.TeamMember, error) {

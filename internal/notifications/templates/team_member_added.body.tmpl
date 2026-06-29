@@ -1,0 +1,9 @@
+Hello{{if .Username}} {{.Username}}{{end}},
+
+You have been added to the team "{{.TeamName}}" in tenant {{.TenantID}} with role {{.Role}}.
+{{if .ActorEmail}}
+Added by: {{.ActorEmail}}
+{{end}}
+{{if .DashboardURL}}
+Open the dashboard: {{.DashboardURL}}
+{{end}}

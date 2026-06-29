@@ -1,0 +1,9 @@
+Hello{{if .Username}} {{.Username}}{{end}},
+
+You have been removed from the team "{{.TeamName}}" in tenant {{.TenantID}}.
+{{if .ActorEmail}}
+Removed by: {{.ActorEmail}}
+{{end}}
+{{if .DashboardURL}}
+Open the dashboard: {{.DashboardURL}}
+{{end}}

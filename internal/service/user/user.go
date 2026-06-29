@@ -9,7 +9,9 @@ import (
 
 	"sami.io/mcpgateway/internal"
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/notifications"
 	"sami.io/mcpgateway/pkg/apierrors"
+	"sami.io/mcpgateway/pkg/auditctx"
 	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
@@ -17,11 +19,17 @@ import (
 
 // UserService provides methods to manage users in the SAMI MCP Gateway system.
 type UserService struct {
-	db *gorm.DB
+	db         *gorm.DB
+	dispatcher *notifications.Dispatcher
 }
 
 func NewUserService(db *gorm.DB) *UserService {
 	return &UserService{db: db}
+}
+
+// SetNotificationDispatcher wires optional email notifications.
+func (u *UserService) SetNotificationDispatcher(d *notifications.Dispatcher) {
+	u.dispatcher = d
 }
 
 func (u *UserService) dbTenant(ctx context.Context) *gorm.DB {
@@ -259,9 +267,13 @@ func (u *UserService) UpdateRole(ctx context.Context, userID uint, role types.Us
 	if err != nil {
 		return nil, err
 	}
+	oldRole := user.Role
 	user.Role = types.NormalizeUserRole(role)
 	if err := u.db.WithContext(ctx).Save(user).Error; err != nil {
 		return nil, err
+	}
+	if u.dispatcher != nil && user.Email != "" && oldRole != user.Role {
+		u.dispatcher.UserRoleUpdated(ctx, user.Email, user.Username, user.TenantID, string(oldRole), string(user.Role), auditctx.ActorFrom(ctx))
 	}
 	return user, nil
 }

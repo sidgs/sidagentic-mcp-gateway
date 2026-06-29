@@ -1,0 +1,9 @@
+Hello,
+
+Your role for tenant "{{.TenantName}}" ({{.TenantID}}) was changed from {{.OldRole}} to {{.NewRole}}.
+{{if .ActorEmail}}
+Updated by: {{.ActorEmail}}
+{{end}}
+{{if .DashboardURL}}
+Sign in: {{.DashboardURL}}
+{{end}}

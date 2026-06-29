@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/internal/notifications"
 	"sami.io/mcpgateway/pkg/apierrors"
 	"sami.io/mcpgateway/pkg/auditctx"
 	"sami.io/mcpgateway/pkg/tenant"
@@ -16,11 +17,17 @@ import (
 )
 
 type Service struct {
-	db *gorm.DB
+	db         *gorm.DB
+	dispatcher *notifications.Dispatcher
 }
 
 func NewService(db *gorm.DB) *Service {
 	return &Service{db: db}
+}
+
+// SetNotificationDispatcher wires optional email notifications.
+func (s *Service) SetNotificationDispatcher(d *notifications.Dispatcher) {
+	s.dispatcher = d
 }
 
 func (s *Service) Get(ctx context.Context, id string) (*model.Tenant, error) {
@@ -80,6 +87,9 @@ func (s *Service) Create(ctx context.Context, id, name, ownerEmail string) (*mod
 	model.StampCreateFromCtx(ctx, &mem)
 	if err := s.db.WithContext(ctx).Create(&mem).Error; err != nil {
 		return nil, fmt.Errorf("create tenant owner membership: %w", err)
+	}
+	if s.dispatcher != nil {
+		s.dispatcher.TenantOwnerInvite(ctx, ownerEmail, id, name, auditctx.ActorFrom(ctx))
 	}
 	return &row, nil
 }
@@ -143,6 +153,14 @@ func (s *Service) AddMember(ctx context.Context, tenantID, email string, role ty
 	if err := s.db.WithContext(ctx).Create(&row).Error; err != nil {
 		return nil, fmt.Errorf("add tenant member: %w", err)
 	}
+	if s.dispatcher != nil {
+		t, _ := s.Get(ctx, tenantID)
+		tenantName := tenantID
+		if t != nil {
+			tenantName = t.Name
+		}
+		s.dispatcher.TenantMemberAdded(ctx, email, tenantID, tenantName, string(role), auditctx.ActorFrom(ctx))
+	}
 	return &row, nil
 }
 
@@ -154,21 +172,45 @@ func (s *Service) PatchMemberRole(ctx context.Context, tenantID string, membersh
 		}
 		return nil, err
 	}
+	oldRole := row.Role
 	row.Role = types.NormalizeUserRole(role)
 	model.StampUpdateFromCtx(ctx, &row)
 	if err := s.db.WithContext(ctx).Save(&row).Error; err != nil {
 		return nil, err
 	}
+	if s.dispatcher != nil && row.Email != "" {
+		t, _ := s.Get(ctx, tenantID)
+		tenantName := tenantID
+		if t != nil {
+			tenantName = t.Name
+		}
+		s.dispatcher.TenantMembershipRoleUpdated(ctx, row.Email, tenantID, tenantName, string(oldRole), string(row.Role), auditctx.ActorFrom(ctx))
+	}
 	return &row, nil
 }
 
 func (s *Service) RemoveMember(ctx context.Context, tenantID string, membershipID uint) error {
+	var row model.TenantMembership
+	if err := s.db.WithContext(ctx).Where("id = ? AND tenant_id = ?", membershipID, tenantID).First(&row).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("membership not found: %w", apierrors.ErrNotFound)
+		}
+		return err
+	}
 	res := s.db.WithContext(ctx).Where("id = ? AND tenant_id = ?", membershipID, tenantID).Delete(&model.TenantMembership{})
 	if res.Error != nil {
 		return res.Error
 	}
 	if res.RowsAffected == 0 {
 		return fmt.Errorf("membership not found: %w", apierrors.ErrNotFound)
+	}
+	if s.dispatcher != nil && row.Email != "" {
+		t, _ := s.Get(ctx, tenantID)
+		tenantName := tenantID
+		if t != nil {
+			tenantName = t.Name
+		}
+		s.dispatcher.TenantMemberRemoved(ctx, row.Email, tenantID, tenantName, auditctx.ActorFrom(ctx))
 	}
 	return nil
 }

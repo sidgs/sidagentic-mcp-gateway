@@ -1,0 +1,9 @@
+Hello,
+
+You have been added to tenant "{{.TenantName}}" ({{.TenantID}}) with role {{.Role}}.
+{{if .ActorEmail}}
+Added by: {{.ActorEmail}}
+{{end}}
+{{if .DashboardURL}}
+Sign in to access your tenant: {{.DashboardURL}}
+{{end}}

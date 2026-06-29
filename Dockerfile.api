@@ -11,6 +11,10 @@ ARG VERSION=dev
 
 WORKDIR /src
 
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends librdkafka-dev \
+	&& rm -rf /var/lib/apt/lists/*
+
 COPY go.mod go.sum ./
 RUN go mod download
 
@@ -20,7 +24,7 @@ COPY . .
 RUN mkdir -p internal/dashboardui/dist \
 	&& printf '%s\n' '<!DOCTYPE html><html><body></body></html>' > internal/dashboardui/dist/index.html
 
-RUN CGO_ENABLED=0 go build -trimpath \
+RUN CGO_ENABLED=1 go build -trimpath \
 	-ldflags="-s -w -X sami.io/mcpgateway/pkg/version.Version=${VERSION}" \
 	-o /sami-mcp-gateway .
 
@@ -28,7 +32,7 @@ RUN CGO_ENABLED=0 go build -trimpath \
 FROM ghcr.io/astral-sh/uv:debian
 
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends curl gnupg \
+	&& apt-get install -y --no-install-recommends curl gnupg librdkafka1 \
 	&& curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
 	&& apt-get install -y --no-install-recommends nodejs \
 	&& apt-get clean \
