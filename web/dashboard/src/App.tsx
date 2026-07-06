@@ -108,7 +108,7 @@ import { LineagePage } from "@/components/LineagePage";
 import { ObservabilityPage } from "@/components/ObservabilityPage";
 import { SectionCard } from "@/components/SectionCard";
 import { SkillsSection } from "@/components/SkillsSection";
-import { SkillSetsCatalogPanel } from "@/components/SkillSetsCatalogPanel";
+import { SkillSetsSection } from "@/components/SkillSetsSection";
 import { StatusBadge } from "@/components/StatusBadge";
 import { monospaceFontFamily } from "@/theme";
 
@@ -5018,11 +5018,7 @@ export default function App() {
 
             {section === "skills" ? <SkillsSection /> : null}
 
-            {section === "skill_sets" ? (
-              <SectionCard title={currentSectionMeta.title} subtitle={currentSectionMeta.subtitle}>
-                <SkillSetsCatalogPanel />
-              </SectionCard>
-            ) : null}
+            {section === "skill_sets" ? <SkillSetsSection /> : null}
 
             {section === "prompt_groups" && data.promptGroups ? (
               expandedPromptGroup !== null ? (

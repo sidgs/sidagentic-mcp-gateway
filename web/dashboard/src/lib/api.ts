@@ -297,7 +297,7 @@ export const api = {
       body: JSON.stringify(body),
     }),
   updateSkillSet: (name: string, body: import("./types").DashboardUpdateSkillSetInput) =>
-    requestJSON(`/dashboard/skillsets/${encodeURIComponent(name)}`, {
+    requestJSON<import("./types").DashboardSkillSet>(`/dashboard/skillsets/${encodeURIComponent(name)}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),

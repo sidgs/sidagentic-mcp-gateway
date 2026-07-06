@@ -28,6 +28,8 @@ export type ToolGroupFormMode = "create" | "edit" | null;
 
 export type SkillFormMode = "create" | "add-version" | "edit" | "import";
 
+export type SkillSetFormMode = "create" | "edit" | null;
+
 export type HashRoute = {
   section: AppSection | null;
   agentAppId: number | null;
@@ -41,6 +43,8 @@ export type HashRoute = {
   skillFormMode: SkillFormMode | null;
   skillName: string | null;
   skillVersion: string | null;
+  skillSetName: string | null;
+  skillSetFormMode: SkillSetFormMode;
 };
 
 function decodeRouteSegment(parts: string[], fromIndex: number): string | null {
@@ -81,6 +85,25 @@ function parseToolGroupSubroute(parts: string[]): Pick<
     toolGroupName: decodeRouteSegment(parts, 1),
     toolGroupFormMode: null,
     toolGroupEditName: null,
+  };
+}
+
+function parseSkillSetSubroute(parts: string[]): Pick<HashRoute, "skillSetName" | "skillSetFormMode"> {
+  if (parts.length < 2) {
+    return { skillSetName: null, skillSetFormMode: null };
+  }
+  if (parts[1] === "new" && parts.length === 2) {
+    return { skillSetName: null, skillSetFormMode: "create" };
+  }
+  if (parts.length >= 3 && parts[parts.length - 1] === "edit") {
+    return {
+      skillSetName: decodeRouteSegmentRange(parts, 1, parts.length - 1),
+      skillSetFormMode: "edit",
+    };
+  }
+  return {
+    skillSetName: decodeRouteSegment(parts, 1),
+    skillSetFormMode: null,
   };
 }
 
@@ -137,6 +160,8 @@ export function parseHashRoute(): HashRoute {
       skillFormMode: null,
       skillName: null,
       skillVersion: null,
+      skillSetName: null,
+      skillSetFormMode: null,
     };
   }
   const section = parts[0] as AppSection;
@@ -161,6 +186,10 @@ export function parseHashRoute(): HashRoute {
     section === "skills"
       ? parseSkillSubroute(parts)
       : { skillFormMode: null, skillName: null, skillVersion: null };
+  const skillSetRoute =
+    section === "skill_sets"
+      ? parseSkillSetSubroute(parts)
+      : { skillSetName: null, skillSetFormMode: null };
 
   return {
     section,
@@ -175,6 +204,8 @@ export function parseHashRoute(): HashRoute {
     skillFormMode: section === "skills" ? skillRoute.skillFormMode : null,
     skillName: section === "skills" ? skillRoute.skillName : null,
     skillVersion: section === "skills" ? skillRoute.skillVersion : null,
+    skillSetName: section === "skill_sets" ? skillSetRoute.skillSetName : null,
+    skillSetFormMode: section === "skill_sets" ? skillSetRoute.skillSetFormMode : null,
   };
 }
 
@@ -241,6 +272,26 @@ export function skillAddVersionHash(name: string): string {
 /** Bookmarkable hash for editing a skill version. */
 export function skillEditHash(name: string, version: string): string {
   return `#/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/edit`;
+}
+
+/** Bookmarkable hash for the skill sets list. */
+export function skillSetsListHash(): string {
+  return "#/skill_sets";
+}
+
+/** Bookmarkable hash for creating a skill set. */
+export function skillSetCreateHash(): string {
+  return "#/skill_sets/new";
+}
+
+/** Bookmarkable hash for a skill set detail view (name is URL-encoded). */
+export function skillSetDetailHash(name: string): string {
+  return `#/skill_sets/${encodeURIComponent(name)}`;
+}
+
+/** Bookmarkable hash for editing a skill set (name is URL-encoded). */
+export function skillSetEditHash(name: string): string {
+  return `#/skill_sets/${encodeURIComponent(name)}/edit`;
 }
 
 /** Bookmarkable hash for a single prompt detail view (canonical name is URL-encoded). */
