@@ -9,6 +9,7 @@ import {
   setDashboardLocationHash,
   skillCreateHash,
   skillAddVersionHash,
+  skillDuplicateHash,
   skillEditHash,
   skillImportHash,
   skillsListHash,
@@ -101,13 +102,17 @@ export function SkillsSection() {
 
   if (activeFormMode) {
     const backLabel =
-      activeFormMode === "edit" && activeSkillName ? `← ${activeSkillName}` : "← All skills";
+      (activeFormMode === "edit" || activeFormMode === "duplicate") && activeSkillName
+        ? `← ${activeSkillName}`
+        : "← All skills";
     const title =
       activeFormMode === "create"
         ? "Register Skill"
         : activeFormMode === "add-version"
           ? "Add Version"
-          : "Edit Skill";
+          : activeFormMode === "duplicate"
+            ? "Duplicate Version"
+            : "Edit Skill";
 
     return (
       <SectionCard
@@ -115,7 +120,9 @@ export function SkillsSection() {
         subtitle={
           activeFormMode === "edit" && activeSkillName && activeSkillVersion
             ? `${activeSkillName} @ ${activeSkillVersion}`
-            : "Versioned Agent Skills catalog with lifecycle and DLC status."
+            : activeFormMode === "duplicate" && activeSkillName && activeSkillVersion
+              ? `Copy ${activeSkillName} @ ${activeSkillVersion} to a new version`
+              : "Versioned Agent Skills catalog with lifecycle and DLC status."
         }
         action={
           <Button variant="outlined" onClick={navigateToList}>
@@ -165,6 +172,15 @@ export function SkillsSection() {
             return;
           }
           setLocalFormMode("edit");
+          setLocalSkillName(name);
+          setLocalSkillVersion(version);
+        }}
+        onDuplicateSkill={(name, version) => {
+          if (usesHashRouting()) {
+            setDashboardLocationHash(skillDuplicateHash(name, version));
+            return;
+          }
+          setLocalFormMode("duplicate");
           setLocalSkillName(name);
           setLocalSkillVersion(version);
         }}

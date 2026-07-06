@@ -18,12 +18,14 @@ function statusChipColor(status: string): "success" | "warning" | "default" | "e
 export function SkillVersionCard({
   skill,
   onEdit,
+  onDuplicate,
   onActivate,
   onToggleLock,
   onDelete,
 }: {
   skill: DashboardSkillVersionSummary;
   onEdit: () => void;
+  onDuplicate: () => void;
   onActivate: () => void;
   onToggleLock: () => void;
   onDelete: () => void;
@@ -82,6 +84,9 @@ export function SkillVersionCard({
         <Stack direction="row" spacing={0.75} sx={{ flexWrap: "wrap", justifyContent: "flex-end", pt: 0.5 }}>
           <Button size="small" onClick={onEdit}>
             Edit
+          </Button>
+          <Button size="small" onClick={onDuplicate}>
+            Duplicate
           </Button>
           <Button size="small" onClick={onActivate}>
             Activate

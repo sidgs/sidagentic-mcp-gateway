@@ -26,7 +26,7 @@ export function appSectionToHash(section: AppSection): string {
 
 export type ToolGroupFormMode = "create" | "edit" | null;
 
-export type SkillFormMode = "create" | "add-version" | "edit" | "import";
+export type SkillFormMode = "create" | "add-version" | "duplicate" | "edit" | "import";
 
 export type SkillSetFormMode = "create" | "edit" | null;
 
@@ -129,6 +129,9 @@ function parseSkillSubroute(parts: string[]): Pick<HashRoute, "skillFormMode" | 
     return { skillFormMode: "add-version", skillName, skillVersion: null };
   }
   const skillVersion = decodeRouteSegmentRange(parts, versionsIndex + 1, versionsIndex + 2);
+  if (parts.length === versionsIndex + 4 && parts[parts.length - 1] === "duplicate") {
+    return { skillFormMode: "duplicate", skillName, skillVersion };
+  }
   if (parts.length === versionsIndex + 3 && parts[parts.length - 1] === "edit") {
     return { skillFormMode: "edit", skillName, skillVersion };
   }
@@ -267,6 +270,11 @@ export function skillCreateHash(): string {
 /** Bookmarkable hash for adding a version to an existing skill. */
 export function skillAddVersionHash(name: string): string {
   return `#/skills/${encodeURIComponent(name)}/versions/new`;
+}
+
+/** Bookmarkable hash for duplicating a skill version into a new version. */
+export function skillDuplicateHash(name: string, version: string): string {
+  return `#/skills/${encodeURIComponent(name)}/versions/${encodeURIComponent(version)}/duplicate`;
 }
 
 /** Bookmarkable hash for editing a skill version. */

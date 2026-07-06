@@ -20,6 +20,7 @@ import type { DashboardSkillVersionSummary } from "../lib/types";
 export interface SkillsCatalogPanelProps {
   onAddVersion: (name: string) => void;
   onEditSkill: (name: string, version: string) => void;
+  onDuplicateSkill: (name: string, version: string) => void;
 }
 
 const STATUS_OPTIONS = ["all", "preview", "active", "deprecated", "retired"] as const;
@@ -35,7 +36,7 @@ function skillMatchesSearch(skill: DashboardSkillVersionSummary, term: string): 
   return haystack.includes(term);
 }
 
-export function SkillsCatalogPanel({ onAddVersion, onEditSkill }: SkillsCatalogPanelProps) {
+export function SkillsCatalogPanel({ onAddVersion, onEditSkill, onDuplicateSkill }: SkillsCatalogPanelProps) {
   const [skills, setSkills] = useState<DashboardSkillVersionSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -217,6 +218,7 @@ export function SkillsCatalogPanel({ onAddVersion, onEditSkill }: SkillsCatalogP
                 key={v.id}
                 skill={v}
                 onEdit={() => onEditSkill(name, v.version)}
+                onDuplicate={() => onDuplicateSkill(name, v.version)}
                 onActivate={async () => {
                   await api.setSkillDLCStatus(name, v.version, "released");
                   await api.transitionSkillStatus(name, v.version, "active");

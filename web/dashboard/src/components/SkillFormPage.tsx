@@ -3,6 +3,7 @@ import { Alert, Button, Stack, Typography } from "@mui/material";
 import { api } from "../lib/api";
 import type { SkillFormMode } from "../lib/hashRoute";
 import {
+  createFormFromDetail,
   emptySkillContent,
   emptySkillCreateForm,
   formToUpdatePayload,
@@ -32,6 +33,8 @@ function formTitle(mode: SkillFormMode, skillName: string | null, skillVersion: 
       return "Register skill";
     case "add-version":
       return skillName ? `Add version — ${skillName}` : "Add version";
+    case "duplicate":
+      return skillName && skillVersion ? `Duplicate ${skillName} @ ${skillVersion}` : "Duplicate skill";
     case "edit":
       return skillName && skillVersion ? `Edit ${skillName} @ ${skillVersion}` : "Edit skill";
     default:
@@ -41,6 +44,7 @@ function formTitle(mode: SkillFormMode, skillName: string | null, skillVersion: 
 
 export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved }: SkillFormPageProps) {
   const isEdit = mode === "edit";
+  const isDuplicate = mode === "duplicate";
   const [createForm, setCreateForm] = useState<SkillCreateForm>(() => {
     if (mode === "add-version" && skillName) {
       return { ...emptySkillCreateForm(), name: skillName, version: "" };
@@ -51,9 +55,40 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
   const [lifecycleForm, setLifecycleForm] = useState<SkillLifecycleForm>(emptySkillLifecycle);
   const [originalLifecycle, setOriginalLifecycle] = useState<SkillLifecycleForm>(emptySkillLifecycle);
   const [locked, setLocked] = useState(false);
-  const [loading, setLoading] = useState(isEdit);
+  const [loading, setLoading] = useState(isEdit || isDuplicate);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!isDuplicate || !skillName || !skillVersion) {
+      return;
+    }
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    void api
+      .getSkillVersion(skillName, skillVersion)
+      .then((detail) => {
+        if (cancelled) {
+          return;
+        }
+        setCreateForm(createFormFromDetail(detail));
+      })
+      .catch((e) => {
+        if (cancelled) {
+          return;
+        }
+        setError(e instanceof Error ? e.message : "Failed to load skill");
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [isDuplicate, skillName, skillVersion]);
 
   useEffect(() => {
     if (!isEdit || !skillName || !skillVersion) {
@@ -161,10 +196,15 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
 
       {!loading && !isEdit ? (
         <>
+          {isDuplicate ? (
+            <Alert severity="info">
+              Content is copied from v{skillVersion}. Choose a new version label and adjust fields before saving.
+            </Alert>
+          ) : null}
           <SkillIdentityFields
             form={createForm}
             setForm={setCreateForm}
-            nameLocked={mode === "add-version"}
+            nameLocked={mode === "add-version" || mode === "duplicate"}
             disabled={saving}
           />
           <SkillContentFields form={createForm} setForm={(content) => setCreateForm({ ...createForm, ...content })} disabled={saving} />
@@ -202,7 +242,7 @@ export function SkillFormPage({ mode, skillName, skillVersion, onCancel, onSaved
           disabled={loading || saving || !canSave}
           onClick={() => void submit()}
         >
-          {isEdit ? "Save changes" : "Create skill"}
+          {isEdit ? "Save changes" : isDuplicate ? "Create duplicate" : "Create skill"}
         </Button>
       </Stack>
     </Stack>

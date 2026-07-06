@@ -43,6 +43,27 @@ export function skillDetailToForm(detail: DashboardSkillVersionDetail): SkillCon
   };
 }
 
+/** Suggest the next patch version for semver-like labels (e.g. 1.0.0 -> 1.0.1). */
+export function suggestNextVersion(version: string): string {
+  const match = version.trim().match(/^(\d+)\.(\d+)\.(\d+)(.*)$/);
+  if (!match) {
+    return "";
+  }
+  const patch = Number.parseInt(match[3], 10) + 1;
+  return `${match[1]}.${match[2]}.${patch}${match[4]}`;
+}
+
+export function createFormFromDetail(
+  detail: DashboardSkillVersionDetail,
+  versionOverride?: string,
+): SkillCreateForm {
+  return {
+    name: detail.name,
+    version: versionOverride ?? suggestNextVersion(detail.version),
+    ...skillDetailToForm(detail),
+  };
+}
+
 export function formToUpdatePayload(form: SkillContentForm): DashboardUpdateSkillInput {
   return {
     description: form.description.trim(),
