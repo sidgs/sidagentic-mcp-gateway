@@ -150,3 +150,12 @@ func respondSkillDetailCreated(c *gin.Context, sv *model.SkillVersion, skillName
 	}
 	c.JSON(http.StatusCreated, detail)
 }
+
+func respondSkillEditableDetail(c *gin.Context, sv *model.SkillVersion, skillName string) {
+	detail, err := skillsvc.ToEditableDetail(sv, skillName)
+	if err != nil {
+		handleServiceError(c, err)
+		return
+	}
+	c.JSON(http.StatusOK, detail)
+}

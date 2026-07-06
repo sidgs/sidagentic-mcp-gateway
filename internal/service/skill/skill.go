@@ -308,6 +308,26 @@ func (s *Service) GetReferenceContent(ctx context.Context, name, version, filena
 	return ref.MarkdownContent, nil
 }
 
+// GetScriptContent returns source code for a script file.
+func (s *Service) GetScriptContent(ctx context.Context, name, version, filename string) (string, error) {
+	sv, _, err := s.getVersionRecord(ctx, name, version)
+	if err != nil {
+		return "", err
+	}
+	filename = strings.TrimSpace(filename)
+	if err := ValidateResourceFilename(filename); err != nil {
+		return "", err
+	}
+	var script model.SkillScript
+	if err := s.db.WithContext(ctx).Where("skill_version_id = ? AND filename = ?", sv.ID, filename).First(&script).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return "", fmt.Errorf("script not found: %w", apierrors.ErrNotFound)
+		}
+		return "", err
+	}
+	return script.CodeContent, nil
+}
+
 // ResolveVersionByID loads a version with skill for tenant scope checks.
 func (s *Service) ResolveVersionByID(ctx context.Context, versionID uuid.UUID) (*model.SkillVersion, *model.Skill, error) {
 	var sv model.SkillVersion

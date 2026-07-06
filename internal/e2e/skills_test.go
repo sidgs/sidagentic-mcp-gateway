@@ -146,6 +146,13 @@ func TestE2E_DevMode_SkillSet_TenantRoute_Open(t *testing.T) {
 	resp = env.do(t, http.MethodGet, "/sami/v0/skillsets/open-set/skills", nil, "")
 	defer drain(resp)
 	require.Equal(t, http.StatusOK, resp.StatusCode)
+	var catalog []map[string]any
+	decodeJSON(t, resp, &catalog)
+	require.Len(t, catalog, 1)
+	assert.Equal(t, "tenant-skill", catalog[0]["name"])
+	assert.Equal(t, "2.0.0", catalog[0]["version"])
+	assert.NotEmpty(t, catalog[0]["id"])
+	assert.Equal(t, "# Instructions\nDo the thing.", catalog[0]["body_content"])
 }
 
 func TestE2E_DevMode_AgentApp_SkillSetAttachment(t *testing.T) {

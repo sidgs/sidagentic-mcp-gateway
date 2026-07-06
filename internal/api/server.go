@@ -647,6 +647,12 @@ func (s *Server) setupRouter() (*gin.Engine, error) {
 		s.checkAuthForSkillSetAccess(),
 		s.tenantSkillSetReferenceHandler(),
 	)
+	tenantMCP.GET(
+		V0PathPrefix+"/skillsets/:name/skills/:skillname/versions/:version/scripts/:filename",
+		s.requireInitialized(),
+		s.checkAuthForSkillSetAccess(),
+		s.tenantSkillSetScriptHandler(),
+	)
 
 	g.POST(
 		"/agent-apps/oauth/token",

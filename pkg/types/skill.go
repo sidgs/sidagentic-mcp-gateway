@@ -134,3 +134,9 @@ type SkillReferenceContentResponse struct {
 	Filename         string `json:"filename"`
 	MarkdownContent  string `json:"markdown_content"`
 }
+
+// SkillScriptContentResponse returns on-demand script source.
+type SkillScriptContentResponse struct {
+	Filename    string `json:"filename"`
+	CodeContent string `json:"code_content"`
+}

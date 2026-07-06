@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	skillsvc "sami.io/mcpgateway/internal/service/skill"
 	"sami.io/mcpgateway/pkg/types"
 )
 
@@ -79,13 +80,21 @@ func (s *Server) tenantSkillSetListHandler() gin.HandlerFunc {
 			handleServiceError(c, err)
 			return
 		}
-		summaries := make([]types.SkillVersionSummary, 0, len(detail.Members))
+		out := make([]types.SkillVersionEditableDetail, 0, len(detail.Members))
 		for _, m := range detail.Members {
-			summaries = append(summaries, types.SkillVersionSummary{
-				Name: m.Name, Version: m.Version, Description: m.Description, Status: m.Status,
-			})
+			sv, sk, err := s.skillService.GetSkillVersion(c.Request.Context(), m.Name, m.Version)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			item, err := skillsvc.ToEditableDetail(sv, sk.Name)
+			if err != nil {
+				handleServiceError(c, err)
+				return
+			}
+			out = append(out, *item)
 		}
-		c.JSON(http.StatusOK, summaries)
+		c.JSON(http.StatusOK, out)
 	}
 }
 
@@ -108,7 +117,7 @@ func (s *Server) tenantSkillSetSkillHandler() gin.HandlerFunc {
 			handleServiceError(c, err)
 			return
 		}
-		respondSkillDetail(c, sv, sk.Name)
+		respondSkillEditableDetail(c, sv, sk.Name)
 	}
 }
 
@@ -135,6 +144,33 @@ func (s *Server) tenantSkillSetReferenceHandler() gin.HandlerFunc {
 		c.JSON(http.StatusOK, types.SkillReferenceContentResponse{
 			Filename:        filename,
 			MarkdownContent: content,
+		})
+	}
+}
+
+func (s *Server) tenantSkillSetScriptHandler() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		setName := c.Param("name")
+		skillName := c.Param("skillname")
+		version := c.Param("version")
+		filename := c.Param("filename")
+		ok, err := s.skillSetService.IsMember(c.Request.Context(), setName, skillName, version)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		if !ok {
+			c.JSON(http.StatusNotFound, gin.H{"error": "skill version not in skill set"})
+			return
+		}
+		content, err := s.skillService.GetScriptContent(c.Request.Context(), skillName, version, filename)
+		if err != nil {
+			handleServiceError(c, err)
+			return
+		}
+		c.JSON(http.StatusOK, types.SkillScriptContentResponse{
+			Filename:    filename,
+			CodeContent: content,
 		})
 	}
 }
