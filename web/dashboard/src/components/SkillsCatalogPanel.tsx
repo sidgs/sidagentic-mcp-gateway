@@ -10,15 +10,11 @@ import {
   MenuItem,
   Select,
   Stack,
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableRow,
   TextField,
   Typography,
 } from "@mui/material";
 import { api } from "../lib/api";
+import { SkillVersionCard } from "./SkillVersionCard";
 import type { DashboardSkillVersionSummary } from "../lib/types";
 
 export interface SkillsCatalogPanelProps {
@@ -199,8 +195,8 @@ export function SkillsCatalogPanel({ onAddVersion, onEditSkill }: SkillsCatalogP
       ) : null}
 
       {grouped.map(([name, versions]) => (
-        <Box key={name} className="section-card" sx={{ p: 2 }}>
-          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1 }}>
+        <Box key={name}>
+          <Stack direction="row" sx={{ justifyContent: "space-between", alignItems: "center", mb: 1.5 }}>
             <Stack direction="row" spacing={1} sx={{ alignItems: "center" }}>
               <Typography variant="h6">{name}</Typography>
               <Chip size="small" variant="outlined" label={`${versions.length} shown`} />
@@ -209,70 +205,34 @@ export function SkillsCatalogPanel({ onAddVersion, onEditSkill }: SkillsCatalogP
               Add version
             </Button>
           </Stack>
-          <Table size="small">
-            <TableHead>
-              <TableRow>
-                <TableCell>Version</TableCell>
-                <TableCell>Description</TableCell>
-                <TableCell>Status</TableCell>
-                <TableCell>DLC</TableCell>
-                <TableCell>Lock</TableCell>
-                <TableCell align="right">Actions</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {versions.map((v) => (
-                <TableRow key={v.id}>
-                  <TableCell>{v.version}</TableCell>
-                  <TableCell>{v.description}</TableCell>
-                  <TableCell>
-                    <Chip size="small" label={v.status} />
-                  </TableCell>
-                  <TableCell>
-                    <Chip size="small" variant="outlined" label={v.dlc_status} />
-                  </TableCell>
-                  <TableCell>{v.locked ? "Locked" : "Open"}</TableCell>
-                  <TableCell align="right">
-                    <Stack direction="row" spacing={1} sx={{ justifyContent: "flex-end", flexWrap: "wrap" }}>
-                      <Button size="small" onClick={() => onEditSkill(name, v.version)}>
-                        Edit
-                      </Button>
-                      <Button
-                        size="small"
-                        onClick={async () => {
-                          await api.setSkillDLCStatus(name, v.version, "released");
-                          await api.transitionSkillStatus(name, v.version, "active");
-                          await reload();
-                        }}
-                      >
-                        Activate
-                      </Button>
-                      <Button
-                        size="small"
-                        onClick={async () => {
-                          await api.setSkillLock(name, v.version, !v.locked);
-                          await reload();
-                        }}
-                      >
-                        {v.locked ? "Unlock" : "Lock"}
-                      </Button>
-                      <Button
-                        size="small"
-                        color="error"
-                        disabled={v.locked}
-                        onClick={async () => {
-                          await api.deleteSkillVersion(name, v.version);
-                          await reload();
-                        }}
-                      >
-                        Delete
-                      </Button>
-                    </Stack>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: { xs: "1fr", sm: "repeat(2, 1fr)", md: "repeat(3, 1fr)" },
+              gap: 1.5,
+            }}
+          >
+            {versions.map((v) => (
+              <SkillVersionCard
+                key={v.id}
+                skill={v}
+                onEdit={() => onEditSkill(name, v.version)}
+                onActivate={async () => {
+                  await api.setSkillDLCStatus(name, v.version, "released");
+                  await api.transitionSkillStatus(name, v.version, "active");
+                  await reload();
+                }}
+                onToggleLock={async () => {
+                  await api.setSkillLock(name, v.version, !v.locked);
+                  await reload();
+                }}
+                onDelete={async () => {
+                  await api.deleteSkillVersion(name, v.version);
+                  await reload();
+                }}
+              />
+            ))}
+          </Box>
         </Box>
       ))}
     </Stack>
