@@ -129,7 +129,7 @@ function parseSkillSubroute(parts: string[]): Pick<HashRoute, "skillFormMode" | 
     return { skillFormMode: "add-version", skillName, skillVersion: null };
   }
   const skillVersion = decodeRouteSegmentRange(parts, versionsIndex + 1, versionsIndex + 2);
-  if (parts.length === versionsIndex + 4 && parts[parts.length - 1] === "duplicate") {
+  if (parts.length === versionsIndex + 3 && parts[parts.length - 1] === "duplicate") {
     return { skillFormMode: "duplicate", skillName, skillVersion };
   }
   if (parts.length === versionsIndex + 3 && parts[parts.length - 1] === "edit") {

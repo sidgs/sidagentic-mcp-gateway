@@ -61,6 +61,8 @@ export function createFormFromDetail(
     name: detail.name,
     version: versionOverride ?? suggestNextVersion(detail.version),
     ...skillDetailToForm(detail),
+    script_files: (detail.script_files ?? []).map((script) => ({ ...script })),
+    reference_files: (detail.reference_files ?? []).map((reference) => ({ ...reference })),
   };
 }
 
