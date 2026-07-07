@@ -76,12 +76,12 @@ func (s *Server) dashboardAuthTenantsHandler() gin.HandlerFunc {
 			c.JSON(http.StatusOK, types.ListAccessibleTenantsResponse{Tenants: []types.AccessibleTenant{}})
 			return
 		}
-		sub, email, platformAdmin, ok := s.identityFromRequest(c)
+		_, email, platformAdmin, ok := s.identityFromRequest(c)
 		if !ok {
 			c.JSON(http.StatusUnauthorized, gin.H{"error": "unauthorized"})
 			return
 		}
-		tenants, memberships, err := s.tenantRegistry.ListForIdentity(c.Request.Context(), sub, email, platformAdmin)
+		tenants, memberships, err := s.tenantRegistry.ListForIdentity(c.Request.Context(), email, platformAdmin)
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -143,13 +143,13 @@ func (s *Server) dashboardSelectTenantHandler() gin.HandlerFunc {
 		}
 		role := types.UserRoleAdministrator
 		if !platformAdmin {
-			mem, err := s.tenantRegistry.MembershipForIdentity(c.Request.Context(), tid, sub, email)
+			mem, err := s.tenantRegistry.MembershipForIdentity(c.Request.Context(), tid, email)
 			if err != nil {
 				c.JSON(http.StatusForbidden, gin.H{"error": "not a member of this tenant"})
 				return
 			}
 			role = mem.Role
-		} else if mem, err := s.tenantRegistry.MembershipForIdentity(c.Request.Context(), tid, sub, email); err == nil {
+		} else if mem, err := s.tenantRegistry.MembershipForIdentity(c.Request.Context(), tid, email); err == nil {
 			role = mem.Role
 		}
 		token, exp, err := s.mintTenantJWT(sub, email, tid, role, platformAdmin)

@@ -102,3 +102,37 @@ func TestCreateTenantAndMembership(t *testing.T) {
 		t.Fatalf("expected owner membership, got %+v", members)
 	}
 }
+
+func TestMembershipForIdentityUsesEmail(t *testing.T) {
+	setup, _ := testhelpers.SetupUserTest(t)
+	defer setup.Cleanup()
+
+	svc := NewService(setup.DB)
+	ctx := context.Background()
+	if _, err := svc.Create(ctx, "acme", "Acme Corp", "owner@example.com"); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	mem, err := svc.MembershipForIdentity(ctx, "acme", "owner@example.com")
+	if err != nil {
+		t.Fatalf("MembershipForIdentity: %v", err)
+	}
+	if mem.Email != "owner@example.com" || mem.Role != "administrator" {
+		t.Fatalf("unexpected membership: %+v", mem)
+	}
+
+	tenants, memberships, err := svc.ListForIdentity(ctx, "owner@example.com", false)
+	if err != nil {
+		t.Fatalf("ListForIdentity: %v", err)
+	}
+	if len(tenants) != 1 || tenants[0].ID != "acme" {
+		t.Fatalf("unexpected tenants: %+v", tenants)
+	}
+	if memberships["acme"].Email != "owner@example.com" {
+		t.Fatalf("unexpected memberships: %+v", memberships)
+	}
+
+	if _, err := svc.MembershipForIdentity(ctx, "acme", "other@example.com"); err == nil {
+		t.Fatal("expected membership lookup to fail for non-member email")
+	}
+}

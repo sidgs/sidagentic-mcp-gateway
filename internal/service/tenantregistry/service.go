@@ -215,33 +215,22 @@ func (s *Service) RemoveMember(ctx context.Context, tenantID string, membershipI
 	return nil
 }
 
-func (s *Service) MembershipForIdentity(ctx context.Context, tenantID, sub, email string) (*model.TenantMembership, error) {
+func (s *Service) MembershipForIdentity(ctx context.Context, tenantID, email string) (*model.TenantMembership, error) {
 	email = strings.TrimSpace(strings.ToLower(email))
-	sub = strings.TrimSpace(sub)
-	q := s.db.WithContext(ctx).Where("tenant_id = ?", tenantID)
-	if sub != "" {
-		q = q.Where("oidc_sub = ? OR (oidc_sub = '' AND email = ?)", sub, email)
-	} else if email != "" {
-		q = q.Where("email = ?", email)
-	} else {
-		return nil, fmt.Errorf("identity required: %w", apierrors.ErrInvalidInput)
+	if email == "" {
+		return nil, fmt.Errorf("email required: %w", apierrors.ErrInvalidInput)
 	}
 	var row model.TenantMembership
-	if err := q.First(&row).Error; err != nil {
+	if err := s.db.WithContext(ctx).Where("tenant_id = ? AND email = ?", tenantID, email).First(&row).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, fmt.Errorf("membership not found: %w", apierrors.ErrNotFound)
 		}
 		return nil, err
 	}
-	if row.OIDCSub == "" && sub != "" {
-		row.OIDCSub = sub
-		model.StampUpdate(&row, auditctx.ActorFrom(ctx), time.Now().UTC())
-		_ = s.db.WithContext(ctx).Save(&row).Error
-	}
 	return &row, nil
 }
 
-func (s *Service) ListForIdentity(ctx context.Context, sub, email string, platformAdmin bool) ([]model.Tenant, map[string]model.TenantMembership, error) {
+func (s *Service) ListForIdentity(ctx context.Context, email string, platformAdmin bool) ([]model.Tenant, map[string]model.TenantMembership, error) {
 	if platformAdmin {
 		tenants, err := s.List(ctx, false)
 		if err != nil {
@@ -250,17 +239,11 @@ func (s *Service) ListForIdentity(ctx context.Context, sub, email string, platfo
 		return tenants, map[string]model.TenantMembership{}, nil
 	}
 	email = strings.TrimSpace(strings.ToLower(email))
-	sub = strings.TrimSpace(sub)
-	var memberships []model.TenantMembership
-	q := s.db.WithContext(ctx)
-	switch {
-	case sub != "":
-		q = q.Where("oidc_sub = ? OR email = ?", sub, email)
-	case email != "":
-		q = q.Where("email = ?", email)
-	default:
+	if email == "" {
 		return nil, nil, nil
 	}
+	var memberships []model.TenantMembership
+	q := s.db.WithContext(ctx).Where("email = ?", email)
 	if err := q.Find(&memberships).Error; err != nil {
 		return nil, nil, err
 	}
