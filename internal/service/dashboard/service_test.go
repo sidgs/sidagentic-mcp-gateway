@@ -60,6 +60,25 @@ func TestServers_WithToolCounts(t *testing.T) {
 	require.Equal(t, 2, resp.Servers[0].ToolCount)
 }
 
+func TestDiagnostics_ActiveEntityCountsWithServerJoin(t *testing.T) {
+	db := testhelpers.CreateTestDB(t)
+
+	server := model.McpServer{Name: "srv-a", Transport: "stdio", Enabled: true, TenantID: "tenant-a"}
+	require.NoError(t, db.Create(&server).Error)
+	require.NoError(t, db.Create(&model.Tool{
+		Name: "tool-a", Enabled: true, TenantID: "tenant-a", ServerID: server.ID,
+	}).Error)
+
+	svc := NewService(db, false)
+	resp, err := svc.Diagnostics(
+		tenant.WithContext(context.Background(), "tenant-a"),
+		model.ModeEnterprise,
+		"https://example.com",
+	)
+	require.NoError(t, err)
+	require.Equal(t, 1, resp.ToolCount)
+}
+
 func TestTools_TenantIsolation(t *testing.T) {
 	db := testhelpers.CreateTestDB(t)
 

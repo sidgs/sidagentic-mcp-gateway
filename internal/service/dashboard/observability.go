@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/types"
 	"gorm.io/gorm"
 )
@@ -77,7 +78,7 @@ func (s *Service) Observability(ctx context.Context, rangeKey, fromRaw, toRaw st
 		return nil, err
 	}
 	limit = normalizeLimit(limit, defaultObservabilityLimit)
-	db := s.dbTenant(ctx)
+	db := s.dbTenantModel(ctx, &model.ToolInvocationEvent{})
 
 	summary, err := s.loadObservabilitySummary(db, window.From, window.To)
 	if err != nil {
@@ -99,7 +100,7 @@ func (s *Service) Observability(ctx context.Context, rangeKey, fromRaw, toRaw st
 		return resp, nil
 	}
 
-	byAgent, err := s.loadObservabilityByAgent(db, window.From, window.To, limit)
+	byAgent, err := s.loadObservabilityByAgent(ctx, window.From, window.To, limit)
 	if err != nil {
 		return nil, err
 	}
@@ -181,9 +182,10 @@ type agentUsageRow struct {
 	AvgLatency   float64
 }
 
-func (s *Service) loadObservabilityByAgent(db *gorm.DB, from, to time.Time, limit int) ([]types.DashboardAgentUsage, error) {
+func (s *Service) loadObservabilityByAgent(ctx context.Context, from, to time.Time, limit int) ([]types.DashboardAgentUsage, error) {
+	tid := tenant.MustFromContext(ctx)
 	var rows []agentUsageRow
-	err := db.Table("tool_invocation_events AS e").
+	err := s.db.WithContext(ctx).Table("tool_invocation_events AS e").
 		Select(`
 			e.agent_app_id,
 			COALESCE(a.name, 'Unattributed') AS agent_name,
@@ -195,8 +197,8 @@ func (s *Service) loadObservabilityByAgent(db *gorm.DB, from, to time.Time, limi
 			model.ToolInvocationOutcomeSuccess,
 			model.ToolInvocationOutcomeError,
 		).
-		Joins("LEFT JOIN agent_apps AS a ON a.id = e.agent_app_id").
-		Where("e.created_on >= ? AND e.created_on < ?", from, to).
+		Joins("LEFT JOIN agent_apps AS a ON a.id = e.agent_app_id AND a.tenant_id = e.tenant_id").
+		Where("e.tenant_id = ? AND e.created_on >= ? AND e.created_on < ?", tid, from, to).
 		Group("e.agent_app_id, a.name, a.client_id").
 		Order("total_calls DESC").
 		Limit(limit).
