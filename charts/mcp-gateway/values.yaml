@@ -11,14 +11,14 @@ image:
   # This sets the pull policy for images.
   pullPolicy: Always
   # Overrides the image tag whose default is the chart appVersion.
-  tag: "latest-stdio"
+  tag: "1.17.0"
 
 # Flyway database migrations run before the API container starts (same image as docker-compose migrate service).
 migrate:
   enabled: false
   image:
     repository: sidgs.jfrog.io/sami/sami-mcp-gateway-migrate
-    tag: "latest-stdio"
+    tag: "1.17.0"
     pullPolicy: Always
   # Required when enabled: FLYWAY_URL (jdbc:postgresql://host:5432/dbname).
   # FLYWAY_USER and FLYWAY_PASSWORD can be set here or in secrets (via envFrom below).

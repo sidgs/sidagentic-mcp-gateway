@@ -29,7 +29,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.migrate
-    image: sidgs.jfrog.io/sami/sami-mcp-gateway-migrate:${SAMI_MCP_GATEWAY_IMAGE_TAG:-latest-stdio}
+    image: sidgs.jfrog.io/sami/sami-mcp-gateway-migrate:${SAMI_MCP_GATEWAY_IMAGE_TAG:-1.17.0}
     environment:
       FLYWAY_URL: jdbc:postgresql://${POSTGRES_HOST:-postgres-dev-sl.sidglobal.cloud}:${POSTGRES_PORT:-5432}/sami-mcp-gateway
       FLYWAY_USER: sami
@@ -43,7 +43,7 @@ services:
     restart: unless-stopped
 
   api:
-    image: sidgs.jfrog.io/sami/sami-mcp-gateway:${SAMI_MCP_GATEWAY_IMAGE_TAG:-latest-stdio}
+    image: sidgs.jfrog.io/sami/sami-mcp-gateway:${SAMI_MCP_GATEWAY_IMAGE_TAG:-1.17.0}
     container_name: sami-mcp-gateway-server
     build:
       context: .
@@ -106,7 +106,7 @@ services:
     restart: always
 
   api-local:
-    image: sidgs.jfrog.io/sami/sami-mcp-gateway:${SAMI_MCP_GATEWAY_IMAGE_TAG:-latest-stdio}
+    image: sidgs.jfrog.io/sami/sami-mcp-gateway:${SAMI_MCP_GATEWAY_IMAGE_TAG:-1.17.0}
     container_name: sami-mcp-gateway-server-local
     build:
       context: .
