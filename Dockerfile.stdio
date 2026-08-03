@@ -1,0 +1,54 @@
+# SAMI MCP Gateway stdio runtime image (embedded dashboard + uv/uvx + npx).
+# Builds the Linux binary inside Docker (CGO + librdkafka required for notifications).
+#
+# Build: docker build -f Dockerfile.stdio -t sidgs.jfrog.io/sami/sami-mcp-gateway:latest-stdio .
+
+FROM node:20-bookworm-slim AS dashboard-builder
+
+WORKDIR /src/web/dashboard
+COPY web/dashboard/package.json web/dashboard/package-lock.json ./
+RUN npm ci
+COPY web/dashboard/ ./
+RUN mkdir -p /src/assets
+
+ARG VITE_DASHBOARD_BASE=
+ENV VITE_DASHBOARD_BASE=$VITE_DASHBOARD_BASE
+
+RUN npm run build
+
+FROM golang:1.24.3-bookworm AS builder
+
+ARG VERSION=dev
+
+WORKDIR /src
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends librdkafka-dev \
+	&& rm -rf /var/lib/apt/lists/*
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+
+RUN rm -rf internal/dashboardui/dist
+COPY --from=dashboard-builder /src/web/dashboard/dist ./internal/dashboardui/dist
+
+RUN CGO_ENABLED=1 GOOS=linux go build -trimpath \
+	-ldflags="-s -w -X sami.io/mcpgateway/pkg/version.Version=${VERSION}" \
+	-o /sami-mcp-gateway .
+
+FROM ghcr.io/astral-sh/uv:debian
+
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends curl gnupg librdkafka1 \
+	&& curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+	&& apt-get install -y --no-install-recommends nodejs \
+	&& apt-get clean \
+	&& rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /sami-mcp-gateway /sami-mcp-gateway
+
+EXPOSE 8080
+ENTRYPOINT ["/sami-mcp-gateway"]
+CMD ["start"]
