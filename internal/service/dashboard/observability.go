@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"fmt"
 	"math"
 	"sort"
@@ -9,6 +10,7 @@ import (
 
 	"sami.io/mcpgateway/internal/model"
 	"sami.io/mcpgateway/pkg/types"
+	"gorm.io/gorm"
 )
 
 const (
@@ -69,14 +71,15 @@ func normalizeLimit(limit, fallback int) int {
 }
 
 // Observability returns aggregated tool invocation metrics for the dashboard.
-func (s *Service) Observability(rangeKey, fromRaw, toRaw string, limit int) (*types.DashboardObservabilityResponse, error) {
+func (s *Service) Observability(ctx context.Context, rangeKey, fromRaw, toRaw string, limit int) (*types.DashboardObservabilityResponse, error) {
 	window, err := parseObservabilityWindow(rangeKey, fromRaw, toRaw)
 	if err != nil {
 		return nil, err
 	}
 	limit = normalizeLimit(limit, defaultObservabilityLimit)
+	db := s.dbTenant(ctx)
 
-	summary, err := s.loadObservabilitySummary(window.From, window.To)
+	summary, err := s.loadObservabilitySummary(db, window.From, window.To)
 	if err != nil {
 		return nil, err
 	}
@@ -96,23 +99,23 @@ func (s *Service) Observability(rangeKey, fromRaw, toRaw string, limit int) (*ty
 		return resp, nil
 	}
 
-	byAgent, err := s.loadObservabilityByAgent(window.From, window.To, limit)
+	byAgent, err := s.loadObservabilityByAgent(db, window.From, window.To, limit)
 	if err != nil {
 		return nil, err
 	}
-	topTools, err := s.loadObservabilityToolTraffic(window.From, window.To, limit)
+	topTools, err := s.loadObservabilityToolTraffic(db, window.From, window.To, limit)
 	if err != nil {
 		return nil, err
 	}
-	topGroups, err := s.loadObservabilityToolGroups(window.From, window.To, limit)
+	topGroups, err := s.loadObservabilityToolGroups(db, window.From, window.To, limit)
 	if err != nil {
 		return nil, err
 	}
-	toolTraffic, err := s.loadObservabilityToolTraffic(window.From, window.To, defaultObservabilityTrafficLimit)
+	toolTraffic, err := s.loadObservabilityToolTraffic(db, window.From, window.To, defaultObservabilityTrafficLimit)
 	if err != nil {
 		return nil, err
 	}
-	series, err := s.loadObservabilityCallVolume(window.From, window.To)
+	series, err := s.loadObservabilityCallVolume(db, window.From, window.To)
 	if err != nil {
 		return nil, err
 	}
@@ -135,9 +138,9 @@ type summaryRow struct {
 	ActiveGroups int
 }
 
-func (s *Service) loadObservabilitySummary(from, to time.Time) (types.DashboardObservabilitySummary, error) {
+func (s *Service) loadObservabilitySummary(db *gorm.DB, from, to time.Time) (types.DashboardObservabilitySummary, error) {
 	var row summaryRow
-	err := s.db.Model(&model.ToolInvocationEvent{}).
+	err := db.Model(&model.ToolInvocationEvent{}).
 		Select(`
 			COUNT(*) AS total_calls,
 			SUM(CASE WHEN outcome = ? THEN 1 ELSE 0 END) AS success_calls,
@@ -178,9 +181,9 @@ type agentUsageRow struct {
 	AvgLatency   float64
 }
 
-func (s *Service) loadObservabilityByAgent(from, to time.Time, limit int) ([]types.DashboardAgentUsage, error) {
+func (s *Service) loadObservabilityByAgent(db *gorm.DB, from, to time.Time, limit int) ([]types.DashboardAgentUsage, error) {
 	var rows []agentUsageRow
-	err := s.db.Table("tool_invocation_events AS e").
+	err := db.Table("tool_invocation_events AS e").
 		Select(`
 			e.agent_app_id,
 			COALESCE(a.name, 'Unattributed') AS agent_name,
@@ -227,9 +230,9 @@ type toolTrafficRow struct {
 	AvgLatency    float64
 }
 
-func (s *Service) loadObservabilityToolTraffic(from, to time.Time, limit int) ([]types.DashboardToolTraffic, error) {
+func (s *Service) loadObservabilityToolTraffic(db *gorm.DB, from, to time.Time, limit int) ([]types.DashboardToolTraffic, error) {
 	var rows []toolTrafficRow
-	err := s.db.Model(&model.ToolInvocationEvent{}).
+	err := db.Model(&model.ToolInvocationEvent{}).
 		Select(`
 			mcp_server_name,
 			tool_name,
@@ -251,7 +254,7 @@ func (s *Service) loadObservabilityToolTraffic(from, to time.Time, limit int) ([
 
 	out := make([]types.DashboardToolTraffic, 0, len(rows))
 	for _, row := range rows {
-		p95, err := s.loadToolP95Latency(from, to, row.MCPServerName, row.ToolName)
+		p95, err := s.loadToolP95Latency(db, from, to, row.MCPServerName, row.ToolName)
 		if err != nil {
 			return nil, err
 		}
@@ -270,9 +273,9 @@ func (s *Service) loadObservabilityToolTraffic(from, to time.Time, limit int) ([
 	return out, nil
 }
 
-func (s *Service) loadToolP95Latency(from, to time.Time, serverName, toolName string) (float64, error) {
+func (s *Service) loadToolP95Latency(db *gorm.DB, from, to time.Time, serverName, toolName string) (float64, error) {
 	var latencies []int64
-	err := s.db.Model(&model.ToolInvocationEvent{}).
+	err := db.Model(&model.ToolInvocationEvent{}).
 		Where("created_on >= ? AND created_on < ? AND mcp_server_name = ? AND tool_name = ?", from, to, serverName, toolName).
 		Order("latency_ms ASC").
 		Pluck("latency_ms", &latencies).Error
@@ -300,9 +303,9 @@ type toolGroupTrafficRow struct {
 	AvgLatency    float64
 }
 
-func (s *Service) loadObservabilityToolGroups(from, to time.Time, limit int) ([]types.DashboardToolGroupTraffic, error) {
+func (s *Service) loadObservabilityToolGroups(db *gorm.DB, from, to time.Time, limit int) ([]types.DashboardToolGroupTraffic, error) {
 	var rows []toolGroupTrafficRow
-	err := s.db.Model(&model.ToolInvocationEvent{}).
+	err := db.Model(&model.ToolInvocationEvent{}).
 		Select(`
 			tool_group_name,
 			COUNT(*) AS total_calls,
@@ -335,13 +338,13 @@ func (s *Service) loadObservabilityToolGroups(from, to time.Time, limit int) ([]
 	return out, nil
 }
 
-func (s *Service) loadObservabilityCallVolume(from, to time.Time) ([]types.DashboardTimeBucket, error) {
+func (s *Service) loadObservabilityCallVolume(db *gorm.DB, from, to time.Time) ([]types.DashboardTimeBucket, error) {
 	type eventPoint struct {
 		CreatedOn time.Time
 		Outcome   string
 	}
 	var events []eventPoint
-	err := s.db.Model(&model.ToolInvocationEvent{}).
+	err := db.Model(&model.ToolInvocationEvent{}).
 		Select("created_on, outcome").
 		Where("created_on >= ? AND created_on < ?", from, to).
 		Order("created_on ASC").

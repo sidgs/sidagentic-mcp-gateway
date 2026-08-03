@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/url"
@@ -42,13 +43,13 @@ type serverInventory struct {
 // Overview returns the high-level counts and endpoint hints shown in the
 // dashboard header/cards. These counts intentionally reflect discovered totals
 // rather than only currently enabled entities.
-func (s *Service) Overview(mode model.ServerMode, baseURL string) (*types.DashboardOverviewResponse, error) {
-	inventory, err := s.loadServerInventory()
+func (s *Service) Overview(ctx context.Context, mode model.ServerMode, baseURL string) (*types.DashboardOverviewResponse, error) {
+	inventory, err := s.loadServerInventory(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	toolCount, promptCount, resourceCount, err := s.loadDiscoveredEntityCounts()
+	toolCount, promptCount, resourceCount, err := s.loadDiscoveredEntityCounts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -79,8 +80,8 @@ func (s *Service) Overview(mode model.ServerMode, baseURL string) (*types.Dashbo
 
 // Servers returns the full server inventory with sanitized configuration
 // summaries suitable for direct UI display.
-func (s *Service) Servers() (*types.DashboardServersResponse, error) {
-	inventory, err := s.loadServerInventory()
+func (s *Service) Servers(ctx context.Context) (*types.DashboardServersResponse, error) {
+	inventory, err := s.loadServerInventory(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -113,9 +114,9 @@ func (s *Service) Servers() (*types.DashboardServersResponse, error) {
 	return resp, nil
 }
 
-func (s *Service) Tools() (*types.DashboardToolsResponse, error) {
+func (s *Service) Tools(ctx context.Context) (*types.DashboardToolsResponse, error) {
 	var tools []model.Tool
-	if err := s.db.Preload("Server").Order("name asc").Find(&tools).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.Tool{}).Preload("Server").Order("name asc").Find(&tools).Error; err != nil {
 		return nil, err
 	}
 
@@ -152,9 +153,9 @@ func (s *Service) Tools() (*types.DashboardToolsResponse, error) {
 	return resp, nil
 }
 
-func (s *Service) Prompts() (*types.DashboardPromptsResponse, error) {
+func (s *Service) Prompts(ctx context.Context) (*types.DashboardPromptsResponse, error) {
 	var prompts []model.Prompt
-	if err := s.db.Preload("Server").Order("name asc").Find(&prompts).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.Prompt{}).Preload("Server").Order("name asc").Find(&prompts).Error; err != nil {
 		return nil, err
 	}
 
@@ -186,9 +187,9 @@ func (s *Service) Prompts() (*types.DashboardPromptsResponse, error) {
 	return resp, nil
 }
 
-func (s *Service) Resources() (*types.DashboardResourcesResponse, error) {
+func (s *Service) Resources(ctx context.Context) (*types.DashboardResourcesResponse, error) {
 	var resources []model.Resource
-	if err := s.db.Preload("Server").Order("name asc").Find(&resources).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.Resource{}).Preload("Server").Order("name asc").Find(&resources).Error; err != nil {
 		return nil, err
 	}
 
@@ -222,13 +223,13 @@ func (s *Service) Resources() (*types.DashboardResourcesResponse, error) {
 
 // Diagnostics is intentionally stricter than Overview: its counts describe what
 // is currently exposed through SAMI MCP Gateway, not every entity ever discovered.
-func (s *Service) Diagnostics(mode model.ServerMode, baseURL string) (*types.DashboardDiagnosticsResponse, error) {
-	inventory, err := s.loadServerInventory()
+func (s *Service) Diagnostics(ctx context.Context, mode model.ServerMode, baseURL string) (*types.DashboardDiagnosticsResponse, error) {
+	inventory, err := s.loadServerInventory(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	toolCount, promptCount, resourceCount, err := s.loadEntityCounts()
+	toolCount, promptCount, resourceCount, err := s.loadEntityCounts(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -258,33 +259,33 @@ func (s *Service) Diagnostics(mode model.ServerMode, baseURL string) (*types.Das
 // loadServerInventory builds the server rows used throughout the dashboard. It
 // tracks both discovered totals and "active" counts so the UI can distinguish
 // between registered/discovered state and current proxy exposure state.
-func (s *Service) loadServerInventory() ([]serverInventory, error) {
+func (s *Service) loadServerInventory(ctx context.Context) ([]serverInventory, error) {
 	var servers []model.McpServer
-	if err := s.db.Order("name asc").Find(&servers).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.McpServer{}).Order("name asc").Find(&servers).Error; err != nil {
 		return nil, err
 	}
 
-	toolCounts, err := groupedCounts[model.Tool](s.db)
+	toolCounts, err := groupedCounts[model.Tool](s, ctx)
 	if err != nil {
 		return nil, err
 	}
-	promptCounts, err := groupedCounts[model.Prompt](s.db)
+	promptCounts, err := groupedCounts[model.Prompt](s, ctx)
 	if err != nil {
 		return nil, err
 	}
-	resourceCounts, err := groupedCounts[model.Resource](s.db)
+	resourceCounts, err := groupedCounts[model.Resource](s, ctx)
 	if err != nil {
 		return nil, err
 	}
-	activeToolCounts, err := groupedEnabledCounts[model.Tool](s.db)
+	activeToolCounts, err := groupedEnabledCounts[model.Tool](s, ctx)
 	if err != nil {
 		return nil, err
 	}
-	activePromptCounts, err := groupedEnabledCounts[model.Prompt](s.db)
+	activePromptCounts, err := groupedEnabledCounts[model.Prompt](s, ctx)
 	if err != nil {
 		return nil, err
 	}
-	activeResourceCounts, err := groupedEnabledCounts[model.Resource](s.db)
+	activeResourceCounts, err := groupedEnabledCounts[model.Resource](s, ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -315,24 +316,24 @@ func (s *Service) loadServerInventory() ([]serverInventory, error) {
 
 // loadEntityCounts returns the number of entities currently exposed through the
 // gateway after applying both server-level and per-entity enabled flags.
-func (s *Service) loadEntityCounts() (int, int, int, error) {
+func (s *Service) loadEntityCounts(ctx context.Context) (int, int, int, error) {
 	var toolCount int64
-	if err := s.db.Model(&model.Tool{}).
-		Joins("JOIN mcp_servers ON mcp_servers.id = tools.server_id").
+	if err := s.dbTenantModel(ctx, &model.Tool{}).
+		Joins("JOIN mcp_servers ON mcp_servers.id = tools.server_id AND mcp_servers.tenant_id = tools.tenant_id").
 		Where("tools.enabled = ? AND mcp_servers.enabled = ?", true, true).
 		Count(&toolCount).Error; err != nil {
 		return 0, 0, 0, err
 	}
 	var promptCount int64
-	if err := s.db.Model(&model.Prompt{}).
-		Joins("JOIN mcp_servers ON mcp_servers.id = prompts.server_id").
+	if err := s.dbTenantModel(ctx, &model.Prompt{}).
+		Joins("JOIN mcp_servers ON mcp_servers.id = prompts.server_id AND mcp_servers.tenant_id = prompts.tenant_id").
 		Where("prompts.enabled = ? AND mcp_servers.enabled = ?", true, true).
 		Count(&promptCount).Error; err != nil {
 		return 0, 0, 0, err
 	}
 	var resourceCount int64
-	if err := s.db.Model(&model.Resource{}).
-		Joins("JOIN mcp_servers ON mcp_servers.id = resources.server_id").
+	if err := s.dbTenantModel(ctx, &model.Resource{}).
+		Joins("JOIN mcp_servers ON mcp_servers.id = resources.server_id AND mcp_servers.tenant_id = resources.tenant_id").
 		Where("resources.enabled = ? AND mcp_servers.enabled = ?", true, true).
 		Count(&resourceCount).Error; err != nil {
 		return 0, 0, 0, err
@@ -342,17 +343,17 @@ func (s *Service) loadEntityCounts() (int, int, int, error) {
 
 // loadDiscoveredEntityCounts returns raw discovered totals from the database
 // without considering enabled/disabled state.
-func (s *Service) loadDiscoveredEntityCounts() (int, int, int, error) {
+func (s *Service) loadDiscoveredEntityCounts(ctx context.Context) (int, int, int, error) {
 	var toolCount int64
-	if err := s.db.Model(&model.Tool{}).Count(&toolCount).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.Tool{}).Count(&toolCount).Error; err != nil {
 		return 0, 0, 0, err
 	}
 	var promptCount int64
-	if err := s.db.Model(&model.Prompt{}).Count(&promptCount).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.Prompt{}).Count(&promptCount).Error; err != nil {
 		return 0, 0, 0, err
 	}
 	var resourceCount int64
-	if err := s.db.Model(&model.Resource{}).Count(&resourceCount).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.Resource{}).Count(&resourceCount).Error; err != nil {
 		return 0, 0, 0, err
 	}
 	return int(toolCount), int(promptCount), int(resourceCount), nil
@@ -363,9 +364,9 @@ type groupedCountRow struct {
 	Count    int
 }
 
-func groupedCounts[T any](db *gorm.DB) (map[uint]int, error) {
+func groupedCounts[T any](s *Service, ctx context.Context) (map[uint]int, error) {
 	var rows []groupedCountRow
-	if err := db.Model(new(T)).
+	if err := s.dbTenantModel(ctx, new(T)).
 		Select("server_id, COUNT(*) AS count").
 		Group("server_id").
 		Scan(&rows).Error; err != nil {
@@ -379,9 +380,9 @@ func groupedCounts[T any](db *gorm.DB) (map[uint]int, error) {
 	return counts, nil
 }
 
-func groupedEnabledCounts[T any](db *gorm.DB) (map[uint]int, error) {
+func groupedEnabledCounts[T any](s *Service, ctx context.Context) (map[uint]int, error) {
 	var rows []groupedCountRow
-	if err := db.Model(new(T)).
+	if err := s.dbTenantModel(ctx, new(T)).
 		Select("server_id, COUNT(*) AS count").
 		Where("enabled = ?", true).
 		Group("server_id").

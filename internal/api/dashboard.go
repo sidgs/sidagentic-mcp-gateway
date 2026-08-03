@@ -77,7 +77,7 @@ func (s *Server) dashboardAuthStatusHandler() gin.HandlerFunc {
 func (s *Server) dashboardOverviewHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		mode := c.MustGet("mode").(model.ServerMode)
-		resp, err := s.dashboardService.Overview(mode, s.publicTenantMCPRoot(c))
+		resp, err := s.dashboardService.Overview(c.Request.Context(), mode, s.publicTenantMCPRoot(c))
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -93,7 +93,7 @@ func (s *Server) dashboardOverviewHandler() gin.HandlerFunc {
 func (s *Server) dashboardServersHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := mustDashboardPrincipal(c)
-		resp, err := s.dashboardService.Servers()
+		resp, err := s.dashboardService.Servers(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -117,7 +117,7 @@ func (s *Server) dashboardServersHandler() gin.HandlerFunc {
 func (s *Server) dashboardToolsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := mustDashboardPrincipal(c)
-		resp, err := s.dashboardService.Tools()
+		resp, err := s.dashboardService.Tools(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -141,7 +141,7 @@ func (s *Server) dashboardToolsHandler() gin.HandlerFunc {
 func (s *Server) dashboardPromptsHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := mustDashboardPrincipal(c)
-		resp, err := s.dashboardService.Prompts()
+		resp, err := s.dashboardService.Prompts(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -165,7 +165,7 @@ func (s *Server) dashboardPromptsHandler() gin.HandlerFunc {
 func (s *Server) dashboardResourcesHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		p := mustDashboardPrincipal(c)
-		resp, err := s.dashboardService.Resources()
+		resp, err := s.dashboardService.Resources(c.Request.Context())
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -194,7 +194,7 @@ func (s *Server) dashboardDiagnosticsHandler() gin.HandlerFunc {
 			return
 		}
 		mode := c.MustGet("mode").(model.ServerMode)
-		resp, err := s.dashboardService.Diagnostics(mode, s.publicTenantMCPRoot(c))
+		resp, err := s.dashboardService.Diagnostics(c.Request.Context(), mode, s.publicTenantMCPRoot(c))
 		if err != nil {
 			handleServiceError(c, err)
 			return
@@ -218,6 +218,7 @@ func (s *Server) dashboardObservabilityHandler() gin.HandlerFunc {
 			}
 		}
 		resp, err := s.dashboardService.Observability(
+			c.Request.Context(),
 			c.Query("range"),
 			c.Query("from"),
 			c.Query("to"),
@@ -238,7 +239,7 @@ func (s *Server) dashboardLineageHandler() gin.HandlerFunc {
 			c.JSON(http.StatusForbidden, gin.H{"error": "forbidden"})
 			return
 		}
-		resp, err := s.dashboardService.Lineage(c.Query("range"))
+		resp, err := s.dashboardService.Lineage(c.Request.Context(), c.Query("range"))
 		if err != nil {
 			handleServiceError(c, err)
 			return

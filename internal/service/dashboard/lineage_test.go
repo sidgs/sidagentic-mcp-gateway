@@ -1,11 +1,13 @@
 package dashboard
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
 	"time"
 
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/require"
 	"gorm.io/datatypes"
@@ -40,7 +42,8 @@ func TestLineage_BuildsConfiguredAndUsageEdges(t *testing.T) {
 	}).Error)
 
 	svc := NewService(db, true)
-	resp, err := svc.Lineage("24h")
+	ctx := tenant.WithContext(context.Background(), "sami")
+	resp, err := svc.Lineage(ctx, "24h")
 	require.NoError(t, err)
 	require.GreaterOrEqual(t, len(resp.Nodes), 4)
 	require.NotEmpty(t, resp.Edges)

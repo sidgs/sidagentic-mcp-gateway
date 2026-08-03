@@ -1,6 +1,7 @@
 package dashboard
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
@@ -98,7 +99,7 @@ func (b *lineageBuilder) response(usageWindow string, empty bool) *types.Dashboa
 }
 
 // Lineage returns a graph of configured and observed relationships between agent apps, tool groups, servers, and tools.
-func (s *Service) Lineage(usageRange string) (*types.DashboardLineageResponse, error) {
+func (s *Service) Lineage(ctx context.Context, usageRange string) (*types.DashboardLineageResponse, error) {
 	window, err := parseObservabilityWindow(usageRange, "", "")
 	if err != nil {
 		window, err = parseObservabilityWindow(defaultLineageUsageWindow, "", "")
@@ -110,15 +111,15 @@ func (s *Service) Lineage(usageRange string) (*types.DashboardLineageResponse, e
 	builder := newLineageBuilder()
 
 	var agentApps []model.AgentApp
-	if err := s.db.Find(&agentApps).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.AgentApp{}).Find(&agentApps).Error; err != nil {
 		return nil, err
 	}
 	var toolGroups []model.ToolGroup
-	if err := s.db.Find(&toolGroups).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.ToolGroup{}).Find(&toolGroups).Error; err != nil {
 		return nil, err
 	}
 	var tools []model.Tool
-	if err := s.db.Preload("Server").Find(&tools).Error; err != nil {
+	if err := s.dbTenantModel(ctx, &model.Tool{}).Preload("Server").Find(&tools).Error; err != nil {
 		return nil, err
 	}
 
@@ -196,7 +197,7 @@ func (s *Service) Lineage(usageRange string) (*types.DashboardLineageResponse, e
 		TotalCalls    int64
 	}
 	var usageRows []usageEdgeRow
-	if err := s.db.Model(&model.ToolInvocationEvent{}).
+	if err := s.dbTenantModel(ctx, &model.ToolInvocationEvent{}).
 		Select(`
 			agent_app_id,
 			mcp_server_name,
@@ -219,7 +220,7 @@ func (s *Service) Lineage(usageRange string) (*types.DashboardLineageResponse, e
 		if row.AgentAppID != nil {
 			agentID := agentLineageID(*row.AgentAppID)
 			var app model.AgentApp
-			if err := s.db.First(&app, *row.AgentAppID).Error; err == nil {
+			if err := s.dbTenantModel(ctx, &model.AgentApp{}).First(&app, *row.AgentAppID).Error; err == nil {
 				builder.addNode(agentID, "agent_app", app.Name, map[string]string{
 					"client_id": app.ClientID,
 					"status":    string(app.Status),

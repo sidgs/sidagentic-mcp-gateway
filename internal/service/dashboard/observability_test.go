@@ -1,13 +1,14 @@
 package dashboard
 
 import (
+	"context"
 	"testing"
 	"time"
 
 	"sami.io/mcpgateway/internal/model"
+	"sami.io/mcpgateway/pkg/tenant"
 	"sami.io/mcpgateway/pkg/testhelpers"
 	"github.com/stretchr/testify/require"
-	"gorm.io/gorm"
 )
 
 func TestObservability_AggregatesEvents(t *testing.T) {
@@ -42,7 +43,8 @@ func TestObservability_AggregatesEvents(t *testing.T) {
 	}).Error)
 
 	svc := NewService(db, true)
-	resp, err := svc.Observability("24h", "", "", 10)
+	ctx := tenant.WithContext(context.Background(), "sami")
+	resp, err := svc.Observability(ctx, "24h", "", "", 10)
 	require.NoError(t, err)
 	require.Equal(t, int64(3), resp.Summary.TotalCalls)
 	require.Equal(t, int64(2), resp.Summary.SuccessCalls)
@@ -63,8 +65,37 @@ func TestObservability_EmptyRangeReturnsEmptyState(t *testing.T) {
 	db := testhelpers.CreateTestDB(t)
 
 	svc := NewService(db, true)
-	resp, err := svc.Observability("24h", "", "", 10)
+	ctx := tenant.WithContext(context.Background(), "sami")
+	resp, err := svc.Observability(ctx, "24h", "", "", 10)
 	require.NoError(t, err)
 	require.NotNil(t, resp.EmptyState)
 	require.Equal(t, int64(0), resp.Summary.TotalCalls)
+}
+
+func TestObservability_TenantIsolation(t *testing.T) {
+	db := testhelpers.CreateTestDB(t)
+	now := time.Now().UTC()
+
+	require.NoError(t, db.Create(&model.ToolInvocationEvent{
+		CreatedOn: now, TenantID: "tenant-a",
+		MCPServerName: "calc", ToolName: "add",
+		Outcome: model.ToolInvocationOutcomeSuccess, LatencyMs: 10,
+		Source: model.ToolInvocationSourceMCPProxy, AuthKind: model.ToolInvocationAuthOpen,
+	}).Error)
+	require.NoError(t, db.Create(&model.ToolInvocationEvent{
+		CreatedOn: now, TenantID: "tenant-b",
+		MCPServerName: "git", ToolName: "status",
+		Outcome: model.ToolInvocationOutcomeSuccess, LatencyMs: 20,
+		Source: model.ToolInvocationSourceMCPProxy, AuthKind: model.ToolInvocationAuthOpen,
+	}).Error)
+
+	svc := NewService(db, true)
+
+	respA, err := svc.Observability(tenant.WithContext(context.Background(), "tenant-a"), "24h", "", "", 10)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), respA.Summary.TotalCalls)
+
+	respB, err := svc.Observability(tenant.WithContext(context.Background(), "tenant-b"), "24h", "", "", 10)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), respB.Summary.TotalCalls)
 }
